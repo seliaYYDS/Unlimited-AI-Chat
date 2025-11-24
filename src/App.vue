@@ -2,6 +2,8 @@
   <div class="app" :class="{ 'theme-dark': isDarkTheme }">
 
 
+
+
     <!-- 侧边栏 -->
 
     <div :class="['sidebar', { 'collapsed': !sidebarExpanded }]">
@@ -332,13 +334,20 @@
             </svg>
           </button>
 
-                    <textarea
-            v-model="inputMessage"
-            class="chat-input"
-            placeholder="输入您的消息..."
-            @keydown.enter.exact.prevent="sendMessage"
-            rows="1"
-            ref="chatInput"
+                    <textarea
+
+            v-model="inputMessage"
+
+            class="chat-input"
+
+            placeholder="输入您的消息..."
+
+            @keydown.enter.exact.prevent="sendMessage"
+
+            rows="1"
+
+            ref="chatInput"
+
           ></textarea>
           <button
             :class="['send-btn', 'hover-perspective', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]"
@@ -365,11 +374,30 @@
       @close="showStyleSettingsModal = false"
     >
       <StyleSettings
+
         :settings="styleSettings"
+
         @update:settings="updateStyleSettings"
+
         @notify="showNotification"
+
       />
+
     </Modal>
+
+
+
+    <!-- 悬浮球组件 -->
+
+    <FloatingBall
+      :primary-color="styleSettings.primaryColor"
+      :secondary-color="styleSettings.secondaryColor"
+      :primary-color-dark="styleSettings.primaryColor || '#c0399d'"
+      :secondary-color-dark="styleSettings.secondaryColor || '#2c6cb0'"
+      @tool-click="handleFloatingBallToolClick">
+      工具
+    </FloatingBall>
+
 
     <!-- 自定义弹窗 -->
     <Modal
@@ -967,13 +995,25 @@ import { AIService } from './aiService.js'
 
 import Modal from './components/Modal.vue'
 
+
+
 import CustomSelect from './components/CustomSelect.vue'
+
+
 
 import CustomSlider from './components/CustomSlider.vue'
 
+
+
 import CustomCheckbox from './components/CustomCheckbox.vue'
 
+
+
 import StyleSettings from './components/StyleSettings.vue'
+
+
+
+import FloatingBall from './components/FloatingBall.vue'
 
 export default {
   name: 'App',
@@ -987,7 +1027,9 @@ export default {
 
     CustomCheckbox,
 
-    StyleSettings
+    StyleSettings,
+
+    FloatingBall
 
   },
   data() {
@@ -1177,22 +1219,36 @@ export default {
       this.setupScrollListener()
     })
 
-    // 添加全局点击事件监听器用于关闭右键菜单
-    document.addEventListener('click', this.handleGlobalClick)
-    
-    // 添加页面卸载事件监听器以确保数据保存
-    window.addEventListener('beforeunload', this.handlePageUnload)
+    // 添加全局点击事件监听器用于关闭右键菜单
+
+    document.addEventListener('click', this.handleGlobalClick)
+
+    
+
+    // 添加页面卸载事件监听器以确保数据保存
+
+    window.addEventListener('beforeunload', this.handlePageUnload)
+
   },
 
-  beforeUnmount() {
-    // 在组件卸载前保存当前智能体的对话（如果存在）
-    if (this.currentAgent && this.conversations) {
-      this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
-    }
-    // 移除全局点击事件监听器
-    document.removeEventListener('click', this.handleGlobalClick)
-    // 移除页面卸载事件监听器
-    window.removeEventListener('beforeunload', this.handlePageUnload)
+  beforeUnmount() {
+
+    // 在组件卸载前保存当前智能体的对话（如果存在）
+
+    if (this.currentAgent && this.conversations) {
+
+      this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+
+    }
+
+    // 移除全局点击事件监听器
+
+    document.removeEventListener('click', this.handleGlobalClick)
+
+    // 移除页面卸载事件监听器
+
+    window.removeEventListener('beforeunload', this.handlePageUnload)
+
   },
 
   watch: {
@@ -1249,10 +1305,14 @@ export default {
     }
   },
   methods: {
-    // 主题切换
-    toggleTheme() {
-      const newTheme = this.themeManager.toggleTheme()
-      this.isDarkTheme = newTheme === 'dark'
+    // 主题切换
+
+    toggleTheme() {
+
+      const newTheme = this.themeManager.toggleTheme()
+
+      this.isDarkTheme = newTheme === 'dark'
+
     },
 
     // 样式设置相关方法
@@ -1364,15 +1424,24 @@ export default {
       }
     },
 
-    // 智能体管理
-    selectAgent(agent) {
-      // 在切换智能体前保存当前智能体的对话（如果存在）
-      if (this.currentAgent && this.conversations) {
-        this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
-      }
-      
-      this.currentAgent = agent
-      this.conversations = this.storageManager.getConversations(agent.id)
+    // 智能体管理
+
+    selectAgent(agent) {
+
+      // 在切换智能体前保存当前智能体的对话（如果存在）
+
+      if (this.currentAgent && this.conversations) {
+
+        this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+
+      }
+
+      
+
+      this.currentAgent = agent
+
+      this.conversations = this.storageManager.getConversations(agent.id)
+
     },
 
     // AI填写智能体信息
@@ -1780,13 +1849,20 @@ export default {
             }
           })
 
-          if (aiMessage) {
-            this.conversations.push(aiMessage)
-            // 保存到localStorage
-            this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
-          }
-        }
-
+          if (aiMessage) {
+
+            this.conversations.push(aiMessage)
+
+            // 保存到localStorage
+
+            this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+
+          }
+
+        }
+
+
+
       } catch (error) {
         console.error('发送消息失败:', error)
         this.showNotification(`发送失败: ${error.message}`, 'danger')
@@ -2202,31 +2278,56 @@ export default {
       }
     },
 
-    // 处理全局点击事件，用于关闭右键菜单
-    handleGlobalClick(event) {
-      if (this.contextMenuVisible) {
-        // 检查点击是否在右键菜单内部
-        const contextMenu = document.querySelector('.context-menu')
-        if (contextMenu && !contextMenu.contains(event.target)) {
-          this.closeContextMenu()
-        }
-      }
-    },
-
-    // 处理页面卸载事件，确保保存数据
-    handlePageUnload() {
-      if (this.currentAgent && this.conversations) {
-        this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
-      }
-    },
-
-    // 滚动到底部
-    scrollToBottom() {
-      const container = this.$refs.messagesContainer
-      if (container) {
-        container.scrollTop = container.scrollHeight
-        this.isUserAtBottom = true
-      }
+    // 处理全局点击事件，用于关闭右键菜单
+
+    handleGlobalClick(event) {
+
+      if (this.contextMenuVisible) {
+
+        // 检查点击是否在右键菜单内部
+
+        const contextMenu = document.querySelector('.context-menu')
+
+        if (contextMenu && !contextMenu.contains(event.target)) {
+
+          this.closeContextMenu()
+
+        }
+
+      }
+
+    },
+
+
+
+    // 处理页面卸载事件，确保保存数据
+
+    handlePageUnload() {
+
+      if (this.currentAgent && this.conversations) {
+
+        this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+
+      }
+
+    },
+
+
+
+    // 滚动到底部
+
+    scrollToBottom() {
+
+      const container = this.$refs.messagesContainer
+
+      if (container) {
+
+        container.scrollTop = container.scrollHeight
+
+        this.isUserAtBottom = true
+
+      }
+
     },
 
     // 自动调整输入框高度
@@ -2788,6 +2889,31 @@ export default {
     async regenerateImage(message) {
       // 重新生成图片
       await this.generateImageForMessage(message)
+    },
+
+    handleFloatingBallToolClick(toolName) {
+       switch(toolName) {
+         case 'new-agent':
+           this.createAgent();
+          break;
+      case 'export-data':
+           this.exportData();
+           break;
+         case 'import-data':
+          this.importData();
+          break;
+        case 'settings':
+          this.showSettingsModal = true;
+          break;
+        case 'clear-history':
+          this.showManualCleanupConfirm();
+          break;
+        case 'style-settings':
+          this.showStyleSettingsModal = true;
+          break;
+        default:
+          console.log('未知工具:', toolName);
+      }
     },
 
 
