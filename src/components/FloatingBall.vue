@@ -18,15 +18,12 @@
         <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.7 7.1 1.2 10.1 3.2 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>
       </svg>
     </div>
-    <div v-if="isExpanded" class="tools-dropdown">
-      <div class="tools-list">
-        <div class="tool-item" @click.stop="onToolClick('new-agent')">新建智能体</div>
-        <div class="tool-item" @click.stop="onToolClick('export-data')">导出数据</div>
-        <div class="tool-item" @click.stop="onToolClick('import-data')">导入数据</div>
-        <div class="tool-item" @click.stop="onToolClick('settings')">AI设置</div>
-        <div class="tool-item" @click.stop="onToolClick('clear-history')">清空历史</div>
-        <div class="tool-item" @click.stop="onToolClick('style-settings')">样式设置</div>
-      </div>
+    <div v-if="isExpanded" class="tools-dropdown">
+      <div class="tools-list">
+        <div class="tool-item" @click.stop="onToolClick('music-player')">音乐播放器</div>
+        <div class="tool-item" @click.stop="onToolClick('notepad')">草稿纸</div>
+        <div class="tool-item" @click.stop="onToolClick('quick-chat')">快速对话</div>
+      </div>
     </div>
   </div>
 </template>
@@ -253,9 +250,13 @@ export default {
       );
       
       // 如果移动距离小于等于5像素，则认为是点击，触发展开/收起
+      // 使用 setTimeout 确保事件处理完成后再执行展开/收起
       if (distance <= 5) {
         this.isClickDetected = true;
-        this.toggleExpand();
+        // 延迟执行展开/收起以确保事件处理完成
+        setTimeout(() => {
+          this.toggleExpand();
+        }, 0);
       }
     }
   }

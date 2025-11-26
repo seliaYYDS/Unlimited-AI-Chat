@@ -111,7 +111,8 @@
 
     <!-- 主内容区域 -->
     <div class="main-content">
-      <div class="dynamic-island" v-if="currentAgent" @mouseenter="showDynamicIslandContent = true" @mouseleave="showDynamicIslandContent = false">
+      
+      <div class="dynamic-island" :class="{ 'has-music': isMusicPlaying && currentMusic }" v-if="currentAgent" @mouseenter="showDynamicIslandContent = true" @mouseleave="showDynamicIslandContent = false">
         <div class="dynamic-island-content">
           <div class="dynamic-island-avatar">
             <div v-if="currentAgent.avatar && currentAgent.avatar.startsWith('data:image')" class="avatar-image">
@@ -148,7 +149,7 @@
             </button>
             <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="showSettingsModal = true" title="AI设置">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
               </svg>
               <span v-if="showDynamicIslandContent" class="btn-text">AI设置</span>
             </button>
@@ -166,7 +167,24 @@
             </button>
           </div>
         </div>
-      </div>
+        </div>
+        <!-- 音乐播放信息显示区域 -->
+        <div v-if="isMusicPlaying && currentMusic" class="dynamic-island-music-info">
+          <div class="music-cover">
+            <img :src="(currentMusic.al && currentMusic.al.picUrl) || currentMusic.picUrl || (currentMusic.album && currentMusic.album.picUrl) || defaultAlbumArt" :alt="currentMusic.name" />
+          </div>
+          <div class="music-info">
+            <div class="music-title">{{ currentMusic.name || '未知歌曲' }}</div>
+            <div class="music-artist">{{ (currentMusic.ar && Array.isArray(currentMusic.ar) ? currentMusic.ar.map(a => a.name).join(', ') : (currentMusic.artists && Array.isArray(currentMusic.artists) ? currentMusic.artists.map(a => a.name).join(', ') : currentMusic.artist || '未知艺术家')) }}</div>
+            <!-- 悬停时显示进度条 -->
+            <div class="music-progress-container" v-show="showDynamicIslandContent">
+              <div class="music-progress-bar">
+                <div class="music-progress-fill" :style="{ width: musicProgress + '%' }"></div>
+              </div>
+              <div class="music-progress-text">{{ formatMusicProgress() }}</div>
+            </div>
+          </div>
+        </div>
 
       <div class="chat-messages" ref="messagesContainer">
         <div v-if="!currentAgent" class="empty-state">
@@ -690,6 +708,24 @@
         </div>
       </div>
 
+      <!-- 音乐API设置 -->
+      <div class="form-group">
+        <h4 class="section-title">音乐API设置</h4>
+      </div>
+
+      <div class="form-group">
+        <label>音乐API服务器地址</label>
+        <input
+          type="text"
+          class="form-control"
+          v-model="settings.musicApiUrl"
+          placeholder="http://localhost:3000"
+        >
+        <div class="form-hint">
+          网易云音乐API服务器地址，默认为http://localhost:3000
+        </div>
+      </div>
+
       <!-- SD图像生成设置 -->
       <div class="form-group">
         <h4 class="section-title">Stable Diffusion 图像生成设置</h4>
@@ -907,11 +943,166 @@
 
       </div>
 
-    </Modal>
+        </Modal>
+
+
+
+
+
+    <!-- 快速对话界面 -->
+
+    <div v-if="showQuickChatModal" class="quick-chat-modal-overlay show" @click="closeQuickChatModal">
+
+      <div class="quick-chat-modal-content" @click.stop>
+
+        <div class="quick-chat-header">
+
+          <h3>快速对话</h3>
+
+          <button class="close-btn" @click="closeQuickChatModal">×</button>
+
+        </div>
+
+        <div class="quick-chat-messages-container" ref="quickChatMessagesContainer">
+
+          <div v-for="(msg, index) in quickChatMessages" :key="index" class="message" :class="msg.role">
+
+            <div class="message-content" v-html="formatMessageContent(msg.content)"></div>
+
+            <div class="message-info" v-if="msg.tokens || msg.thinkingTime">
+
+              <span v-if="msg.tokens" class="token-info">约 {{ msg.tokens }} tokens</span>
+
+              <span v-if="msg.thinkingTime" class="time-info">{{ formatThinkingTime(msg.thinkingTime) }}</span>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <div class="quick-chat-input-container">
+
+          <textarea
+
+            v-model="quickChatInput"
+
+            @keydown.enter.exact="handleQuickChatSendMessage"
+
+            @keydown.shift.enter.exact.prevent="quickChatInput += '\n'"
+
+            placeholder="输入消息..."
+
+            class="quick-chat-textarea"
+
+            :disabled="quickChatIsLoading"
+
+          ></textarea>
+
+          <button
+
+            @click="handleQuickChatSendMessage"
+
+            :disabled="quickChatIsLoading || !quickChatInput.trim()"
+
+            class="quick-chat-send-btn"
+
+          >
+
+            <div v-if="quickChatIsLoading" class="loading-spinner"></div>
+
+            <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+
+            </svg>
+
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+
+    <!-- 草稿纸界面 -->
+
+    <div v-if="showNotepadModal" class="notepad-modal-overlay show" @click="closeNotepadModal">
+
+      <div class="notepad-modal-content" @click.stop>
+
+        <div class="notepad-tools">
+
+          <button class="tool-btn" :class="{ 'active': currentTool === 'pen' }" @click="selectTool('pen')">
+
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+
+              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+
+            </svg>
+
+          </button>
+
+          <button class="tool-btn" :class="{ 'active': currentTool === 'eraser' }" @click="selectTool('eraser')">
+
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+
+              <path d="M21.99 4c0-1.1-.89-2-2-2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4zm-10 10.5v2h-2v-2h2zm6 0v2h-2v-2h2zm-6-3v2h-2v-2h2zm6 0v2h-2v-2h2zm-6-3v2h-2v-2h2zm6 0v2h-2v-2h2z"/>
+
+            </svg>
+
+          </button>
+
+          <input type="color" v-model="penColor" class="color-picker">
+
+          <input type="range" v-model="penSize" min="1" max="20" class="size-slider">
+
+          <span class="size-value">{{ penSize }}</span>
+
+          <button class="tool-btn" @click="clearCanvas">
+
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+
+              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+
+            </svg>
+
+          </button>
+
+        </div>
+
+        <canvas 
+
+          ref="notepadCanvas" 
+
+          class="notepad-canvas"
+
+          @mousedown="startDrawing"
+
+          @mousemove="draw"
+
+          @mouseup="stopDrawing"
+
+          @mouseout="stopDrawing"
+
+          @touchstart="startDrawing"
+
+          @touchmove="draw"
+
+          @touchend="stopDrawing"
+
+        ></canvas>
+
+      </div>
+
+    </div>
 
 
 
     <!-- 右键菜单 -->
+
 
     <div
 
@@ -981,7 +1172,17 @@
       </transition-group>
 
     </div>
-  </div>
+    
+    <!-- 音乐播放器 -->
+    <MusicPlayer 
+      :visible="showMusicPlayer" 
+      :api-url="settings.musicApiUrl || 'http://localhost:3000'"
+      @close="closeMusicPlayer" 
+      @notify="showNotification" 
+      @playback-status-changed="handleMusicPlaybackStatusChanged"
+      @current-song-changed="handleCurrentSongChanged"
+    />
+    </div>
 </template>
 
 <script>
@@ -1014,6 +1215,7 @@ import StyleSettings from './components/StyleSettings.vue'
 
 
 import FloatingBall from './components/FloatingBall.vue'
+import MusicPlayer from './components/MusicPlayer.vue'
 
 export default {
   name: 'App',
@@ -1029,7 +1231,9 @@ export default {
 
     StyleSettings,
 
-    FloatingBall
+    FloatingBall,
+    
+    MusicPlayer
 
   },
   data() {
@@ -1051,11 +1255,24 @@ export default {
       contextMenuAgent: null,
 
       // 模态框状态
+
       showCreateModal: false,
+
       showEditModal: false,
+
       showSettingsModal: false,
+
       showStyleSettingsModal: false,
+
       showConfirmModal: false,
+
+      showQuickChatModal: false,
+      showNotepadModal: false,
+      showMusicPlayer: false,
+      currentTool: 'pen',
+      penColor: '#000000',
+      penSize: 5,
+      isDrawing: false,
 
       // 表单数据
       agentForm: {
@@ -1081,7 +1298,9 @@ export default {
         enableFormatting: true,
         // 聊天记录清理设置
         autoClearConversations: false,
-        autoClearDays: 3
+        autoClearDays: 3,
+        // 音乐API设置
+        musicApiUrl: 'http://localhost:3000'
       },
 
       // 样式设置
@@ -1120,18 +1339,49 @@ export default {
       availableAvatars: ['🤖', '👤', '👩', '👨', '🧠', '💡', '🌟', '🎭', '🎨', '🔮', '📚', '⚡', '🔥', '💎', '🎯', '🚀', '🌈', '🌙', '🌞', '🌺', '🐶', '🐱', '🦊', '🐻', '🐼', '🦁', '🐯', '🦄', '🐢', '🐙', '🦋', '🐝', '🍎'],
 
       // 推荐回复相关状态
+
       showSuggestionsModal: false,
+
       isGeneratingSuggestions: false,
+
       suggestedReplies: [],
+
       selectedReplyIndex: -1,
 
+
+
       // SD图像生成相关状态
+
       sdModels: [],
+
       isRefreshingModels: false,
+
+
+
+      // 音乐API设置
+      musicApiUrl: 'http://localhost:3000', // 默认API地址
+
+
 
       // AI填写状态
 
+
+
       isGeneratingAIFill: false,
+
+
+
+
+
+
+
+      // 快速对话相关状态
+
+      quickChatMessages: [],
+
+      quickChatInput: '',
+
+      quickChatIsLoading: false,
 
 
 
@@ -1156,7 +1406,14 @@ export default {
       sidebarExpanded: true,
       
       // 动态岛显示内容状态
-      showDynamicIslandContent: false
+      showDynamicIslandContent: false,
+      
+      // 音乐播放状态
+      isMusicPlaying: false,
+      currentMusic: null,
+      musicProgress: 0,
+      // 默认专辑封面
+      defaultAlbumArt: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23e0e0e0"/><text x="50" y="55" font-family="Arial" font-size="12" fill="%23666" text-anchor="middle">专辑封面</text></svg>'
 
 
 
@@ -2892,28 +3149,38 @@ export default {
     },
 
     handleFloatingBallToolClick(toolName) {
+
        switch(toolName) {
-         case 'new-agent':
-           this.createAgent();
+
+         case 'music-player':
+
+           // 打开音乐播放器
+           this.openMusicPlayer();
+
           break;
-      case 'export-data':
-           this.exportData();
+
+      case 'notepad':
+
+           // 草稿纸功能
+
+           this.openNotepadModal();
+
            break;
-         case 'import-data':
-          this.importData();
+
+         case 'quick-chat':
+
+          // 快速对话功能
+
+          this.openQuickChatModal();
+
           break;
-        case 'settings':
-          this.showSettingsModal = true;
-          break;
-        case 'clear-history':
-          this.showManualCleanupConfirm();
-          break;
-        case 'style-settings':
-          this.showStyleSettingsModal = true;
-          break;
+
         default:
+
           console.log('未知工具:', toolName);
+
       }
+
     },
 
 
@@ -2947,15 +3214,426 @@ export default {
     },
 
     // 判断文本是否过长，需要特殊处理
+
     isLongText(text) {
+
       if (!text) return false;
+
       // 如果文本长度超过50个字符或包含多个句子，则认为是长文本
+
       return text.length > 50 || (text.match(/[。！？.!?]/g) || []).length > 1;
+
+    },
+
+
+
+    // 打开快速对话界面
+
+    openQuickChatModal() {
+
+      this.showQuickChatModal = true;
+
+      this.$nextTick(() => {
+
+        this.scrollToBottomQuickChat();
+
+      });
+
+    },
+
+
+    // 打开草稿纸界面
+
+    openNotepadModal() {
+
+      this.showNotepadModal = true;
+
+      this.$nextTick(() => {
+
+        this.initCanvas();
+
+      });
+
+    },
+
+    // 关闭草稿纸界面
+
+    closeNotepadModal() {
+
+      this.showNotepadModal = false;
+
+      // 清空画布内容
+
+      this.clearCanvas();
+
+    },
+
+    // 初始化画布
+
+    initCanvas() {
+
+      const canvas = this.$refs.notepadCanvas;
+
+      if (canvas) {
+
+        // 设置画布大小
+
+        canvas.width = canvas.offsetWidth;
+
+        canvas.height = canvas.offsetHeight;
+
+        // 获取2D上下文并设置默认样式
+
+        const ctx = canvas.getContext('2d');
+
+        ctx.lineCap = 'round';
+
+        ctx.lineJoin = 'round';
+
+      }
+
+    },
+
+    // 选择工具
+
+    selectTool(tool) {
+
+      this.currentTool = tool;
+
+    },
+
+    // 开始绘制
+
+    startDrawing(e) {
+
+      e.preventDefault();
+
+      const canvas = this.$refs.notepadCanvas;
+
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+
+      this.isDrawing = true;
+
+      const rect = canvas.getBoundingClientRect();
+
+      let x, y;
+
+      if (e.type.includes('touch')) {
+
+        x = e.touches[0].clientX - rect.left;
+
+        y = e.touches[0].clientY - rect.top;
+
+      } else {
+
+        x = e.offsetX || e.clientX - rect.left;
+
+        y = e.offsetY || e.clientY - rect.top;
+
+      }
+
+      ctx.beginPath();
+
+      ctx.moveTo(x, y);
+
+    },
+
+    // 绘制
+
+    draw(e) {
+
+      if (!this.isDrawing) return;
+
+      e.preventDefault();
+
+      const canvas = this.$refs.notepadCanvas;
+
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+
+      const rect = canvas.getBoundingClientRect();
+
+      let x, y;
+
+      if (e.type.includes('touch')) {
+
+        x = e.touches[0].clientX - rect.left;
+
+        y = e.touches[0].clientY - rect.top;
+
+      } else {
+
+        x = e.offsetX || e.clientX - rect.left;
+
+        y = e.offsetY || e.clientY - rect.top;
+
+      }
+
+      if (this.currentTool === 'pen') {
+
+        ctx.globalCompositeOperation = 'source-over';
+
+        ctx.strokeStyle = this.penColor;
+
+        ctx.lineWidth = this.penSize;
+
+        ctx.lineTo(x, y);
+
+        ctx.stroke();
+
+      } else if (this.currentTool === 'eraser') {
+
+        ctx.globalCompositeOperation = 'destination-out';
+
+        ctx.lineWidth = this.penSize * 2; // 橡皮擦通常是画笔的两倍大小
+
+        ctx.lineTo(x, y);
+
+        ctx.stroke();
+
+      }
+
+    },
+
+    // 停止绘制
+
+    stopDrawing() {
+
+      this.isDrawing = false;
+
+    },
+
+    // 清空画布
+
+    clearCanvas() {
+
+      const canvas = this.$refs.notepadCanvas;
+
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    },
+
+
+
+    // 关闭快速对话界面
+
+    closeQuickChatModal() {
+
+      this.showQuickChatModal = false;
+
+      // 清空快速对话数据，确保下次打开时是干净的状态
+
+      this.quickChatMessages = [];
+
+      this.quickChatInput = '';
+
+      this.quickChatIsLoading = false;
+
+    },
+
+
+
+    // 发送快速对话消息
+
+    async handleQuickChatSendMessage() {
+
+      if (!this.quickChatInput.trim() || this.quickChatIsLoading) return;
+
+
+
+      const userMessage = {
+
+        role: 'user',
+
+        content: this.quickChatInput.trim()
+
+      };
+
+
+
+      // 添加用户消息到对话
+
+      this.quickChatMessages.push(userMessage);
+
+      const input = this.quickChatInput;
+
+      this.quickChatInput = '';
+
+      this.quickChatIsLoading = true;
+
+
+
+      this.$nextTick(() => {
+
+        this.scrollToBottomQuickChat();
+
+      });
+
+
+
+      try {
+
+        // 创建一个临时的智能体对象用于AI服务，无提示词
+
+        const tempAgent = {
+
+          id: 'quick-chat-agent',
+
+          name: '快速对话',
+
+          prompt: '', // 无提示词
+
+          scenario: '',
+
+          keyPoints: '',
+
+          avatar: '⚡'
+
+        };
+
+
+
+        // 调用AI服务发送消息
+
+        const response = await this.aiService.sendMessage(tempAgent, input, this.quickChatMessages.filter(msg => msg.role !== 'system'), (partialResponse) => {
+
+          // 流式输出处理，如果需要可以在这里添加
+
+        });
+
+
+
+        let aiResponse;
+
+        if (typeof response === 'object' && response.response) {
+
+          aiResponse = {
+
+            role: 'assistant',
+
+            content: response.response,
+
+            tokens: response.tokens || null,
+
+            thinkingTime: response.thinkingTime || null
+
+          };
+
+        } else {
+
+          aiResponse = {
+
+            role: 'assistant',
+
+            content: response,
+
+            tokens: null,
+
+            thinkingTime: null
+
+          };
+
+        }
+
+
+
+        // 添加AI回复到对话
+
+        this.quickChatMessages.push(aiResponse);
+
+      } catch (error) {
+
+        console.error('快速对话发送失败:', error);
+
+        this.quickChatMessages.push({
+
+          role: 'assistant',
+
+          content: `❌ 发送失败: ${error.message}`
+
+        });
+
+      } finally {
+
+        this.quickChatIsLoading = false;
+
+        this.$nextTick(() => {
+
+          this.scrollToBottomQuickChat();
+
+        });
+
+      }
+
+    },
+
+
+
+    // 快速对话滚动到底部
+
+    scrollToBottomQuickChat() {
+
+      if (this.$refs.quickChatMessagesContainer) {
+
+        this.$refs.quickChatMessagesContainer.scrollTop = this.$refs.quickChatMessagesContainer.scrollHeight;
+
+      }
+
+    },
+    
+    // 打开音乐播放器
+    openMusicPlayer() {
+      this.showMusicPlayer = true;
+    },
+    
+    // 关闭音乐播放器
+    closeMusicPlayer() {
+      this.showMusicPlayer = false;
+    },
+    
+    // 处理音乐播放状态变化
+    handleMusicPlaybackStatusChanged(status) {
+      this.isMusicPlaying = status.isPlaying;
+      this.currentMusic = status.currentSong;
+      this.musicProgress = status.duration ? (status.currentTime / status.duration) * 100 : 0;
+    },
+    
+    // 处理当前歌曲变化
+    handleCurrentSongChanged(song) {
+      this.currentMusic = song;
+      if (!this.isMusicPlaying) {
+        // 如果当前没有播放，重置进度
+        this.musicProgress = 0;
+      }
+    },
+    
+    // 格式化音乐进度显示
+    formatMusicProgress() {
+      if (!this.currentMusic || !this.currentMusic.duration) {
+        return '0:00 / 0:00';
+      }
+      const currentSeconds = Math.floor((this.currentMusic.duration * this.musicProgress / 100) / 1000);
+      const totalSeconds = Math.floor(this.currentMusic.duration / 1000);
+      const currentMins = Math.floor(currentSeconds / 60);
+      const currentSecs = currentSeconds % 60;
+      const totalMins = Math.floor(totalSeconds / 60);
+      const totalSecs = totalSeconds % 60;
+      return `${currentMins}:${currentSecs < 10 ? '0' : ''}${currentSecs} / ${totalMins}:${totalSecs < 10 ? '0' : ''}${totalSecs}`;
     }
 
   }
 
-}
+  }
+
+
+
 </script>
 
 <style>
@@ -3355,9 +4033,9 @@ export default {
 /* 动态岛样式 */
 .dynamic-island {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 40px;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: 40px;
   background: var(--chat-header-bg, #f8f9fa);
   border-radius: var(--dynamic-island-radius, 20px); /* 使用CSS变量 */
   padding: 5px 15px;
@@ -3389,7 +4067,7 @@ body[data-color-mode="gradient"] .dynamic-island {
 .dynamic-island:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   transform: translateY(-2px);
-  height: 60px;
+  min-height: 60px;
   padding: 10px 20px;
   transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
@@ -3596,12 +4274,146 @@ body[data-color-mode="gradient"] .dynamic-island {
   background: var(--gradient-primary-dark, linear-gradient(135deg, #c0399d 0%, #2c6cb0 100%));
 }
 
-.theme-dark .dynamic-island-btn {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .theme-dark .dynamic-island-btn:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* 动态岛音乐信息样式 */
+.dynamic-island-music-info {
+  display: flex;
+  align-items: center;
+  padding: 8px 15px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  gap: 10px;
+  overflow: hidden;
+  opacity: 1;
+  max-height: 100px; /* 增加最大高度以容纳进度条 */
+  transition: max-height 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), padding 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.5s ease;
+}
+
+.dynamic-island:hover .dynamic-island-music-info {
+  max-height: 100px;
+}
+
+/* 当没有音乐播放时隐藏音乐信息区域 */
+.dynamic-island:not(.has-music) .dynamic-island-music-info {
+  max-height: 0;
+  padding: 0 15px;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), padding 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
+}
+
+/* 音乐进度条样式 */
+.music-progress-container {
+  margin-top: 6px;
+  width: 100%;
+}
+
+.music-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.1); /* 使用深色透明背景在亮色主题下更明显 */
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+/* 暗色主题下的进度条背景 */
+.theme-dark .music-progress-bar {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.music-progress-fill {
+  height: 100%;
+  background: var(--primary-color, #ec4899); /* 使用主题主色 */
+  border-radius: 2px;
+  transition: width 0.1s linear; /* 平滑的进度更新 */
+}
+
+/* 暗色主题下的进度条填充 */
+.theme-dark .music-progress-fill {
+  background: var(--primary-color-dark, #c0399d);
+}
+
+.music-progress-text {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: right;
+}
+
+.music-cover {
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.music-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.music-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.music-title {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: white;
+}
+
+.music-artist {
+  font-size: 11px;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: white;
+}
+
+/* 亮色主题下的音乐信息样式 */
+.dynamic-island-music-info {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.music-title {
+  color: black;
+}
+
+.music-artist {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.music-progress-text {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+/* 暗色主题下的音乐信息样式 */
+.theme-dark .dynamic-island-music-info {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.theme-dark .music-title {
+  color: white;
+}
+
+.theme-dark .music-artist {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.theme-dark .music-progress-text {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 /* 拖拽样式 */
@@ -3616,7 +4428,708 @@ body[data-color-mode="gradient"] .dynamic-island {
 }
 
 .agent-item.drag-over-bottom {
+
   border-bottom: 2px solid var(--primary-color);
+
+}
+
+
+
+
+
+/* 快速对话界面样式 */
+
+.quick-chat-modal-overlay {
+
+  position: fixed;
+
+  top: 0;
+
+  left: 0;
+
+  width: 100%;
+
+  height: 100%;
+
+  background: rgba(0, 0, 0, 0.5);
+
+  display: flex;
+
+  justify-content: center;
+
+  align-items: center;
+
+  z-index: 10000;
+
+  opacity: 0;
+
+  transition: opacity var(--duration-normal) var(--ease-out);
+
+}
+
+
+
+.quick-chat-modal-overlay.show {
+
+  opacity: 1;
+
+}
+
+
+
+.quick-chat-modal-content {
+
+  width: 90%;
+
+  max-width: 600px;
+
+  height: 80%;
+
+  max-height: 700px;
+
+  background: var(--bg-primary);
+
+  border-radius: var(--radius-lg);
+
+  display: flex;
+
+  flex-direction: column;
+
+  box-shadow: var(--shadow-lg);
+
+  overflow: hidden;
+
+  transform: scale(0.9);
+
+  transition: transform var(--duration-normal) var(--ease-out);
+
+}
+
+
+
+.quick-chat-modal-overlay.show .quick-chat-modal-content {
+
+  transform: scale(1);
+
+}
+
+
+
+.theme-dark .quick-chat-modal-content {
+
+  background: var(--bg-secondary);
+
+  color: var(--text-primary);
+
+}
+
+
+
+.quick-chat-header {
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  padding: 15px 20px;
+
+  border-bottom: 1px solid var(--border-color);
+
+  background: var(--gradient-primary);
+
+  color: white;
+
+}
+
+
+
+.theme-dark .quick-chat-header {
+
+  border-bottom: 1px solid var(--border-color);
+
+}
+
+
+
+.quick-chat-header h3 {
+
+  margin: 0;
+
+  font-size: 1.2em;
+
+  color: white;
+
+}
+
+
+
+.close-btn {
+
+  background: rgba(255, 255, 255, 0.2);
+
+  border: none;
+
+  color: white;
+
+  font-size: 1.5em;
+
+  cursor: pointer;
+
+  width: 30px;
+
+  height: 30px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border-radius: 50%;
+
+  transition: all 0.2s;
+
+}
+
+
+
+.close-btn:hover {
+
+  background: rgba(255, 255, 255, 0.3);
+
+  transform: scale(1.1);
+
+}
+
+
+
+.quick-chat-messages-container {
+
+  flex: 1;
+
+  padding: 20px;
+
+  overflow-y: auto;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 15px;
+
+  background: var(--bg-secondary);
+
+}
+
+
+
+.theme-dark .quick-chat-messages-container {
+
+  background: var(--bg-tertiary);
+
+}
+
+
+
+.quick-chat-messages-container .message {
+
+  max-width: 80%;
+
+  padding: 12px 16px;
+
+  border-radius: var(--radius-lg);
+
+  line-height: 1.5;
+
+  position: relative;
+
+  box-shadow: var(--shadow-sm);
+
+  animation: messageFadeIn 0.3s ease-out;
+
+}
+
+
+
+@keyframes messageFadeIn {
+
+  from {
+
+    opacity: 0;
+
+    transform: translateY(10px);
+
+  }
+
+  to {
+
+    opacity: 1;
+
+    transform: translateY(0);
+
+  }
+
+}
+
+
+
+.quick-chat-messages-container .message.user {
+
+  align-self: flex-end;
+
+  background: var(--primary-color);
+
+  color: white;
+
+  border-bottom-right-radius: 4px;
+
+}
+
+
+
+.theme-dark .quick-chat-messages-container .message.user {
+
+  background: var(--primary-hover);
+
+}
+
+
+
+.quick-chat-messages-container .message.assistant {
+
+  align-self: flex-start;
+
+  background: var(--bg-tertiary);
+
+  color: var(--text-primary);
+
+  border-bottom-left-radius: 4px;
+
+}
+
+
+
+.theme-dark .quick-chat-messages-container .message.assistant {
+
+  background: var(--bg-tertiary);
+
+  color: var(--text-primary);
+
+}
+
+
+
+.message-info {
+
+  font-size: 0.75em;
+
+  margin-top: 5px;
+
+  display: flex;
+
+  gap: 10px;
+
+  opacity: 0.7;
+
+}
+
+
+
+.token-info, .time-info {
+
+  background: rgba(0, 0, 0, 0.1);
+
+  padding: 2px 6px;
+
+  border-radius: var(--radius);
+
+}
+
+
+
+.quick-chat-input-container {
+
+  display: flex;
+
+  padding: 15px;
+
+  background: var(--bg-primary);
+
+  border-top: 1px solid var(--border-color);
+
+  gap: 10px;
+
+}
+
+
+
+.theme-dark .quick-chat-input-container {
+
+  background: var(--bg-secondary);
+
+  border-top: 1px solid var(--border-color);
+
+}
+
+
+
+.quick-chat-textarea {
+
+  flex: 1;
+
+  padding: 12px 15px;
+
+  border: 1px solid var(--border-color);
+
+  border-radius: var(--radius-lg);
+
+  resize: none;
+
+  min-height: 50px;
+
+  max-height: 150px;
+
+  font-family: inherit;
+
+  font-size: 1em;
+
+  outline: none;
+
+  transition: all 0.2s;
+
+  background: var(--bg-secondary);
+
+  color: var(--text-primary);
+
+}
+
+
+
+.quick-chat-textarea:focus {
+
+  border-color: var(--primary-color);
+
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.2);
+
+}
+
+
+
+.theme-dark .quick-chat-textarea {
+
+  background: var(--bg-tertiary);
+
+  color: var(--text-primary);
+
+  border-color: var(--border-color);
+
+}
+
+
+
+.quick-chat-send-btn {
+
+  width: 46px;
+
+  height: 46px;
+
+  border-radius: 50%;
+
+  border: none;
+
+  background: var(--primary-color);
+
+  color: white;
+
+  cursor: pointer;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  transition: all 0.2s;
+
+  align-self: flex-end;
+
+}
+
+
+
+.quick-chat-send-btn:hover:not(:disabled) {
+
+  transform: scale(1.05);
+
+  background: var(--primary-hover);
+
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.4);
+
+}
+
+
+
+.quick-chat-send-btn:disabled {
+
+  opacity: 0.5;
+
+  cursor: not-allowed;
+
+  transform: none;
+
+  background: var(--text-tertiary);
+
+}
+
+
+
+.theme-dark .quick-chat-send-btn {
+
+  background: var(--primary-color);
+
+}
+
+
+
+.loading-spinner {
+
+  width: 20px;
+
+  height: 20px;
+
+  border: 2px solid rgba(255, 255, 255, 0.3);
+
+  border-top: 2px solid white;
+
+  border-radius: 50%;
+
+  animation: spin 1s linear infinite;
+
+}
+
+
+
+@keyframes spin {
+
+  0% { transform: rotate(0deg); }
+
+  100% { transform: rotate(360deg); }
+
+}
+
+
+/* 草稿纸界面样式 */
+
+.notepad-modal-overlay {
+
+  position: fixed;
+
+  top: 0;
+
+  left: 0;
+
+  width: 100%;
+
+  height: 100%;
+
+  background: rgba(0, 0, 0, 0.5);
+
+  display: flex;
+
+  justify-content: center;
+
+  align-items: center;
+
+  z-index: 10000;
+
+  opacity: 0;
+
+  transition: opacity var(--duration-normal) var(--ease-out);
+
+}
+
+
+.notepad-modal-overlay.show {
+
+  opacity: 1;
+
+}
+
+
+.notepad-modal-content {
+
+  width: 90%;
+
+  max-width: 800px;
+
+  height: 80%;
+
+  max-height: 700px;
+
+  background: var(--bg-primary);
+
+  border-radius: var(--radius-lg);
+
+  display: flex;
+
+  flex-direction: column;
+
+  box-shadow: var(--shadow-lg);
+
+  overflow: hidden;
+
+  transform: scale(0.9);
+
+  transition: transform var(--duration-normal) var(--ease-out);
+
+}
+
+
+.notepad-modal-overlay.show .notepad-modal-content {
+
+  transform: scale(1);
+
+}
+
+
+.theme-dark .notepad-modal-content {
+
+  background: var(--bg-secondary);
+
+  color: var(--text-primary);
+
+}
+
+
+.notepad-tools {
+
+  display: flex;
+
+  align-items: center;
+
+  padding: 12px 15px;
+
+  background: var(--bg-secondary);
+
+  border-bottom: 1px solid var(--border-color);
+
+  gap: 10px;
+
+}
+
+
+.theme-dark .notepad-tools {
+
+  background: var(--bg-tertiary);
+
+}
+
+
+.tool-btn {
+
+  width: 40px;
+
+  height: 40px;
+
+  border-radius: 50%;
+
+  border: 1px solid var(--border-color);
+
+  background: var(--bg-primary);
+
+  color: var(--text-primary);
+
+  cursor: pointer;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  transition: all 0.2s;
+
+}
+
+
+.tool-btn:hover {
+
+  background: var(--primary-color);
+
+  color: white;
+
+  border-color: var(--primary-color);
+
+}
+
+
+.tool-btn.active {
+
+  background: var(--primary-color);
+
+  color: white;
+
+  border-color: var(--primary-color);
+
+}
+
+
+.color-picker {
+
+  width: 40px;
+
+  height: 40px;
+
+  border: none;
+
+  border-radius: 50%;
+
+  cursor: pointer;
+
+  background: none;
+
+}
+
+
+.size-slider {
+
+  width: 100px;
+
+}
+
+
+.size-value {
+
+  min-width: 20px;
+
+  text-align: center;
+
+  font-size: 0.9em;
+
+}
+
+
+.notepad-canvas {
+
+  flex: 1;
+
+  width: 100%;
+
+  background: var(--bg-primary);
+
+  cursor: crosshair;
+
+  touch-action: none; /* 防止触摸事件触发默认行为 */
+
+}
+
+
+.theme-dark .notepad-canvas {
+
+  background: var(--bg-primary);
+
 }
 
 
