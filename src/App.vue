@@ -167,7 +167,6 @@
             </button>
           </div>
         </div>
-        </div>
         <!-- 音乐播放信息显示区域 -->
         <div v-if="isMusicPlaying && currentMusic" class="dynamic-island-music-info">
           <div class="music-cover">
@@ -176,15 +175,37 @@
           <div class="music-info">
             <div class="music-title">{{ currentMusic.name || '未知歌曲' }}</div>
             <div class="music-artist">{{ (currentMusic.ar && Array.isArray(currentMusic.ar) ? currentMusic.ar.map(a => a.name).join(', ') : (currentMusic.artists && Array.isArray(currentMusic.artists) ? currentMusic.artists.map(a => a.name).join(', ') : currentMusic.artist || '未知艺术家')) }}</div>
-            <!-- 悬停时显示进度条 -->
+            <!-- 悬停时显示进度条和播放控件 -->
             <div class="music-progress-container" v-show="showDynamicIslandContent">
               <div class="music-progress-bar">
                 <div class="music-progress-fill" :style="{ width: musicProgress + '%' }"></div>
               </div>
-              <div class="music-progress-text">{{ formatMusicProgress() }}</div>
+              <div class="music-progress-controls">
+                <div class="music-progress-text">{{ formatMusicProgress() }}</div>
+                <div class="music-controls" :class="{ 'show': showDynamicIslandContent }">
+                  <button class="music-control-btn prev-btn" @click.stop="playPrevMusicFromPlayer" title="上一首">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                    </svg>
+                  </button>
+                  <button class="music-control-btn play-btn" @click.stop="toggleMusicPlayFromPlayer" title="播放/暂停">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path v-if="isMusicPlaying" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                      <path v-else d="M8 5v14l11-7z"/>
+                    </svg>
+                  </button>
+                  <button class="music-control-btn next-btn" @click.stop="playNextMusicFromPlayer" title="下一首">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+      </div>
+        
 
       <div class="chat-messages" ref="messagesContainer">
         <div v-if="!currentAgent" class="empty-state">
@@ -1175,12 +1196,16 @@
     
     <!-- 音乐播放器 -->
     <MusicPlayer 
+      ref="musicPlayer"
       :visible="showMusicPlayer" 
       :api-url="settings.musicApiUrl || 'http://localhost:3000'"
       @close="closeMusicPlayer" 
       @notify="showNotification" 
       @playback-status-changed="handleMusicPlaybackStatusChanged"
       @current-song-changed="handleCurrentSongChanged"
+      @toggle-music-play="toggleMusicPlayFromPlayer"
+      @play-next-music="playNextMusicFromPlayer"
+      @play-prev-music="playPrevMusicFromPlayer"
     />
     </div>
 </template>
@@ -1412,6 +1437,8 @@ export default {
       isMusicPlaying: false,
       currentMusic: null,
       musicProgress: 0,
+      currentTime: 0, // 当前播放时间
+      musicProgressInterval: null, // 音乐进度更新定时器
       // 默认专辑封面
       defaultAlbumArt: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23e0e0e0"/><text x="50" y="55" font-family="Arial" font-size="12" fill="%23666" text-anchor="middle">专辑封面</text></svg>'
 
@@ -3602,6 +3629,7 @@ export default {
     handleMusicPlaybackStatusChanged(status) {
       this.isMusicPlaying = status.isPlaying;
       this.currentMusic = status.currentSong;
+      this.currentTime = status.currentTime || 0; // 记录当前播放时间
       this.musicProgress = status.duration ? (status.currentTime / status.duration) * 100 : 0;
     },
     
@@ -3626,11 +3654,62 @@ export default {
       const totalMins = Math.floor(totalSeconds / 60);
       const totalSecs = totalSeconds % 60;
       return `${currentMins}:${currentSecs < 10 ? '0' : ''}${currentSecs} / ${totalMins}:${totalSecs < 10 ? '0' : ''}${totalSecs}`;
+    },
+
+    // 播放/暂停音乐
+    toggleMusicPlay() {
+      // 通过事件与MusicPlayer组件通信
+      this.$emit('toggle-music-play');
+    },
+
+    // 播放音乐
+    playMusic() {
+      this.isMusicPlaying = true;
+      this.startMusicProgress();
+    },
+
+    // 暂停音乐
+    pauseMusic() {
+      this.isMusicPlaying = false;
+      if (this.musicProgressInterval) {
+        clearInterval(this.musicProgressInterval);
+        this.musicProgressInterval = null;
+      }
+    },
+
+    // 开始音乐进度更新
+    startMusicProgress() {
+      if (this.musicProgressInterval) {
+        clearInterval(this.musicProgressInterval);
+      }
+
+      this.musicProgressInterval = setInterval(() => {
+        if (this.isMusicPlaying && this.currentMusic && this.currentMusic.duration) {
+          this.musicProgress = (this.currentTime / this.currentMusic.duration) * 100;
+        }
+      }, 1000);
+    },
+
+    // 从播放器组件触发播放/暂停
+    toggleMusicPlayFromPlayer() {
+      // 向MusicPlayer组件发送播放/暂停命令
+      this.$refs.musicPlayer && this.$refs.musicPlayer.togglePlayPause();
+    },
+
+    // 从播放器组件触发下一首
+    playNextMusicFromPlayer() {
+      this.$refs.musicPlayer && this.$refs.musicPlayer.skipNext();
+    },
+
+    // 从播放器组件触发上一首
+    playPrevMusicFromPlayer() {
+      this.$refs.musicPlayer && this.$refs.musicPlayer.skipPrevious();
     }
 
   }
 
   }
+
 
 
 
@@ -4039,12 +4118,15 @@ export default {
   background: var(--chat-header-bg, #f8f9fa);
   border-radius: var(--dynamic-island-radius, 20px); /* 使用CSS变量 */
   padding: 5px 15px;
-  margin: 10px auto;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: all var(--dynamic-island-animation-speed, 0.5s) cubic-bezier(0.25, 0.8, 0.25, 1);
   background: var(--primary-color, #ec4899);
   color: white;
-  position: relative;
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
   overflow: hidden;
   max-width: 600px;
   min-width: 0;
@@ -4066,7 +4148,7 @@ body[data-color-mode="gradient"] .dynamic-island {
 
 .dynamic-island:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  transform: translateY(-2px);
+  transform: translateX(-50%) translateY(-2px);
   min-height: 60px;
   padding: 10px 20px;
   transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -4287,12 +4369,12 @@ body[data-color-mode="gradient"] .dynamic-island {
   gap: 10px;
   overflow: hidden;
   opacity: 1;
-  max-height: 100px; /* 增加最大高度以容纳进度条 */
+  max-height: 80px; /* 减小最大高度以优化布局 */
   transition: max-height 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), padding 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.5s ease;
 }
 
 .dynamic-island:hover .dynamic-island-music-info {
-  max-height: 100px;
+  max-height: 80px; /* 减小展开后的高度 */
 }
 
 /* 当没有音乐播放时隐藏音乐信息区域 */
@@ -4319,6 +4401,13 @@ body[data-color-mode="gradient"] .dynamic-island {
   margin-bottom: 4px;
 }
 
+.music-progress-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
 /* 暗色主题下的进度条背景 */
 .theme-dark .music-progress-bar {
   background: rgba(255, 255, 255, 0.3);
@@ -4326,14 +4415,14 @@ body[data-color-mode="gradient"] .dynamic-island {
 
 .music-progress-fill {
   height: 100%;
-  background: var(--primary-color, #ec4899); /* 使用主题主色 */
+  background: var(--primary-color-dark, #ffffff); /* 使用主题主色 */
   border-radius: 2px;
   transition: width 0.1s linear; /* 平滑的进度更新 */
 }
 
 /* 暗色主题下的进度条填充 */
 .theme-dark .music-progress-fill {
-  background: var(--primary-color-dark, #c0399d);
+  background: var(--primary-color-dark, #1b1b1b);
 }
 
 .music-progress-text {
@@ -4342,18 +4431,65 @@ body[data-color-mode="gradient"] .dynamic-island {
   text-align: right;
 }
 
+/* 音乐播放控件 */
+.music-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.music-controls.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.music-control-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.music-control-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
 .music-cover {
   width: 30px;
   height: 30px;
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
+  transition: all 0.3s ease;
 }
 
 .music-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: all 0.3s ease;
+}
+
+/* hover时放大封面，使其与歌名和进度条对齐 */
+.dynamic-island:hover .music-cover {
+  width: 45px;
+  height: 45px;
+}
+
+.dynamic-island:hover .music-cover img {
+  transform: scale(1.05);
 }
 
 .music-info {
@@ -4365,39 +4501,27 @@ body[data-color-mode="gradient"] .dynamic-island {
 }
 
 .music-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: white;
+  margin-bottom: 2px;
 }
 
 .music-artist {
-  font-size: 11px;
+  font-size: 10px;
   opacity: 0.8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: white;
+  margin-bottom: 4px;
 }
 
-/* 亮色主题下的音乐信息样式 */
-.dynamic-island-music-info {
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-}
 
-.music-title {
-  color: black;
-}
 
-.music-artist {
-  color: rgba(0, 0, 0, 0.7);
-}
-
-.music-progress-text {
-  color: rgba(0, 0, 0, 0.7);
-}
 
 /* 暗色主题下的音乐信息样式 */
 .theme-dark .dynamic-island-music-info {

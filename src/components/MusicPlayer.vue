@@ -188,6 +188,8 @@ export default {
     }
   },
   mounted() {
+    // 加载保存的音量设置
+    this.loadSavedVolume();
     this.initAudio();
     this.loadDefaultPlaylist();
   },
@@ -222,38 +224,9 @@ export default {
       });
     },
     
-    async loadDefaultPlaylist() {
-      try {
-        // 调用API获取推荐歌曲
-        const response = await fetch(`${this.apiUrl}/personalized/newsong`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.code === 200 && data.result) {
-            this.playlist = data.result.map(item => ({
-              id: item.id,
-              name: item.name,
-              artist: (item.song && item.song.artists) ? item.song.artists.map(a => a.name).join(', ') : 
-                      (item.artists ? item.artists.map(a => a.name).join(', ') : '未知艺术家'),
-              duration: (item.song ? item.song.duration : 0) || (item.duration ? item.duration : 0),
-              album: (item.song && item.song.album) ? item.song.album.name : 
-                     (item.album ? item.album.name : '未知专辑'),
-              picUrl: (item.song && item.song.album && item.song.album.picUrl) ? item.song.album.picUrl : 
-                      (item.picUrl ? item.picUrl : null),
-              url: `https://music.163.com/song/media/outer/url?id=${item.id}.mp3`
-            }));
-          } else {
-            // 如果API调用失败，使用默认列表
-            this.useDefaultPlaylist();
-          }
-        } else {
-          // 如果API调用失败，使用默认列表
-          this.useDefaultPlaylist();
-        }
-        this.currentPlaylist = this.playlist;
-      } catch (error) {
-        console.error('加载默认播放列表失败:', error);
-        this.useDefaultPlaylist();
-      }
+      async loadDefaultPlaylist() {
+      // 取消自动加载个性化推荐，初始化为空播放列表
+      this.useDefaultPlaylist();
     },
     
     useDefaultPlaylist() {
@@ -435,6 +408,29 @@ export default {
       if (this.audio) {
         this.audio.volume = this.volume / 100;
       }
+      // 保存音量设置到localStorage
+      this.saveVolume();
+    },
+
+    // 加载保存的音量设置
+    loadSavedVolume() {
+      try {
+        const savedVolume = localStorage.getItem('musicPlayerVolume');
+        if (savedVolume !== null) {
+          this.volume = parseInt(savedVolume, 10);
+        }
+      } catch (error) {
+        console.error('加载音量设置失败:', error);
+      }
+    },
+
+    // 保存音量设置到localStorage
+    saveVolume() {
+      try {
+        localStorage.setItem('musicPlayerVolume', this.volume.toString());
+      } catch (error) {
+        console.error('保存音量设置失败:', error);
+      }
     },
     
     togglePlaylistView() {
@@ -512,32 +508,53 @@ export default {
   align-items: center;
   z-index: 10000;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transform: scale(0.9);
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* 更流畅的缓动 */
 }
 
 .music-player-modal-overlay[style*="display: block"], 
 .music-player-modal-overlay:not([style*="display: none"]) {
   opacity: 1;
+  transform: scale(1);
 }
 
 .music-player-modal-content {
   width: 90%;
-  max-width: 800px;
-  height: 80%;
-  max-height: 700px;
+  max-width: 900px; /* 增加最大宽度 */
+  height: 85%; /* 增加高度 */
+  max-height: 800px; /* 增加最大高度 */
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-  transform: scale(0.9);
-  transition: transform 0.3s ease;
+  transform: translateY(-50px); /* 初始位置向上偏移 */
+  transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* 更流畅的缓动 */
 }
 
 .music-player-modal-overlay[style*="display: block"] .music-player-modal-content,
 .music-player-modal-overlay:not([style*="display: none"]) .music-player-modal-content {
-  transform: scale(1);
+  transform: translateY(0); /* 恢复正常位置 */
+}
+
+/* 添加弹跳效果 */
+.music-player-modal-content {
+  animation: modalPopIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes modalPopIn {
+  0% {
+    transform: scale(0.8) translateY(-60px);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.05) translateY(10px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
 }
 
 .theme-dark .music-player-modal-content {
@@ -685,7 +702,9 @@ export default {
 .playlist-container {
   flex: 1;
   overflow-y: auto;
-  max-height: 200px;
+  max-height: none;
+  height: 300px;
+  min-height: 200px;
 }
 
 .playlist-item {
@@ -743,7 +762,8 @@ export default {
   background: var(--bg-primary);
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 10px; /* 减少间距 */
+  min-height: 180px; /* 设置最小高度，但比之前小一些 */
 }
 
 .current-song-info {
@@ -808,6 +828,11 @@ export default {
   background: var(--bg-tertiary);
   outline: none;
   -webkit-appearance: none;
+  transition: all 0.3s ease;
+}
+
+.progress-slider:hover {
+  height: 7px; /* 悬停时增高 */
 }
 
 .progress-slider::-webkit-slider-thumb {
@@ -817,6 +842,13 @@ export default {
   border-radius: 50%;
   background: var(--primary-color);
   cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 5px rgba(var(--primary-color-rgb), 0.5);
+}
+
+.progress-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.3); /* 悬停时放大 */
+  background: var(--primary-hover);
 }
 
 .progress-slider::-moz-range-thumb {
@@ -826,6 +858,13 @@ export default {
   background: var(--primary-color);
   cursor: pointer;
   border: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 5px rgba(var(--primary-color-rgb), 0.5);
+}
+
+.progress-slider::-moz-range-thumb:hover {
+  transform: scale(1.3); /* 悬停时放大 */
+  background: var(--primary-hover);
 }
 
 .control-buttons {
@@ -964,18 +1003,72 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* 更流畅的过渡 */
 }
 
 .add-to-playlist-btn:hover, .play-song-btn:hover {
   background: var(--primary-color);
   color: white;
-  transform: scale(1.1);
+  transform: scale(1.2); /* 增大缩放效果 */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .add-to-playlist-btn:disabled, .play-song-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+}
+
+/* 播放列表项动画 */
+.playlist-item {
+  animation: fadeInUp 0.4s ease-out;
+  animation-fill-mode: both;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 按钮悬停效果动画 */
+.control-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.control-btn:hover:not(:disabled) {
+  transform: scale(1.1) !important; /* 增大悬停缩放效果 */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.search-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.search-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.6s;
+}
+
+.search-btn:hover::before {
+  left: 100%;
+}
+
+.search-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 </style>
