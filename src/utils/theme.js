@@ -146,6 +146,21 @@ export class ThemeManager {
 
     }
 
+    // 应用字体
+    if (settings.fontFamily) {
+      let fontFamily = settings.fontFamily
+      
+      // 如果启用了副字体，将副字体添加到字体栈中
+      if (settings.enableSecondaryFont && settings.secondaryFontFamily) {
+        // 确保副字体不与主字体重复
+        if (settings.secondaryFontFamily !== settings.fontFamily) {
+          fontFamily = `${settings.fontFamily}, ${settings.secondaryFontFamily}`
+        }
+      }
+      
+      root.style.setProperty('--font-family', fontFamily)
+    }
+
     // 应用字体大小
     const fontSizeMap = {
       small: '14px',

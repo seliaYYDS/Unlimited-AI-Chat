@@ -152,6 +152,50 @@
       <h4 class="section-title">界面样式</h4>
 
       <div class="form-group">
+        <label>字体</label>
+        <div class="font-select-container">
+          <CustomSelect
+            :model-value="settings.fontFamily"
+            :options="fontFamilyOptions"
+            placeholder="选择字体"
+            @update:model-value="updateSetting('fontFamily', $event)"
+          />
+          <div v-if="loadingSystemFonts" class="font-loading-indicator">
+            <span class="loading-text">正在检测系统字体...</span>
+          </div>
+          <div class="font-preview" :style="{ fontFamily: settings.fontFamily || 'system-ui' }">
+            字体预览 AaBbCc 123 汉字测试
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <CustomCheckbox
+          :model-value="settings.enableSecondaryFont"
+          label="启用副字体"
+          @update:model-value="updateSetting('enableSecondaryFont', $event)"
+        />
+        <div class="form-hint">
+          启用后，当主字体无法显示某些字符时，将使用副字体显示
+        </div>
+      </div>
+
+      <div v-if="settings.enableSecondaryFont" class="form-group">
+        <label>副字体</label>
+        <div class="font-select-container">
+          <CustomSelect
+            :model-value="settings.secondaryFontFamily"
+            :options="fontFamilyOptions"
+            placeholder="选择副字体"
+            @update:model-value="updateSetting('secondaryFontFamily', $event)"
+          />
+          <div class="font-preview" :style="{ fontFamily: settings.secondaryFontFamily || 'system-ui' }">
+            副字体预览 AaBbCc 123 汉字测试
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
         <label>字体大小</label>
         <div class="option-buttons">
           <button
@@ -408,29 +452,14 @@
 
 
       <div class="form-group">
-
-        <label>流光透明度</label>
-
-        <input
-
-          type="range"
-
-          min="0"
-
-          max="1"
-
-          step="0.1"
-
-          :value="settings.shineOpacity"
-
-          @input="updateSetting('shineOpacity', parseFloat($event.target.value))"
-
-          class="slider"
-
-        >
-
-        <div class="slider-value">{{ settings.shineOpacity }}</div>
-
+        <CustomSlider
+          :model-value="settings.shineOpacity"
+          :min="0"
+          :max="1"
+          :step="0.1"
+          label="流光透明度"
+          @update:model-value="updateSetting('shineOpacity', $event)"
+        />
       </div>
     </div>
 
@@ -449,15 +478,51 @@
       </div>
 
       <div class="form-group">
-        <label>滞留时间（秒）</label>
         <CustomSlider
           :model-value="settings.notificationDuration"
           :min="1"
           :max="10"
           :step="0.5"
-          label=""
+          label="滞留时间（秒）"
           unit="秒"
           @update:model-value="updateSetting('notificationDuration', $event)"
+        />
+      </div>
+    </div>
+
+    <!-- 弹窗背景设置 -->
+    <div class="settings-section">
+      <h4 class="section-title">弹窗背景设置</h4>
+
+      <div class="form-group">
+        <CustomCheckbox
+          :model-value="settings.modalBackdropBlur"
+          label="启用背景模糊"
+          @update:model-value="updateSetting('modalBackdropBlur', $event)"
+        />
+      </div>
+
+      <div v-if="settings.modalBackdropBlur" class="form-group">
+        <CustomSlider
+          :model-value="settings.modalBackdropBlurAmount"
+          :min="0"
+          :max="20"
+          :step="1"
+          label="模糊程度"
+          unit="px"
+          @update:model-value="updateSetting('modalBackdropBlurAmount', $event)"
+        />
+      </div>
+
+      <div class="form-group">
+        <CustomSlider
+          :model-value="settings.modalBackdropOpacity"
+          :min="0.1"
+          :max="1.0"
+          :step="0.1"
+          label="背景暗化程度"
+          unit=""
+          @update:model-value="updateSetting('modalBackdropOpacity', $event)"
         />
       </div>
     </div>
@@ -472,6 +537,7 @@
 
 <script>
 import { StorageManager } from '../storage.js'
+import { FontDetector } from '../utils/fontDetector.js'
 import CustomSelect from './CustomSelect.vue'
 import CustomSlider from './CustomSlider.vue'
 import CustomCheckbox from './CustomCheckbox.vue'
@@ -492,6 +558,9 @@ export default {
   data() {
     return {
       storageManager: null,
+      fontDetector: null,
+      systemFonts: [],
+      loadingSystemFonts: false,
 
       // 选项配置
       themeOptions: [
@@ -513,6 +582,42 @@ export default {
         { value: 'dual', label: '双色模式' },
         { value: 'gradient', label: '渐变模式' }
       ],
+
+      get fontFamilyOptions() {
+      const baseOptions = [
+        { value: 'system-ui', label: '系统默认', fontFamily: 'system-ui' },
+        { value: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', label: '苹果系统', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+        { value: '"Microsoft YaHei", "微软雅黑", sans-serif', label: '微软雅黑', fontFamily: '"Microsoft YaHei", "微软雅黑", sans-serif' },
+        { value: '"SimHei", "黑体", sans-serif', label: '黑体', fontFamily: '"SimHei", "黑体", sans-serif' },
+        { value: '"SimSun", "宋体", serif', label: '宋体', fontFamily: '"SimSun", "宋体", serif' },
+        { value: '"KaiTi", "楷体", serif', label: '楷体', fontFamily: '"KaiTi", "楷体", serif' },
+        { value: '"FangSong", "仿宋", serif', label: '仿宋', fontFamily: '"FangSong", "仿宋", serif' },
+        { value: 'Arial, sans-serif', label: 'Arial', fontFamily: 'Arial, sans-serif' },
+        { value: 'Georgia, serif', label: 'Georgia', fontFamily: 'Georgia, serif' },
+        { value: '"Courier New", monospace', label: 'Courier New', fontFamily: '"Courier New", monospace' },
+        { value: '"Comic Sans MS", cursive', label: 'Comic Sans', fontFamily: '"Comic Sans MS", cursive' }
+      ]
+
+      // 如果有系统字体，添加到选项中
+      if (this.systemFonts.length > 0) {
+        const systemFontOptions = this.systemFonts.map(font => ({
+          value: this.fontDetector.formatFontFamily(font),
+          label: font,
+          fontFamily: this.fontDetector.formatFontFamily(font)
+        }))
+        
+        // 添加分隔符
+        if (systemFontOptions.length > 0) {
+          return [
+            ...baseOptions,
+            { value: '---', label: '--- 系统字体 ---', disabled: true, fontFamily: 'inherit' },
+            ...systemFontOptions
+          ]
+        }
+      }
+
+      return baseOptions
+    },
 
       fontSizeOptions: [
         { value: 'small', label: '小' },
@@ -596,6 +701,8 @@ export default {
   },
   mounted() {
     this.storageManager = new StorageManager()
+    this.fontDetector = new FontDetector()
+    this.loadSystemFonts()
   },
   methods: {
     updateSetting(key, value) {
@@ -622,6 +729,12 @@ export default {
         gradientColor1: '#ec4899',
 
         gradientColor2: '#3b82f6',
+
+        fontFamily: 'system-ui',
+
+        enableSecondaryFont: false,
+
+        secondaryFontFamily: 'system-ui',
 
         fontSize: 'medium',
 
@@ -653,7 +766,12 @@ export default {
         
         // 通知默认设置
         notificationBorderMode: 'none',
-        notificationDuration: 3
+        notificationDuration: 3,
+        
+        // 弹窗背景默认设置
+        modalBackdropBlur: true,
+        modalBackdropBlurAmount: 8,
+        modalBackdropOpacity: 0.5
 
       })
 
@@ -663,6 +781,19 @@ export default {
 
     showNotification(message, type) {
       this.$emit('notify', { message, type })
+    },
+
+    async loadSystemFonts() {
+      this.loadingSystemFonts = true
+      try {
+        const fonts = await this.fontDetector.getSystemFonts()
+        this.systemFonts = fonts
+      } catch (error) {
+        console.error('加载系统字体失败:', error)
+        this.showNotification('加载系统字体失败', 'error')
+      } finally {
+        this.loadingSystemFonts = false
+      }
     }
   }
 }
@@ -975,6 +1106,64 @@ export default {
   margin-top: 8px;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* 字体选择器相关样式 */
+.font-select-container {
+  position: relative;
+}
+
+.font-loading-indicator {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text-secondary);
+  z-index: 10;
+}
+
+.loading-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.loading-text::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.font-preview {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  font-size: 16px;
+  color: var(--text-primary);
+  text-align: center;
+  transition: all var(--duration-fast) var(--ease-in-out);
+}
+
+.font-preview:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 /* 响应式设计 */

@@ -99,12 +99,22 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, var(--modal-backdrop-opacity, 0.5));
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   animation: fadeIn 0.3s ease;
+  /* 添加模糊效果 */
+  backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 8px)); /* Safari 支持 */
+}
+
+/* 为不支持 backdrop-filter 的浏览器提供降级方案 */
+@supports not (backdrop-filter: blur(8px)) {
+  .modal-overlay {
+    background: rgba(0, 0, 0, 0.7);
+  }
 }
 
 .modal-container {

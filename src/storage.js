@@ -181,11 +181,11 @@ export class StorageManager {
                 modelName: 'gpt-3.5-turbo',
                 temperature: 0.7,
                 maxTokens: 1000,
-                                // 对话设置
-                wordByWordOutput: false,
-                showTokens: false,
-                showThinkingTime: false,
-                enableFormatting: true,
+                                // 对话设置
+                wordByWordOutput: false,
+                showTokens: false,
+                showThinkingTime: false,
+                enableFormatting: true,
                 contextLength: 50, // 上下文长度限制，默认为50条消息
                 // 聊天记录清理设置
                 autoClearConversations: false, // 是否自动清理对话记录
@@ -206,6 +206,9 @@ export class StorageManager {
                 secondaryColor: '#3b82f6', // 副色调
                 gradientColor1: '#ec4899', // 渐变色1
                 gradientColor2: '#3b82f6', // 渐变色2
+                fontFamily: 'system-ui', // 字体设置
+                enableSecondaryFont: false, // 是否启用副字体
+                secondaryFontFamily: 'system-ui', // 副字体设置
                 fontSize: 'medium', // 'small', 'medium', 'large'
                 borderRadius: 'medium', // 'small', 'medium', 'large'
                 animationSpeed: 'normal', // 'fast', 'normal', 'slow'
@@ -213,14 +216,18 @@ export class StorageManager {
                 messageBubbleStyle: 'default', // 'default', 'rounded', 'minimal'
                 chatLayout: 'standard', // 'standard', 'compact', 'expanded'
                 colorMode: 'single', // 'single', 'dual', 'gradient'
-                // 流光效果设置
-                enableShineEffect: true, // 是否启用流光效果
-                shineColor: '#ec4899', // 流光颜色
-                shineSpeed: 'normal', // 'fast', 'normal', 'slow'
-                shineOpacity: 0.4, // 流光透明度 (0-1)
-                // 通知设置
-                notificationBorderMode: 'none', // 边框模式：'none', 'left', 'right', 'full'
-                notificationDuration: 3 // 滞留时间（秒）
+                // 流光效果设置
+                enableShineEffect: true, // 是否启用流光效果
+                shineColor: '#ec4899', // 流光颜色
+                shineSpeed: 'normal', // 'fast', 'normal', 'slow'
+                shineOpacity: 0.4, // 流光透明度 (0-1)
+                // 通知设置
+                notificationBorderMode: 'none', // 边框模式：'none', 'left', 'right', 'full'
+                notificationDuration: 3, // 滞留时间（秒）
+                // 弹窗背景设置
+                modalBackdropBlur: true, // 是否启用弹窗背景模糊
+                modalBackdropBlurAmount: 8, // 模糊程度 (0-20)
+                modalBackdropOpacity: 0.5 // 背景暗化程度 (0.1-1.0)
             }
 
             if (settings) {

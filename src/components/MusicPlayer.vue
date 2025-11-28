@@ -502,7 +502,7 @@ export default {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, var(--modal-backdrop-opacity, 0.7));
   display: flex;
   justify-content: center;
   align-items: center;
@@ -510,6 +510,9 @@ export default {
   opacity: 0;
   transform: scale(0.9);
   transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* 更流畅的缓动 */
+  /* 添加模糊效果 */
+  backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
+  -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 8px)); /* Safari 支持 */
 }
 
 .music-player-modal-overlay[style*="display: block"], 

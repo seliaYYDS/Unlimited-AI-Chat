@@ -1,8 +1,8 @@
 <template>
   <div class="custom-slider" :class="{ disabled: disabled }">
     <div class="slider-header">
-      <span class="slider-label">{{ label }}: {{ modelValue }}</span>
-      <span class="slider-value">{{ modelValue }}{{ unit }}</span>
+      <span class="slider-label">{{ label }}: {{ displayValue }}</span>
+      <span class="slider-value">{{ displayValue }}{{ unit }}</span>
     </div>
     <div class="slider-track" @click="handleTrackClick">
       <div class="slider-progress" :style="{ width: progressWidth }"></div>
@@ -80,6 +80,11 @@ export default {
         ticks.push(i)
       }
       return ticks
+    },
+    displayValue() {
+      // 确保显示的值有正确的小数位数
+      const stepPrecision = this.getDecimalPlaces(this.step)
+      return parseFloat(this.modelValue.toFixed(stepPrecision))
     }
   },
   methods: {
@@ -118,14 +123,34 @@ export default {
       let position = (clientX - rect.left) / rect.width
       position = Math.max(0, Math.min(1, position))
       
+      // 修复浮点数精度问题
       let newValue = this.min + position * (this.max - this.min)
+      
+      // 使用更精确的四舍五入方法来避免浮点数精度问题
+      const stepPrecision = this.getDecimalPlaces(this.step)
+      const roundFactor = Math.pow(10, stepPrecision)
       newValue = Math.round(newValue / this.step) * this.step
+      
+      // 再次使用toFixed来确保精度
+      newValue = parseFloat(newValue.toFixed(stepPrecision))
       newValue = Math.max(this.min, Math.min(this.max, newValue))
       
       if (this.modelValue !== newValue) {
         this.$emit('update:modelValue', newValue)
         this.$emit('change', newValue)
       }
+    },
+    
+    // 获取小数位数
+    getDecimalPlaces(num) {
+      const str = num.toString()
+      if (str.indexOf('.') !== -1 && str.indexOf('e-') === -1) {
+        return str.split('.')[1].length
+      } else if (str.indexOf('e-') !== -1) {
+        const parts = str.split('e-')
+        return parseInt(parts[1], 10)
+      }
+      return 0
     },
     handleTrackClick(event) {
       if (this.disabled) return

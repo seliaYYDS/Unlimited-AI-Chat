@@ -1,5 +1,12 @@
 <template>
-  <div class="app" :class="{ 'theme-dark': isDarkTheme }">
+  <div 
+    class="app" 
+    :class="{ 'theme-dark': isDarkTheme }"
+    :style="{
+      '--modal-backdrop-blur': styleSettings.modalBackdropBlur ? `${styleSettings.modalBackdropBlurAmount}px` : '0px',
+      '--modal-backdrop-opacity': styleSettings.modalBackdropOpacity || 0.5
+    }"
+  >
 
 
 
@@ -9,7 +16,7 @@
     <div :class="['sidebar', { 'collapsed': !sidebarExpanded }]">
       <div class="sidebar-header neon-glow">
         <h1 class="app-title">
-          <span class="title-text">AI智能体</span>
+          <span class="title-text">Unlimited</span>
           <span class="title-dot"></span>
         </h1>
         <button :class="['create-agent-btn', 'hover-scale', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="showCreateModal = true">
@@ -1608,6 +1615,9 @@ export default {
         secondaryColor: settings.secondaryColor || '#3b82f6',
         gradientColor1: settings.gradientColor1 || '#ec4899',
         gradientColor2: settings.gradientColor2 || '#3b82f6',
+        fontFamily: settings.fontFamily || 'system-ui',
+        enableSecondaryFont: settings.enableSecondaryFont || false,
+        secondaryFontFamily: settings.secondaryFontFamily || 'system-ui',
         fontSize: settings.fontSize || 'medium',
         borderRadius: settings.borderRadius || 'medium',
         animationSpeed: settings.animationSpeed || 'normal',
@@ -1622,7 +1632,11 @@ export default {
         shineOpacity: settings.shineOpacity !== undefined ? settings.shineOpacity : 0.4,
         // 通知设置
         notificationBorderMode: settings.notificationBorderMode || 'none',
-        notificationDuration: settings.notificationDuration || 3
+        notificationDuration: settings.notificationDuration || 3,
+        // 弹窗背景设置
+        modalBackdropBlur: settings.modalBackdropBlur !== undefined ? settings.modalBackdropBlur : true,
+        modalBackdropBlurAmount: settings.modalBackdropBlurAmount || 8,
+        modalBackdropOpacity: settings.modalBackdropOpacity || 0.5
       }
 
       // 应用样式设置
@@ -4575,7 +4589,7 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   height: 100%;
 
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, var(--modal-backdrop-opacity, 0.5));
 
   display: flex;
 
@@ -4588,6 +4602,12 @@ body[data-color-mode="gradient"] .dynamic-island {
   opacity: 0;
 
   transition: opacity var(--duration-normal) var(--ease-out);
+
+  /* 添加模糊效果 */
+
+  backdrop-filter: blur(var(--modal-backdrop-blur, 0px));
+
+  -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 0px)); /* Safari 支持 */
 
 }
 
@@ -5058,7 +5078,7 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   height: 100%;
 
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, var(--modal-backdrop-opacity, 0.5));
 
   display: flex;
 
@@ -5071,6 +5091,12 @@ body[data-color-mode="gradient"] .dynamic-island {
   opacity: 0;
 
   transition: opacity var(--duration-normal) var(--ease-out);
+
+  /* 添加模糊效果 */
+
+  backdrop-filter: blur(var(--modal-backdrop-blur, 0px));
+
+  -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 0px)); /* Safari 支持 */
 
 }
 

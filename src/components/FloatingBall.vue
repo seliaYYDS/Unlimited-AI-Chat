@@ -1,7 +1,7 @@
 <template>
   <div 
     class="floating-ball" 
-    :class="{ 'expanded': isExpanded }"
+    :class="{ 'expanded': isExpanded, 'mobile': isMobile }"
     :style="{
       left: position.x + 'px',
       top: position.y + 'px',
@@ -10,8 +10,8 @@
       '--primary-color-dark': primaryColorDark,
       '--secondary-color-dark': secondaryColorDark
     }"
-    @mousedown="startDrag"
-    @touchstart="startDrag"
+    @mousedown="onDesktopDragStart"
+    @touchstart="onMobileDragStart"
   >
     <div class="floating-ball-icon">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -20,9 +20,21 @@
     </div>
     <div v-if="isExpanded" class="tools-dropdown">
       <div class="tools-list">
-        <div class="tool-item" @click.stop="onToolClick('music-player')">音乐播放器</div>
-        <div class="tool-item" @click.stop="onToolClick('notepad')">草稿纸</div>
-        <div class="tool-item" @click.stop="onToolClick('quick-chat')">快速对话</div>
+        <div 
+          class="tool-item" 
+          @click.stop="onToolClick('music-player')"
+          @touchend.stop="onToolTouchEnd($event, 'music-player')"
+        >音乐播放器</div>
+        <div 
+          class="tool-item" 
+          @click.stop="onToolClick('notepad')"
+          @touchend.stop="onToolTouchEnd($event, 'notepad')"
+        >草稿纸</div>
+        <div 
+          class="tool-item" 
+          @click.stop="onToolClick('quick-chat')"
+          @touchend.stop="onToolTouchEnd($event, 'quick-chat')"
+        >快速对话</div>
       </div>
     </div>
   </div>
@@ -68,7 +80,7 @@ export default {
   },
   mounted() {
     // 检测是否为移动设备
-    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    this.isMobile = 'ontouchstart' in window || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
     // 从localStorage加载之前保存的位置
     this.loadPosition()
@@ -81,28 +93,53 @@ export default {
       window.addEventListener('resize', this.handleResize)
     })
     
-    // 添加鼠标/触摸事件监听器 - 使用 passive 优化性能
-    if (this.isMobile) {
-      document.addEventListener('touchmove', this.onDrag, { passive: false })
-      document.addEventListener('touchend', this.stopDrag, { passive: true })
-      document.addEventListener('touchcancel', this.stopDrag, { passive: true })
-    } else {
-      document.addEventListener('mousemove', this.onDrag, { passive: false })
-      document.addEventListener('mouseup', this.stopDrag, { passive: true })
-    }
+    // 添加桌面端事件监听器
+    document.addEventListener('mousemove', this.onDesktopDrag, { passive: false })
+    document.addEventListener('mouseup', this.onDesktopDragEnd, { passive: true })
+    
+    // 添加移动端事件监听器
+    document.addEventListener('touchmove', this.onMobileDrag, { passive: false })
+    document.addEventListener('touchend', this.onMobileDragEnd, { passive: true })
+    document.addEventListener('touchcancel', this.onMobileDragEnd, { passive: true })
+    
+    // 添加外部点击事件监听器
     document.addEventListener('click', this.handleOutsideClick)
+    
+    // 添加移动端外部触摸事件监听器
+    if (this.isMobile) {
+      document.addEventListener('touchstart', this.handleOutsideTouch, { passive: true })
+    }
+    
+    // 添加移动端触摸事件监听器（用于处理触摸反馈）
+    if (this.isMobile) {
+      this.$el.addEventListener('touchstart', this.onTouchStart, { passive: true })
+      this.$el.addEventListener('touchend', this.onTouchEnd, { passive: true })
+    }
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.handleResize)
-    if (this.isMobile) {
-      document.removeEventListener('touchmove', this.onDrag)
-      document.removeEventListener('touchend', this.stopDrag)
-      document.removeEventListener('touchcancel', this.stopDrag)
-    } else {
-      document.removeEventListener('mousemove', this.onDrag)
-      document.removeEventListener('mouseup', this.stopDrag)
-    }
+    
+    // 移除桌面端事件监听器
+    document.removeEventListener('mousemove', this.onDesktopDrag)
+    document.removeEventListener('mouseup', this.onDesktopDragEnd)
+    
+    // 移除移动端事件监听器
+    document.removeEventListener('touchmove', this.onMobileDrag)
+    document.removeEventListener('touchend', this.onMobileDragEnd)
+    document.removeEventListener('touchcancel', this.onMobileDragEnd)
+    
     document.removeEventListener('click', this.handleOutsideClick)
+    
+    // 移除移动端外部触摸事件监听器
+    if (this.isMobile) {
+      document.removeEventListener('touchstart', this.handleOutsideTouch)
+    }
+    
+    // 移除移动端触摸事件监听器
+    if (this.isMobile && this.$el) {
+      this.$el.removeEventListener('touchstart', this.onTouchStart)
+      this.$el.removeEventListener('touchend', this.onTouchEnd)
+    }
   },
   methods: {
     // 处理窗口大小变化
@@ -162,6 +199,17 @@ export default {
         }
       }
     },
+    
+    // 移动端外部触摸处理
+    handleOutsideTouch(event) {
+      // 如果悬浮球是展开状态，触摸其他地方时收起
+      if (this.isExpanded) {
+        const el = this.$el;
+        if (!el.contains(event.target)) {
+          this.isExpanded = false;
+        }
+      }
+    },
 
     onToolClick(toolName) {
       // 点击工具后立即收起菜单
@@ -172,48 +220,82 @@ export default {
       console.log(`点击了工具: ${toolName}`);
     },
     
-    startDrag(event) {
-      // 获取事件坐标 - 支持鼠标和触摸事件
-      const clientX = event.clientX || (event.touches && event.touches[0] ? event.touches[0].clientX : 0);
-      const clientY = event.clientY || (event.touches && event.touches[0] ? event.touches[0].clientY : 0);
+    // 移动端工具项触摸结束处理
+    onToolTouchEnd(event, toolName) {
+      // 防止事件冒泡和默认行为
+      event.preventDefault();
+      event.stopPropagation();
       
+      // 添加触觉反馈（如果设备支持）
+      if (navigator.vibrate) {
+        navigator.vibrate(50); // 轻微震动反馈
+      }
+      
+      // 触发工具点击
+      this.onToolClick(toolName);
+    },
+    
+    // 桌面端拖动开始
+    onDesktopDragStart(event) {
       this.isDragging = true
-      this.dragStartX = clientX - this.position.x
-      this.dragStartY = clientY - this.position.y
+      this.dragStartX = event.clientX - this.position.x
+      this.dragStartY = event.clientY - this.position.y
       // 记录点击开始位置用于检测是否拖动
-      this.clickStartX = clientX
-      this.clickStartY = clientY
+      this.clickStartX = event.clientX
+      this.clickStartY = event.clientY
       this.isClickDetected = false // 重置点击检测
       // 防止在拖动过程中选中文本
       document.body.style.userSelect = 'none'
       event.preventDefault()
     },
-    
-    onDrag(event) {
-      if (!this.isDragging) return
+
+    // 移动端拖动开始
+    onMobileDragStart(event) {
+      if (!event.touches || event.touches.length !== 1) return
       
-      // 获取事件坐标 - 支持鼠标和触摸事件
-      const clientX = event.clientX || (event.touches && event.touches[0] ? event.touches[0].clientX : 0);
-      const clientY = event.clientY || (event.touches && event.touches[0] ? event.touches[0].clientY : 0);
+      const touch = event.touches[0]
+      this.isDragging = true
+      this.dragStartX = touch.clientX - this.position.x
+      this.dragStartY = touch.clientY - this.position.y
+      // 记录触摸开始位置用于检测是否拖动
+      this.clickStartX = touch.clientX
+      this.clickStartY = touch.clientY
+      this.isClickDetected = false // 重置点击检测
+      // 防止在拖动过程中选中文本和页面滚动
+      document.body.style.userSelect = 'none'
+      document.body.style.webkitUserSelect = 'none'
+      event.preventDefault()
+    },
+
+    // 统一的拖动开始处理
+    startDrag(event) {
+      if (this.isMobile) {
+        this.onMobileDragStart(event)
+      } else {
+        this.onDesktopDragStart(event)
+      }
+    },
+
+    // 桌面端拖动中
+    onDesktopDrag(event) {
+      if (!this.isDragging) return
       
       // 检测是否实际移动了足够距离来判断是否为拖动
       const distance = Math.sqrt(
-        Math.pow(clientX - this.clickStartX, 2) + 
-        Math.pow(clientY - this.clickStartY, 2)
+        Math.pow(event.clientX - this.clickStartX, 2) + 
+        Math.pow(event.clientY - this.clickStartY, 2)
       );
       
       // 如果移动距离超过5像素，则认为是在拖动
       if (distance > 5) {
         this.isClickDetected = false; // 确保不是点击
-      } else {
-        this.isClickDetected = true; // 移动很小，可能为点击
       }
       
       // 使用 requestAnimationFrame 优化拖动性能
       if (!this.rafId) {
         this.rafId = requestAnimationFrame(() => {
-          this.position.x = clientX - this.dragStartX
-          this.position.y = clientY - this.dragStartY
+          this.position.x = event.clientX - this.dragStartX
+          this.position.y = event.clientY - this.dragStartY
           
           // 确保悬浮球在窗口范围内
           this.position.x = Math.max(0, Math.min(window.innerWidth - this.$el.offsetWidth, this.position.x))
@@ -226,8 +308,48 @@ export default {
         })
       }
     },
-    
-    stopDrag(event) {
+
+    // 移动端拖动中
+    onMobileDrag(event) {
+      if (!this.isDragging || !event.touches || event.touches.length !== 1) return
+      
+      const touch = event.touches[0]
+      
+      // 检测是否实际移动了足够距离来判断是否为拖动
+      const distance = Math.sqrt(
+        Math.pow(touch.clientX - this.clickStartX, 2) + 
+        Math.pow(touch.clientY - this.clickStartY, 2)
+      );
+      
+      // 如果移动距离超过10像素（移动端需要更大的阈值），则认为是在拖动
+      if (distance > 10) {
+        this.isClickDetected = false; // 确保不是点击
+      }
+      
+      // 使用 requestAnimationFrame 优化拖动性能
+      if (!this.rafId) {
+        this.rafId = requestAnimationFrame(() => {
+          this.position.x = touch.clientX - this.dragStartX
+          this.position.y = touch.clientY - this.dragStartY
+          
+          // 确保悬浮球在窗口范围内
+          this.position.x = Math.max(0, Math.min(window.innerWidth - this.$el.offsetWidth, this.position.x))
+          this.position.y = Math.max(0, Math.min(window.innerHeight - this.$el.offsetHeight, this.position.y))
+          
+          // 保存当前位置
+          this.savePosition()
+          
+          this.rafId = null
+        })
+      }
+      
+      event.preventDefault() // 防止页面滚动
+    },
+
+    // 桌面端拖动结束
+    onDesktopDragEnd(event) {
+      if (!this.isDragging) return
+      
       this.isDragging = false
       // 恢复用户选择
       document.body.style.userSelect = ''
@@ -239,18 +361,13 @@ export default {
       // 确保在拖动结束时也保存位置
       this.savePosition()
       
-      // 获取事件坐标 - 支持鼠标和触摸事件
-      const clientX = event.clientX || (event.changedTouches && event.changedTouches[0] ? event.changedTouches[0].clientX : 0);
-      const clientY = event.clientY || (event.changedTouches && event.changedTouches[0] ? event.changedTouches[0].clientY : 0);
-      
       // 检测是否为点击事件（即拖动距离很小）
       const distance = Math.sqrt(
-        Math.pow(clientX - this.clickStartX, 2) + 
-        Math.pow(clientY - this.clickStartY, 2)
+        Math.pow(event.clientX - this.clickStartX, 2) + 
+        Math.pow(event.clientY - this.clickStartY, 2)
       );
       
       // 如果移动距离小于等于5像素，则认为是点击，触发展开/收起
-      // 使用 setTimeout 确保事件处理完成后再执行展开/收起
       if (distance <= 5) {
         this.isClickDetected = true;
         // 延迟执行展开/收起以确保事件处理完成
@@ -258,7 +375,57 @@ export default {
           this.toggleExpand();
         }, 0);
       }
-    }
+    },
+
+    // 移动端拖动结束
+    onMobileDragEnd(event) {
+      if (!this.isDragging) return
+      
+      this.isDragging = false
+      // 恢复用户选择
+      document.body.style.userSelect = ''
+      document.body.style.webkitUserSelect = ''
+      // 取消待处理的动画
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId)
+        this.rafId = null
+      }
+      // 确保在拖动结束时也保存位置
+      this.savePosition()
+      
+      // 获取触摸结束位置
+      const touch = event.changedTouches && event.changedTouches[0]
+      if (!touch) return
+      
+      // 检测是否为点击事件（即拖动距离很小）
+      const distance = Math.sqrt(
+        Math.pow(touch.clientX - this.clickStartX, 2) + 
+        Math.pow(touch.clientY - this.clickStartY, 2)
+      );
+      
+      // 如果移动距离小于等于10像素，则认为是点击，触发展开/收起
+      if (distance <= 10) {
+        this.isClickDetected = true;
+        // 延迟执行展开/收起以确保事件处理完成
+        setTimeout(() => {
+          this.toggleExpand();
+        }, 50); // 移动端需要稍微延迟以避免误触发
+      }
+    },
+
+    // 移动端触摸开始（用于触摸反馈）
+    onTouchStart(event) {
+      if (!this.isMobile) return
+      // 添加触摸反馈样式
+      this.$el.style.transform = 'scale(0.95)'
+    },
+
+    // 移动端触摸结束（用于触摸反馈）
+    onTouchEnd(event) {
+      if (!this.isMobile) return
+      // 移除触摸反馈样式
+      this.$el.style.transform = ''
+    },
   }
 }
 </script>
@@ -279,11 +446,25 @@ export default {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none; /* 防止触摸时页面滚动 */
 }
 
 .floating-ball:hover {
   transform: scale(1.1);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* 移动端特定样式 */
+.floating-ball.mobile {
+  /* 移动端不需要hover效果 */
+}
+
+.floating-ball.mobile:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
 }
 
 .floating-ball.expanded {
@@ -292,6 +473,11 @@ export default {
   border-radius: 25px;
   padding: 0 15px;
   cursor: default;
+}
+
+.floating-ball.mobile.expanded {
+  /* 移动端展开时的样式调整 */
+  width: 180px; /* 稍微小一点以适应移动端 */
 }
 
 .floating-ball-icon {
@@ -325,6 +511,13 @@ export default {
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
+/* 移动端工具下拉菜单特定样式 */
+.floating-ball.mobile .tools-dropdown {
+  width: 180px; /* 移动端稍微窄一点 */
+  max-width: 90vw; /* 确保在小屏幕上不会超出视口 */
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2); /* 更深的阴影以增强层次感 */
+}
+
 .floating-ball.expanded .tools-dropdown {
   opacity: 1;
   transform: translateY(0);
@@ -339,7 +532,7 @@ export default {
 }
 
 .tool-item {
-  padding: 10px 15px;
+  padding: 12px 15px; /* 移动端增加点击区域 */
   cursor: pointer;
   border-radius: 8px;
   transition: all 0.2s ease;
@@ -349,11 +542,45 @@ export default {
   white-space: nowrap;
   user-select: none; /* 防止文本选择 */
   -webkit-user-select: none; /* Safari */
+  -webkit-tap-highlight-color: transparent; /* 移除移动端点击高亮 */
+  position: relative; /* 为触摸反馈做准备 */
 }
 
 .tool-item:hover {
   background-color: #f5f5f5;
   transform: translateX(5px);
+}
+
+/* 移动端特定样式 */
+.floating-ball.mobile .tool-item {
+  padding: 14px 15px; /* 移动端进一步增加点击区域 */
+  min-height: 44px; /* 符合移动端最小触摸目标尺寸 */
+  display: flex;
+  align-items: center;
+}
+
+.floating-ball.mobile .tool-item:active {
+  background-color: #e8e8e8;
+  transform: translateX(3px);
+}
+
+/* 移动端触摸反馈效果 */
+.floating-ball.mobile .tool-item::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.1);
+  transform: translate(-50%, -50%);
+  transition: width 0.3s, height 0.3s;
+}
+
+.floating-ball.mobile .tool-item:active::after {
+  width: 100%;
+  height: 100%;
 }
 
 /* 暗色主题适配 */

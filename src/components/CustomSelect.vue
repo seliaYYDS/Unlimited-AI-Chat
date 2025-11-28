@@ -1,7 +1,7 @@
 <template>
   <div class="custom-select" :class="{ open: isOpen, disabled: disabled }">
     <div class="select-trigger" @click="toggleSelect">
-      <span class="select-value">{{ selectedLabel || placeholder }}</span>
+      <span class="select-value" :style="{ fontFamily: selectedFontFamily || 'inherit' }">{{ selectedLabel || placeholder }}</span>
       <svg class="select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -11,7 +11,8 @@
         class="select-option" 
         v-for="option in options" 
         :key="option.value" 
-        :class="{ selected: isSelected(option) }"
+        :class="{ selected: isSelected(option), disabled: option.disabled }"
+        :style="{ fontFamily: option.fontFamily || 'inherit' }"
         @click="selectOption(option)"
       >
         {{ option.label }}
@@ -50,6 +51,10 @@ export default {
     selectedLabel() {
       const selected = this.options.find(option => option.value === this.modelValue)
       return selected ? selected.label : ''
+    },
+    selectedFontFamily() {
+      const selected = this.options.find(option => option.value === this.modelValue)
+      return selected ? selected.fontFamily : null
     }
   },
   methods: {
@@ -58,7 +63,7 @@ export default {
       this.isOpen = !this.isOpen
     },
     selectOption(option) {
-      if (this.disabled) return
+      if (this.disabled || option.disabled) return
       this.$emit('update:modelValue', option.value)
       this.$emit('change', option.value)
       this.isOpen = false
@@ -125,6 +130,10 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
 }
 
 .select-arrow {
@@ -148,7 +157,7 @@ export default {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   z-index: 1000;
-  max-height: 200px;
+  max-height: 250px;
   overflow-y: auto;
   margin-top: 4px;
 }
@@ -159,6 +168,10 @@ export default {
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
+  line-height: 1.4;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
 }
 
 .select-option:hover {
@@ -172,5 +185,16 @@ export default {
 
 .select-option.selected:hover {
   background: var(--primary-hover);
+}
+
+.select-option.disabled {
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  background: var(--bg-secondary);
+  font-style: italic;
+}
+
+.select-option.disabled:hover {
+  background: var(--bg-secondary);
 }
 </style>
