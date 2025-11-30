@@ -120,26 +120,34 @@ export class ThemeManager {
 
       if (settings.gradientColor1 && settings.gradientColor2) {
 
+        // 设置渐变颜色变量
+        root.style.setProperty('--gradient-color1', settings.gradientColor1)
+        root.style.setProperty('--gradient-color2', settings.gradientColor2)
+        
         // 所有元素使用颜色一与二的渐变
-
         root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${settings.gradientColor2} 100%)`)
-
         root.style.setProperty('--title-color', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${settings.gradientColor2} 100%)`)
-
         root.style.setProperty('--component-color', settings.gradientColor1)
-
         root.style.setProperty('--avatar-color', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${settings.gradientColor2} 100%)`)
-
+        
+        // 为主色调和悬停状态设置渐变色
+        root.style.setProperty('--primary-color', settings.gradientColor1)
+        root.style.setProperty('--primary-hover', settings.gradientColor2)
+        
       } else if (settings.gradientColor1) {
-
+        
+        // 设置渐变颜色变量
+        root.style.setProperty('--gradient-color1', settings.gradientColor1)
+        root.style.setProperty('--gradient-color2', this.lightenColor(settings.gradientColor1, 0.2))
+        
         root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${this.lightenColor(settings.gradientColor1, 0.2)} 100%)`)
-
         root.style.setProperty('--title-color', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${this.lightenColor(settings.gradientColor1, 0.2)} 100%)`)
-
         root.style.setProperty('--component-color', settings.gradientColor1)
-
         root.style.setProperty('--avatar-color', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${this.lightenColor(settings.gradientColor1, 0.2)} 100%)`)
-
+        
+        // 为主色调和悬停状态设置渐变色
+        root.style.setProperty('--primary-color', settings.gradientColor1)
+        root.style.setProperty('--primary-hover', this.lightenColor(settings.gradientColor1, 0.2))
       }
 
       // 渐变样式将在CSS中使用这些变量

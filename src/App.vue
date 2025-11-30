@@ -1063,7 +1063,19 @@
 
         <div class="notepad-tools">
 
-          <button class="tool-btn" :class="{ 'active': currentTool === 'pen' }" @click="selectTool('pen')">
+          <button 
+
+            class="tool-btn" 
+
+            :class="{ 'active': currentTool === 'pen' }" 
+
+            @click="selectTool('pen')"
+
+            title="画笔工具 (P)"
+
+            data-tooltip="画笔工具 (P)"
+
+          >
 
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 
@@ -1071,9 +1083,23 @@
 
             </svg>
 
+            <span class="tool-indicator" v-if="currentTool === 'pen'"></span>
+
           </button>
 
-          <button class="tool-btn" :class="{ 'active': currentTool === 'eraser' }" @click="selectTool('eraser')">
+          <button 
+
+            class="tool-btn" 
+
+            :class="{ 'active': currentTool === 'eraser' }" 
+
+            @click="selectTool('eraser')"
+
+            title="橡皮擦 (E)"
+
+            data-tooltip="橡皮擦 (E)"
+
+          >
 
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 
@@ -1081,15 +1107,77 @@
 
             </svg>
 
+            <span class="tool-indicator" v-if="currentTool === 'eraser'"></span>
+
           </button>
 
-          <input type="color" v-model="penColor" class="color-picker">
+          <div class="color-picker-wrapper">
 
-          <input type="range" v-model="penSize" min="1" max="20" class="size-slider">
+            <input 
 
-          <span class="size-value">{{ penSize }}</span>
+              type="color" 
 
-          <button class="tool-btn" @click="clearCanvas">
+              v-model="penColor" 
+
+              class="color-picker"
+
+              title="选择颜色 (C)"
+
+              data-tooltip="选择颜色 (C)"
+
+              @change="onColorChange"
+
+            >
+
+            <span class="color-preview" :style="{ backgroundColor: penColor }"></span>
+
+          </div>
+
+          <div class="size-slider-wrapper">
+
+            <input 
+
+              type="range" 
+
+              v-model="penSize" 
+
+              min="1" 
+
+              max="20" 
+
+              class="size-slider"
+
+              title="画笔大小 (S)"
+
+              data-tooltip="画笔大小 (S)"
+
+              @input="onSizeChange"
+
+            >
+
+            <span 
+
+              class="size-value" 
+
+              :class="{ 'updated': sizeUpdated }"
+
+              ref="sizeValue"
+
+            >{{ penSize }}</span>
+
+          </div>
+
+          <button 
+
+            class="tool-btn clear-btn" 
+
+            @click="clearCanvas"
+
+            title="清空画布 (Delete)"
+
+            data-tooltip="清空画布 (Delete)"
+
+          >
 
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 
@@ -1098,6 +1186,14 @@
             </svg>
 
           </button>
+
+          <!-- 添加状态指示器 -->
+
+          <div class="status-indicator" v-if="showStatus">
+
+            <span class="status-text">{{ statusText }}</span>
+
+          </div>
 
         </div>
 
@@ -1224,6 +1320,8 @@ import { ThemeManager } from './utils/theme.js'
 
 import { MarkdownParser } from './utils/markdownParser.js'
 
+import { MusicColorExtractor } from './utils/musicColorExtractor.js'
+
 import { AIService } from './aiService.js'
 
 import Modal from './components/Modal.vue'
@@ -1273,6 +1371,8 @@ export default {
       storageManager: null,
       aiService: null,
       themeManager: null,
+      musicColorExtractor: null,
+      originalThemeColor: null,
       isDarkTheme: false,
       agents: [],
       currentAgent: null,
@@ -1305,6 +1405,12 @@ export default {
       penColor: '#000000',
       penSize: 5,
       isDrawing: false,
+      
+      // 草稿纸状态相关
+      sizeUpdated: false,
+      showStatus: false,
+      statusText: '',
+      statusTimer: null,
 
       // 表单数据
       agentForm: {
@@ -1315,6 +1421,178 @@ export default {
         keyPoints: '',
         avatar: 'AI'
       },
+
+    // 颜色变化处理
+
+    onColorChange() {
+
+      // 添加颜色变化动画
+
+      const colorPicker = document.querySelector('.color-picker');
+
+      if (colorPicker) {
+
+        colorPicker.classList.add('color-changed');
+
+        setTimeout(() => {
+
+          colorPicker.classList.remove('color-changed');
+
+        }, 600);
+
+      }
+
+      
+
+      // 显示状态提示
+
+      this.showStatusMessage('颜色已更改');
+
+    },
+
+    // 大小变化处理
+
+    onSizeChange() {
+
+      // 触发大小值动画
+
+      this.sizeUpdated = true;
+
+      setTimeout(() => {
+
+        this.sizeUpdated = false;
+
+      }, 300);
+
+      
+
+      // 显示状态提示
+
+      this.showStatusMessage(`画笔大小: ${this.penSize}px`);
+
+    },
+
+    // 显示状态消息
+
+    showStatusMessage(message) {
+
+      this.statusText = message;
+
+      this.showStatus = true;
+
+      
+
+      // 清除之前的定时器
+
+      if (this.statusTimer) {
+
+        clearTimeout(this.statusTimer);
+
+      }
+
+      
+
+      // 设置新的定时器
+
+      this.statusTimer = setTimeout(() => {
+
+        this.showStatus = false;
+
+        this.statusText = '';
+
+      }, 2000);
+
+    },
+
+    // 添加键盘快捷键支持
+
+    handleNotepadKeydown(e) {
+
+      if (!this.showNotepadModal) return;
+
+      
+
+      switch(e.key.toLowerCase()) {
+
+        case 'p':
+
+          e.preventDefault();
+
+          this.selectTool('pen');
+
+          this.showStatusMessage('切换到画笔工具');
+
+          break;
+
+        case 'e':
+
+          e.preventDefault();
+
+          this.selectTool('eraser');
+
+          this.showStatusMessage('切换到橡皮擦');
+
+          break;
+
+        case 'c':
+
+          e.preventDefault();
+
+          // 聚焦颜色选择器
+
+          const colorPicker = document.querySelector('.color-picker');
+
+          if (colorPicker) {
+
+            colorPicker.click();
+
+          }
+
+          break;
+
+        case 's':
+
+          e.preventDefault();
+
+          // 聚焦大小滑块
+
+          const sizeSlider = document.querySelector('.size-slider');
+
+          if (sizeSlider) {
+
+            sizeSlider.focus();
+
+          }
+
+          break;
+
+        case 'delete':
+
+        case 'backspace':
+
+          if (e.ctrlKey || e.metaKey) {
+
+            e.preventDefault();
+
+            this.clearCanvas();
+
+            this.showStatusMessage('画布已清空');
+
+          }
+
+          break;
+
+        case 'escape':
+
+          e.preventDefault();
+
+          this.closeNotepadModal();
+
+          break;
+
+      }
+
+    },
 
       settings: {
         apiType: 'local',
@@ -1348,7 +1626,8 @@ export default {
         enableAnimations: true,
         messageBubbleStyle: 'default',
         chatLayout: 'standard',
-        colorMode: 'single'
+        colorMode: 'single',
+        enableMusicColorSync: false
       },
 
       // API相关状态
@@ -1464,6 +1743,7 @@ export default {
     this.storageManager = new StorageManager()
     this.aiService = new AIService(this.storageManager)
     this.themeManager = new ThemeManager(this.storageManager)
+    this.musicColorExtractor = new MusicColorExtractor()
 
     // 设置初始主题状态
     this.isDarkTheme = this.themeManager.isDark()
@@ -1520,6 +1800,12 @@ export default {
 
     window.addEventListener('beforeunload', this.handlePageUnload)
 
+    
+
+    // 添加键盘事件监听器用于草稿纸快捷键
+
+    document.addEventListener('keydown', this.handleNotepadKeydown)
+
   },
 
   beforeUnmount() {
@@ -1539,6 +1825,22 @@ export default {
     // 移除页面卸载事件监听器
 
     window.removeEventListener('beforeunload', this.handlePageUnload)
+
+    
+
+    // 移除键盘事件监听器
+
+    document.removeEventListener('keydown', this.handleNotepadKeydown)
+
+    
+
+    // 清理状态定时器
+
+    if (this.statusTimer) {
+
+      clearTimeout(this.statusTimer)
+
+    }
 
   },
 
@@ -1636,7 +1938,9 @@ export default {
         // 弹窗背景设置
         modalBackdropBlur: settings.modalBackdropBlur !== undefined ? settings.modalBackdropBlur : true,
         modalBackdropBlurAmount: settings.modalBackdropBlurAmount || 8,
-        modalBackdropOpacity: settings.modalBackdropOpacity || 0.5
+        modalBackdropOpacity: settings.modalBackdropOpacity || 0.5,
+        // 音乐封面颜色联动设置
+        enableMusicColorSync: settings.enableMusicColorSync || false
       }
 
       // 应用样式设置
@@ -1644,8 +1948,18 @@ export default {
     },
 
     updateStyleSettings(newSettings) {
+      // 检查是否禁用了音乐封面颜色联动
+      if (this.styleSettings.enableMusicColorSync && !newSettings.enableMusicColorSync) {
+        this.restoreOriginalThemeColor();
+      }
+      
       this.styleSettings = { ...newSettings }
       this.applyStyleSettings()
+      
+      // 如果启用了音乐封面颜色联动且有当前播放的歌曲，重新提取颜色
+      if (newSettings.enableMusicColorSync && this.currentMusic && this.isMusicPlaying) {
+        this.extractAndApplyMusicColor(this.currentMusic);
+      }
     },
 
     applyStyleSettings() {
@@ -3331,6 +3645,20 @@ export default {
 
         ctx.lineJoin = 'round';
 
+        
+
+        // 添加初始工具类
+
+        if (this.currentTool === 'pen') {
+
+          canvas.classList.add('drawing');
+
+        } else if (this.currentTool === 'eraser') {
+
+          canvas.classList.add('erasing');
+
+        }
+
       }
 
     },
@@ -3340,6 +3668,32 @@ export default {
     selectTool(tool) {
 
       this.currentTool = tool;
+
+      
+
+      // 添加工具切换动画效果
+
+      const canvas = this.$refs.notepadCanvas;
+
+      if (canvas) {
+
+        // 移除所有工具类
+
+        canvas.classList.remove('drawing', 'erasing');
+
+        // 添加当前工具对应的类
+
+        if (tool === 'pen') {
+
+          canvas.classList.add('drawing');
+
+        } else if (tool === 'eraser') {
+
+          canvas.classList.add('erasing');
+
+        }
+
+      }
 
     },
 
@@ -3455,9 +3809,31 @@ export default {
 
       if (!canvas) return;
 
-      const ctx = canvas.getContext('2d');
+      
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // 添加清除动画
+
+      canvas.classList.add('clearing');
+
+      
+
+      setTimeout(() => {
+
+        const ctx = canvas.getContext('2d');
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        
+
+        // 移除动画类
+
+        setTimeout(() => {
+
+          canvas.classList.remove('clearing');
+
+        }, 400);
+
+      }, 200);
 
     },
 
@@ -3645,6 +4021,11 @@ export default {
       this.currentMusic = status.currentSong;
       this.currentTime = status.currentTime || 0; // 记录当前播放时间
       this.musicProgress = status.duration ? (status.currentTime / status.duration) * 100 : 0;
+      
+      // 如果音乐停止播放且启用了音乐封面颜色联动，恢复原始主题色
+      if (!status.isPlaying && this.styleSettings.enableMusicColorSync) {
+        this.restoreOriginalThemeColor();
+      }
     },
     
     // 处理当前歌曲变化
@@ -3654,6 +4035,195 @@ export default {
         // 如果当前没有播放，重置进度
         this.musicProgress = 0;
       }
+      
+      // 如果启用了音乐封面颜色联动，提取封面颜色
+      if (this.styleSettings.enableMusicColorSync && song) {
+        this.extractAndApplyMusicColor(song);
+      }
+    },
+    
+    // 提取音乐封面颜色并应用到主题色
+    async extractAndApplyMusicColor(song) {
+      try {
+        // 获取封面URL
+        const coverUrl = (song.al && song.al.picUrl) || 
+                         song.picUrl || 
+                         (song.album && song.album.picUrl);
+        
+        if (!coverUrl) {
+          console.warn('无法获取歌曲封面URL');
+          return;
+        }
+        
+        // 根据颜色模式提取相应数量的颜色
+        let extractedColors;
+        if (this.styleSettings.colorMode === 'single') {
+          // 单色模式：提取一个颜色
+          const color = await this.musicColorExtractor.extractPrimaryColor(coverUrl, song.id);
+          extractedColors = [color];
+        } else if (this.styleSettings.colorMode === 'dual' || this.styleSettings.colorMode === 'gradient') {
+          // 双色或渐变模式：提取两个颜色
+          extractedColors = await this.musicColorExtractor.extractMultipleColors(coverUrl, song.id, 2);
+        } else {
+          // 默认提取一个颜色
+          const color = await this.musicColorExtractor.extractPrimaryColor(coverUrl, song.id);
+          extractedColors = [color];
+        }
+        
+        // 应用颜色到主题色（临时，不保存）
+        this.applyTemporaryThemeColor(extractedColors);
+      } catch (error) {
+        console.error('提取音乐封面颜色失败:', error);
+      }
+    },
+    
+    // 应用临时主题色
+    applyTemporaryThemeColor(colors) {
+      // 确保colors是数组
+      const colorArray = Array.isArray(colors) ? colors : [colors];
+      const primaryColor = colorArray[0];
+      const secondaryColor = colorArray[1];
+      
+      // 保存原始颜色，以便恢复
+      if (!this.originalThemeColor) {
+        this.originalThemeColor = {
+          primaryColor: this.styleSettings.primaryColor,
+          secondaryColor: this.styleSettings.secondaryColor,
+          gradientColor1: this.styleSettings.gradientColor1,
+          gradientColor2: this.styleSettings.gradientColor2
+        };
+      }
+      
+      // 直接更新所有相关的CSS变量，确保全面覆盖
+      const root = document.documentElement;
+      root.style.setProperty('--primary-color', primaryColor);
+      root.style.setProperty('--primary-color-rgb', this.hexToRgb(primaryColor));
+      
+      // 根据当前颜色模式更新相关变量
+      if (this.styleSettings.colorMode === 'single') {
+        // 单色模式：所有元素使用主色调
+        root.style.setProperty('--title-color', primaryColor);
+        root.style.setProperty('--component-color', primaryColor);
+        root.style.setProperty('--avatar-color', primaryColor);
+        root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${primaryColor} 0%, ${this.lightenColor(primaryColor, 0.2)} 100%)`);
+      } else if (this.styleSettings.colorMode === 'dual') {
+        // 双色模式：主色调和副色调分别使用提取的颜色
+        root.style.setProperty('--title-color', primaryColor);
+        root.style.setProperty('--component-color', primaryColor);
+        root.style.setProperty('--avatar-color', secondaryColor || primaryColor);
+        root.style.setProperty('--secondary-color', secondaryColor || primaryColor);
+        root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor || primaryColor} 100%)`);
+      } else if (this.styleSettings.colorMode === 'gradient') {
+        // 渐变模式：使用提取的颜色作为渐变色
+        root.style.setProperty('--title-color', `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor || primaryColor} 100%)`);
+        root.style.setProperty('--component-color', primaryColor);
+        root.style.setProperty('--avatar-color', `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor || primaryColor} 100%)`);
+        root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor || primaryColor} 100%)`);
+        root.style.setProperty('--gradient-color1', primaryColor);
+        root.style.setProperty('--gradient-color2', secondaryColor || primaryColor);
+      }
+      
+      // 生成颜色变体
+      root.style.setProperty('--primary-hover', this.lightenColor(primaryColor, 0.1));
+      root.style.setProperty('--primary-active', this.darkenColor(primaryColor, 0.1));
+      
+      // 直接更新悬浮球组件的颜色
+      const floatingBallElement = document.querySelector('.floating-ball');
+      if (floatingBallElement) {
+        if (this.styleSettings.colorMode === 'single') {
+          // 单色模式：使用单一颜色
+          floatingBallElement.style.background = primaryColor;
+        } else if (this.styleSettings.colorMode === 'dual') {
+          // 双色模式：使用渐变
+          floatingBallElement.style.background = `linear-gradient(135deg, ${primaryColor}, ${secondaryColor || primaryColor})`;
+        } else if (this.styleSettings.colorMode === 'gradient') {
+          // 渐变模式：使用渐变
+          floatingBallElement.style.background = `linear-gradient(135deg, ${primaryColor}, ${secondaryColor || primaryColor})`;
+        }
+      }
+    },
+    
+    // 恢复原始主题色
+    restoreOriginalThemeColor() {
+      if (this.originalThemeColor) {
+        const originalSettings = {
+          ...this.styleSettings,
+          primaryColor: this.originalThemeColor.primaryColor,
+          secondaryColor: this.originalThemeColor.secondaryColor,
+          gradientColor1: this.originalThemeColor.gradientColor1,
+          gradientColor2: this.originalThemeColor.gradientColor2
+        };
+        
+        // 重新应用原始样式设置
+        this.themeManager.applyStyleSettings(originalSettings);
+        
+        // 确保所有相关变量都恢复到原始值
+        const root = document.documentElement;
+        root.style.setProperty('--primary-color', this.originalThemeColor.primaryColor);
+        root.style.setProperty('--primary-color-rgb', this.hexToRgb(this.originalThemeColor.primaryColor));
+        
+        // 根据当前颜色模式恢复相关变量
+        if (this.styleSettings.colorMode === 'single') {
+          root.style.setProperty('--title-color', this.originalThemeColor.primaryColor);
+          root.style.setProperty('--component-color', this.originalThemeColor.primaryColor);
+          root.style.setProperty('--avatar-color', this.originalThemeColor.primaryColor);
+          root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${this.originalThemeColor.primaryColor} 0%, ${this.lightenColor(this.originalThemeColor.primaryColor, 0.2)} 100%)`);
+        } else if (this.styleSettings.colorMode === 'dual') {
+          root.style.setProperty('--title-color', this.originalThemeColor.primaryColor);
+          root.style.setProperty('--component-color', this.originalThemeColor.primaryColor);
+          root.style.setProperty('--avatar-color', this.originalThemeColor.secondaryColor || this.originalThemeColor.primaryColor);
+          root.style.setProperty('--secondary-color', this.originalThemeColor.secondaryColor || this.originalThemeColor.primaryColor);
+          root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${this.originalThemeColor.primaryColor} 0%, ${this.originalThemeColor.secondaryColor || this.originalThemeColor.primaryColor} 100%)`);
+        } else if (this.styleSettings.colorMode === 'gradient') {
+          root.style.setProperty('--title-color', `linear-gradient(135deg, ${this.originalThemeColor.gradientColor1} 0%, ${this.originalThemeColor.gradientColor2} 100%)`);
+          root.style.setProperty('--component-color', this.originalThemeColor.gradientColor1);
+          root.style.setProperty('--avatar-color', `linear-gradient(135deg, ${this.originalThemeColor.gradientColor1} 0%, ${this.originalThemeColor.gradientColor2} 100%)`);
+          root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${this.originalThemeColor.gradientColor1} 0%, ${this.originalThemeColor.gradientColor2} 100%)`);
+          root.style.setProperty('--gradient-color1', this.originalThemeColor.gradientColor1);
+          root.style.setProperty('--gradient-color2', this.originalThemeColor.gradientColor2);
+        }
+        
+        // 恢复颜色变体
+        root.style.setProperty('--primary-hover', this.lightenColor(this.originalThemeColor.primaryColor, 0.1));
+        root.style.setProperty('--primary-active', this.darkenColor(this.originalThemeColor.primaryColor, 0.1));
+        
+        // 恢复悬浮球组件的颜色
+        const floatingBallElement = document.querySelector('.floating-ball');
+        if (floatingBallElement) {
+          // 清除直接设置的样式，恢复使用CSS变量
+          floatingBallElement.style.background = '';
+        }
+        
+        this.originalThemeColor = null;
+      }
+    },
+    
+    // 十六进制颜色转RGB
+    hexToRgb(hex) {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return result ? 
+        `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : 
+        '236, 72, 153';
+    },
+    
+    // 颜色变亮
+    lightenColor(color, amount) {
+      const hex = color.replace('#', '');
+      const num = parseInt(hex, 16);
+      const r = Math.min(255, ((num >> 16) & 0xff) + Math.floor(255 * amount));
+      const g = Math.min(255, ((num >> 8) & 0xff) + Math.floor(255 * amount));
+      const b = Math.min(255, (num & 0xff) + Math.floor(255 * amount));
+      return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+    },
+    
+    // 颜色变暗
+    darkenColor(color, amount) {
+      const hex = color.replace('#', '');
+      const num = parseInt(hex, 16);
+      const r = Math.max(0, ((num >> 16) & 0xff) - Math.floor(255 * amount));
+      const g = Math.max(0, ((num >> 8) & 0xff) - Math.floor(255 * amount));
+      const b = Math.max(0, (num & 0xff) - Math.floor(255 * amount));
+      return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
     },
     
     // 格式化音乐进度显示
@@ -5090,7 +5660,9 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   opacity: 0;
 
-  transition: opacity var(--duration-normal) var(--ease-out);
+  visibility: hidden;
+
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 
   /* 添加模糊效果 */
 
@@ -5098,12 +5670,20 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 0px)); /* Safari 支持 */
 
+  /* 添加弹性动画效果 */
+
+  transform: scale(0.8);
+
 }
 
 
 .notepad-modal-overlay.show {
 
   opacity: 1;
+
+  visibility: visible;
+
+  transform: scale(1);
 
 }
 
@@ -5126,20 +5706,85 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   flex-direction: column;
 
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 
   overflow: hidden;
 
-  transform: scale(0.9);
+  transform: translateY(30px) scale(0.95);
 
-  transition: transform var(--duration-normal) var(--ease-out);
+  opacity: 0;
+
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* 添加微妙的边框动画 */
+
+  border: 1px solid transparent;
+
+  background-clip: padding-box;
+
+  position: relative;
+
+}
+
+
+.notepad-modal-content::before {
+
+  content: '';
+
+  position: absolute;
+
+  top: 0;
+
+  left: 0;
+
+  right: 0;
+
+  bottom: 0;
+
+  z-index: -1;
+
+  margin: -1px;
+
+  border-radius: inherit;
+
+  background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+
+  opacity: 0;
+
+  transition: opacity 0.3s ease;
 
 }
 
 
 .notepad-modal-overlay.show .notepad-modal-content {
 
-  transform: scale(1);
+  transform: translateY(0) scale(1);
+
+  opacity: 1;
+
+}
+
+
+.notepad-modal-overlay.show .notepad-modal-content::before {
+
+  opacity: 0.1;
+
+}
+
+
+/* 添加悬停效果 */
+
+.notepad-modal-content:hover {
+
+  transform: translateY(-2px) scale(1.005);
+
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.3);
+
+}
+
+.notepad-modal-content:hover::before {
+
+  opacity: 0.2;
 
 }
 
@@ -5199,7 +5844,51 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   justify-content: center;
 
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  position: relative;
+
+  overflow: hidden;
+
+  /* 添加阴影效果 */
+
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+}
+
+
+/* 添加涟漪效果 */
+
+.tool-btn::after {
+
+  content: '';
+
+  position: absolute;
+
+  top: 50%;
+
+  left: 50%;
+
+  width: 0;
+
+  height: 0;
+
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.5);
+
+  transform: translate(-50%, -50%);
+
+  transition: width 0.6s, height 0.6s;
+
+}
+
+
+.tool-btn:active::after {
+
+  width: 100px;
+
+  height: 100px;
 
 }
 
@@ -5212,6 +5901,10 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   border-color: var(--primary-color);
 
+  transform: translateY(-2px) scale(1.05);
+
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+
 }
 
 
@@ -5223,6 +5916,53 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   border-color: var(--primary-color);
 
+  transform: scale(1.1);
+
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+}
+
+
+/* 添加点击动画 */
+
+.tool-btn:active {
+
+  transform: scale(0.95);
+
+  transition: transform 0.1s;
+
+}
+
+
+/* 添加工具切换动画 */
+
+.tool-btn.active {
+
+  animation: toolActivate 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+}
+
+
+@keyframes toolActivate {
+
+  0% {
+
+    transform: scale(1);
+
+  }
+
+  50% {
+
+    transform: scale(1.2);
+
+  }
+
+  100% {
+
+    transform: scale(1.1);
+
+  }
+
 }
 
 
@@ -5232,7 +5972,7 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   height: 40px;
 
-  border: none;
+  border: 2px solid var(--border-color);
 
   border-radius: 50%;
 
@@ -5240,12 +5980,172 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   background: none;
 
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+  position: relative;
+
+  overflow: hidden;
+
+}
+
+
+.color-picker:hover {
+
+  transform: scale(1.1);
+
+  border-color: var(--primary-color);
+
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+
+}
+
+
+.color-picker:active {
+
+  transform: scale(0.95);
+
+}
+
+
+/* 添加颜色选择反馈动画 */
+
+.color-picker::-webkit-color-swatch-wrapper {
+
+  padding: 0;
+
+}
+
+
+.color-picker::-webkit-color-swatch {
+
+  border: none;
+
+  border-radius: 50%;
+
+}
+
+
+/* 添加颜色变化动画 */
+
+.color-changed {
+
+  animation: colorPulse 0.6s ease-in-out;
+
+}
+
+
+@keyframes colorPulse {
+
+  0%, 100% {
+
+    transform: scale(1);
+
+  }
+
+  50% {
+
+    transform: scale(1.2);
+
+  }
+
 }
 
 
 .size-slider {
 
   width: 100px;
+
+  height: 6px;
+
+  -webkit-appearance: none;
+
+  appearance: none;
+
+  background: var(--bg-tertiary);
+
+  border-radius: 3px;
+
+  outline: none;
+
+  transition: all 0.3s ease;
+
+}
+
+
+.size-slider:hover {
+
+  background: var(--border-color);
+
+}
+
+
+.size-slider::-webkit-slider-thumb {
+
+  -webkit-appearance: none;
+
+  appearance: none;
+
+  width: 18px;
+
+  height: 18px;
+
+  border-radius: 50%;
+
+  background: var(--primary-color);
+
+  cursor: pointer;
+
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+}
+
+
+.size-slider::-webkit-slider-thumb:hover {
+
+  transform: scale(1.2);
+
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+
+}
+
+
+.size-slider::-webkit-slider-thumb:active {
+
+  transform: scale(0.9);
+
+}
+
+
+.size-slider::-moz-range-thumb {
+
+  width: 18px;
+
+  height: 18px;
+
+  border-radius: 50%;
+
+  background: var(--primary-color);
+
+  cursor: pointer;
+
+  border: none;
+
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+}
+
+
+.size-slider::-moz-range-thumb:hover {
+
+  transform: scale(1.2);
+
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 
 }
 
@@ -5257,6 +6157,50 @@ body[data-color-mode="gradient"] .dynamic-island {
   text-align: center;
 
   font-size: 0.9em;
+
+  font-weight: 600;
+
+  color: var(--primary-color);
+
+  padding: 4px 8px;
+
+  border-radius: 12px;
+
+  background: var(--bg-secondary);
+
+  transition: all 0.3s ease;
+
+}
+
+
+.size-value.updated {
+
+  animation: valueUpdate 0.3s ease;
+
+}
+
+
+@keyframes valueUpdate {
+
+  0% {
+
+    transform: scale(1);
+
+  }
+
+  50% {
+
+    transform: scale(1.2);
+
+    color: var(--primary-hover);
+
+  }
+
+  100% {
+
+    transform: scale(1);
+
+  }
 
 }
 
@@ -5273,6 +6217,107 @@ body[data-color-mode="gradient"] .dynamic-island {
 
   touch-action: none; /* 防止触摸事件触发默认行为 */
 
+  transition: all 0.3s ease;
+
+  position: relative;
+
+  /* 添加画布加载动画 */
+
+  animation: canvasFadeIn 0.6s ease-out;
+
+}
+
+
+@keyframes canvasFadeIn {
+
+  0% {
+
+    opacity: 0;
+
+    transform: scale(0.98);
+
+  }
+
+  100% {
+
+    opacity: 1;
+
+    transform: scale(1);
+
+  }
+
+}
+
+
+/* 添加画布清除动画 */
+
+.notepad-canvas.clearing {
+
+  animation: canvasClear 0.4s ease-in-out;
+
+}
+
+
+@keyframes canvasClear {
+
+  0% {
+
+    opacity: 1;
+
+    transform: scale(1);
+
+  }
+
+  50% {
+
+    opacity: 0.3;
+
+    transform: scale(0.95);
+
+  }
+
+  100% {
+
+    opacity: 1;
+
+    transform: scale(1);
+
+  }
+
+}
+
+
+/* 添加画布绘制反馈 */
+
+.notepad-canvas.drawing {
+
+  cursor: crosshair;
+
+}
+
+
+.notepad-canvas.erasing {
+
+  cursor: grab;
+
+}
+
+
+/* 添加画布悬停效果 */
+
+.notepad-canvas:hover {
+
+  background: var(--bg-secondary);
+
+}
+
+
+/* 添加画布触摸反馈 */
+
+.notepad-canvas:active {
+
+  cursor: grabbing;
+
 }
 
 
@@ -5282,5 +6327,311 @@ body[data-color-mode="gradient"] .dynamic-island {
 
 }
 
+
+/* 工具指示器 */
+
+.tool-indicator {
+
+  position: absolute;
+
+  bottom: -2px;
+
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  width: 6px;
+
+  height: 6px;
+
+  background: var(--primary-color);
+
+  border-radius: 50%;
+
+  animation: toolIndicator 1.5s ease-in-out infinite;
+
+}
+
+
+@keyframes toolIndicator {
+
+  0%, 100% {
+
+    opacity: 1;
+
+    transform: translateX(-50%) scale(1);
+
+  }
+
+  50% {
+
+    opacity: 0.6;
+
+    transform: translateX(-50%) scale(1.2);
+
+  }
+
+}
+
+
+/* 颜色选择器包装器 */
+
+.color-picker-wrapper {
+
+  position: relative;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+}
+
+
+.color-preview {
+
+  position: absolute;
+
+  top: 50%;
+
+  left: 50%;
+
+  transform: translate(-50%, -50%);
+
+  width: 24px;
+
+  height: 24px;
+
+  border-radius: 50%;
+
+  border: 2px solid white;
+
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+  pointer-events: none;
+
+}
+
+
+/* 大小滑块包装器 */
+
+.size-slider-wrapper {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+}
+
+
+/* 清空按钮特殊样式 */
+
+.clear-btn:hover {
+
+  background: var(--danger-color) !important;
+
+  border-color: var(--danger-color) !important;
+
+  color: white !important;
+
+}
+
+
+/* 状态指示器 */
+
+.status-indicator {
+
+  margin-left: auto;
+
+  padding: 6px 12px;
+
+  background: var(--bg-tertiary);
+
+  border-radius: 16px;
+
+  font-size: 12px;
+
+  color: var(--text-secondary);
+
+  opacity: 0;
+
+  transform: translateY(10px);
+
+  transition: all 0.3s ease;
+
+}
+
+
+.status-indicator.show {
+
+  opacity: 1;
+
+  transform: translateY(0);
+
+}
+
+
+.status-text {
+
+  font-weight: 500;
+
+}
+
+
+/* 工具提示样式 */
+
+[data-tooltip] {
+
+  position: relative;
+
+}
+
+
+[data-tooltip]::before {
+
+  content: attr(data-tooltip);
+
+  position: absolute;
+
+  bottom: 100%;
+
+  left: 50%;
+
+  transform: translateX(-50%) translateY(-4px);
+
+  padding: 6px 10px;
+
+  background: var(--color-gray-900);
+
+  color: var(--color-white);
+
+  font-size: 12px;
+
+  font-weight: 500;
+
+  border-radius: 6px;
+
+  white-space: nowrap;
+
+  opacity: 0;
+
+  pointer-events: none;
+
+  transition: all 0.3s ease;
+
+  z-index: 1000;
+
+}
+
+
+[data-tooltip]::after {
+
+  content: '';
+
+  position: absolute;
+
+  bottom: 100%;
+
+  left: 50%;
+
+  transform: translateX(-50%) translateY(-4px);
+
+  border: 4px solid transparent;
+
+  border-top-color: var(--color-gray-900);
+
+  opacity: 0;
+
+  pointer-events: none;
+
+  transition: all 0.3s ease;
+
+  z-index: 1000;
+
+}
+
+
+[data-tooltip]:hover::before,
+
+[data-tooltip]:hover::after {
+
+  opacity: 1;
+
+  transform: translateX(-50%) translateY(-8px);
+
+}
+
+
+/* 添加工具栏动画 */
+
+.notepad-tools {
+
+  animation: toolbarSlideIn 0.5s ease-out;
+
+}
+
+
+@keyframes toolbarSlideIn {
+
+  0% {
+
+    transform: translateY(-20px);
+
+    opacity: 0;
+
+  }
+
+  100% {
+
+    transform: translateY(0);
+
+    opacity: 1;
+
+  }
+
+}
+
+
+/* 添加焦点样式 */
+
+.tool-btn:focus,
+
+.color-picker:focus,
+
+.size-slider:focus {
+
+  outline: 2px solid var(--primary-color);
+
+  outline-offset: 2px;
+
+}
+
+
+/* 添加触摸反馈 */
+
+@media (hover: none) and (pointer: coarse) {
+
+  .tool-btn:active {
+
+    transform: scale(0.9);
+
+    background: var(--primary-color);
+
+    color: white;
+
+  }
+
+  
+
+  .color-picker:active {
+
+    transform: scale(0.9);
+
+  }
+
+}
 
 </style>

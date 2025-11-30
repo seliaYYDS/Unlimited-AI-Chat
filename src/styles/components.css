@@ -50,6 +50,17 @@
   box-shadow: var(--shadow);
 }
 
+/* 渐变模式下的主按钮 */
+[data-color-mode="gradient"] .btn-primary {
+  background: var(--gradient-primary);
+  border-color: transparent;
+}
+
+[data-color-mode="gradient"] .btn-primary:hover:not(:disabled) {
+  background: var(--gradient-primary);
+  filter: brightness(1.1);
+}
+
 /* 次按钮 */
 .btn-secondary {
   background: var(--bg-secondary);
@@ -65,6 +76,19 @@
 
 .btn-secondary:active:not(:disabled) {
   transform: translateY(0);
+}
+
+/* 渐变模式下的次按钮 */
+[data-color-mode="gradient"] .btn-secondary {
+  background: transparent;
+  color: white;
+  border-color: var(--gradient-color1);
+  background: var(--gradient-primary);
+}
+
+[data-color-mode="gradient"] .btn-secondary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  border-color: var(--gradient-color2);
 }
 
 /* 幽灵按钮 */
@@ -204,6 +228,16 @@
   border-color: var(--primary-color);
 }
 
+/* 渐变模式下的复选框 */
+[data-color-mode="gradient"] .checkbox-input:checked {
+  background: var(--gradient-primary);
+  border-color: var(--gradient-color1);
+}
+
+[data-color-mode="gradient"] .checkbox-input:hover:not(:checked) {
+  border-color: var(--gradient-color1);
+}
+
 .checkbox-input:checked::after {
   content: '';
   position: absolute;
@@ -268,6 +302,25 @@
   transform: scale(1.1);
 }
 
+/* 渐变模式下的滑块 */
+[data-color-mode="gradient"] .slider::-webkit-slider-thumb {
+  background: var(--gradient-primary);
+}
+
+[data-color-mode="gradient"] .slider::-webkit-slider-thumb:hover {
+  background: var(--gradient-primary);
+  filter: brightness(1.1);
+}
+
+[data-color-mode="gradient"] .slider::-moz-range-thumb {
+  background: var(--gradient-primary);
+}
+
+[data-color-mode="gradient"] .slider::-moz-range-thumb:hover {
+  background: var(--gradient-primary);
+  filter: brightness(1.1);
+}
+
 /* 卡片组件 */
 .card {
   background: var(--bg-primary);
@@ -310,8 +363,15 @@
   white-space: nowrap;
 }
 
+/* 徽章 */
 .badge-primary {
   background: var(--primary-color);
+  color: var(--color-white);
+}
+
+/* 渐变模式下的徽章 */
+[data-color-mode="gradient"] .badge-primary {
+  background: var(--gradient-primary);
   color: var(--color-white);
 }
 

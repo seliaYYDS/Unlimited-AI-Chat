@@ -191,6 +191,15 @@ export default {
   font-weight: 600;
 }
 
+/* 渐变模式下的滑块值 */
+[data-color-mode="gradient"] .slider-value {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
 .slider-track {
   position: relative;
   height: 6px;
@@ -218,6 +227,11 @@ export default {
   transition: width 0.2s ease;
 }
 
+/* 渐变模式下的滑块进度条 */
+[data-color-mode="gradient"] .slider-progress {
+  background: var(--gradient-primary);
+}
+
 .slider-thumb {
   position: absolute;
   top: 50%;
@@ -230,6 +244,11 @@ export default {
   cursor: grab;
   transition: all 0.2s ease;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* 渐变模式下的滑块手柄 */
+[data-color-mode="gradient"] .slider-thumb {
+  background: var(--gradient-primary);
 }
 
 .slider-thumb:hover {
@@ -259,6 +278,11 @@ export default {
   opacity: 0.3;
   filter: blur(6px);
   z-index: -1;
+}
+
+/* 渐变模式下的滑块光晕 */
+[data-color-mode="gradient"] .slider-thumb-glow {
+  background: var(--gradient-primary);
 }
 
 .slider-ticks {

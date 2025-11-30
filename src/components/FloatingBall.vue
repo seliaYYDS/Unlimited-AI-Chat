@@ -607,7 +607,7 @@ body[data-color-mode="single"] .floating-ball {
 }
 
 body[data-color-mode="single"].theme-dark .floating-ball {
-  background: var(--primary-color-dark, #c0399d);
+  background: var(--primary-color, #ec4899);
 }
 
 body[data-color-mode="dual"] .floating-ball {
@@ -615,7 +615,7 @@ body[data-color-mode="dual"] .floating-ball {
 }
 
 body[data-color-mode="dual"].theme-dark .floating-ball {
-  background: linear-gradient(135deg, var(--primary-color-dark, #c0399d), var(--secondary-color-dark, #2c6cb0));
+  background: linear-gradient(135deg, var(--primary-color, #ec4899), var(--secondary-color, #3b82f6));
 }
 
 body[data-color-mode="gradient"] .floating-ball {
@@ -623,7 +623,7 @@ body[data-color-mode="gradient"] .floating-ball {
 }
 
 body[data-color-mode="gradient"].theme-dark .floating-ball {
-  background: var(--gradient-primary-dark, linear-gradient(135deg, #c0399d 0%, #2c6cb0 100%));
+  background: var(--gradient-primary, linear-gradient(135deg, #ec4899 0%, #3b82f6 100%));
 }
 
 /* 确保悬浮球在其他元素之上 */

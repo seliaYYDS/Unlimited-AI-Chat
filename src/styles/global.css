@@ -1007,6 +1007,17 @@ body {
   background: var(--primary-hover);
 }
 
+/* 渐变模式下的按钮样式 */
+[data-color-mode="gradient"] .btn.primary {
+  background: var(--gradient-primary);
+  color: white;
+}
+
+[data-color-mode="gradient"] .btn.primary:hover {
+  background: var(--gradient-primary);
+  filter: brightness(1.1);
+}
+
 .btn.secondary {
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -1015,6 +1026,19 @@ body {
 
 .btn.secondary:hover {
   background: var(--bg-hover);
+}
+
+/* 渐变模式下的次按钮样式 */
+[data-color-mode="gradient"] .btn.secondary {
+  background: transparent;
+  color: white;
+  border: 1px solid var(--gradient-color1);
+  background: var(--gradient-primary);
+}
+
+[data-color-mode="gradient"] .btn.secondary:hover {
+  filter: brightness(1.1);
+  border-color: var(--gradient-color2);
 }
 
 /* 通知系统 */

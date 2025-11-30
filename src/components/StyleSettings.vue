@@ -144,7 +144,16 @@
         </div>
       </div>
 
-      
+      <div class="form-group">
+        <CustomCheckbox
+          :model-value="settings.enableMusicColorSync"
+          label="颜色联动音乐封面"
+          @update:model-value="updateSetting('enableMusicColorSync', $event)"
+        />
+        <div class="form-hint">
+          开启后，当音乐播放器中有音乐正在播放时会获取歌曲封面的颜色并设置为临时主题色
+        </div>
+      </div>
     </div>
 
     <!-- 界面样式 -->
@@ -771,7 +780,10 @@ export default {
         // 弹窗背景默认设置
         modalBackdropBlur: true,
         modalBackdropBlurAmount: 8,
-        modalBackdropOpacity: 0.5
+        modalBackdropOpacity: 0.5,
+        
+        // 音乐封面颜色联动默认设置
+        enableMusicColorSync: false
 
       })
 
@@ -1006,6 +1018,24 @@ export default {
   background: var(--primary-color);
   color: white;
   border-color: var(--primary-color);
+}
+
+/* 渐变模式下的选项按钮样式 */
+[data-color-mode="gradient"] .option-btn {
+  border: 1px solid var(--gradient-color1);
+  background: transparent;
+  color: var(--gradient-color1);
+}
+
+[data-color-mode="gradient"] .option-btn:hover {
+  border-color: var(--gradient-color2);
+  color: var(--gradient-color2);
+}
+
+[data-color-mode="gradient"] .option-btn.active {
+  background: var(--gradient-primary);
+  color: white;
+  border-color: transparent;
 }
 
 
