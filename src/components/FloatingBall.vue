@@ -618,11 +618,13 @@ body[data-color-mode="dual"].theme-dark .floating-ball {
   background: linear-gradient(135deg, var(--primary-color, #ec4899), var(--secondary-color, #3b82f6));
 }
 
-body[data-color-mode="gradient"] .floating-ball {
+body[data-color-mode="gradient"] .floating-ball,
+body[data-color-mode="advanced-gradient"] .floating-ball {
   background: var(--gradient-primary, linear-gradient(135deg, #ec4899 0%, #3b82f6 100%));
 }
 
-body[data-color-mode="gradient"].theme-dark .floating-ball {
+body[data-color-mode="gradient"].theme-dark .floating-ball,
+body[data-color-mode="advanced-gradient"].theme-dark .floating-ball {
   background: var(--gradient-primary, linear-gradient(135deg, #ec4899 0%, #3b82f6 100%));
 }
 

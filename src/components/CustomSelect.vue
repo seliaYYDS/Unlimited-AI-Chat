@@ -187,6 +187,21 @@ export default {
   background: var(--primary-hover);
 }
 
+/* 渐变模式下的选择器 */
+[data-color-mode="gradient"] .select-option.selected,
+[data-color-mode="advanced-gradient"] .select-option.selected {
+  background: var(--gradient-primary);
+  color: white;
+  border: 1px solid var(--primary-color);
+}
+
+[data-color-mode="gradient"] .select-option.selected:hover,
+[data-color-mode="advanced-gradient"] .select-option.selected:hover {
+  background: var(--gradient-primary);
+  opacity: 0.9;
+  border-color: var(--primary-hover);
+}
+
 .select-option.disabled {
   color: var(--text-tertiary);
   cursor: not-allowed;

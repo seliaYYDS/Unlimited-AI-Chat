@@ -1912,6 +1912,7 @@ export default {
     loadStyleSettings() {
       const settings = this.storageManager.getSettings()
       this.styleSettings = {
+        autoTheme: settings.autoTheme || false,
         theme: settings.theme || 'light',
         primaryColor: settings.primaryColor || '#ec4899',
         secondaryColor: settings.secondaryColor || '#3b82f6',
@@ -1927,6 +1928,11 @@ export default {
         messageBubbleStyle: settings.messageBubbleStyle || 'default',
         chatLayout: settings.chatLayout || 'standard',
         colorMode: settings.colorMode || 'single',
+        // 高级渐变模式设置
+        gradientDirection: settings.gradientDirection || '135deg',
+        gradientColorCount: settings.gradientColorCount || 3,
+        advancedGradientColors: settings.advancedGradientColors || ['#ec4899', '#3b82f6', '#10b981'],
+        customGradientAngle: settings.customGradientAngle || 135,
         // 流光效果设置
         enableShineEffect: settings.enableShineEffect !== undefined ? settings.enableShineEffect : true,
         shineColor: settings.shineColor || '#ec4899',
@@ -1964,21 +1970,17 @@ export default {
 
     applyStyleSettings() {
 
-      // 应用主题
-
-      if (this.styleSettings.theme !== this.themeManager.getCurrentTheme()) {
-
-        this.themeManager.applyTheme(this.styleSettings.theme)
-
-        this.isDarkTheme = this.styleSettings.theme === 'dark'
-
-      }
-
-
-
-      // 应用其他样式设置
-
+      // 应用其他样式设置（包含自动主题逻辑）
       this.themeManager.applyStyleSettings(this.styleSettings)
+      
+      // 如果没有启用自动主题，手动应用选择的主题
+      if (!this.styleSettings.autoTheme && this.styleSettings.theme !== this.themeManager.getCurrentTheme()) {
+        this.themeManager.applyTheme(this.styleSettings.theme)
+        this.isDarkTheme = this.styleSettings.theme === 'dark'
+      } else if (this.styleSettings.autoTheme) {
+        // 如果启用了自动主题，更新当前主题状态
+        this.isDarkTheme = this.themeManager.isDark()
+      }
 
       
 
@@ -4064,6 +4066,10 @@ export default {
         } else if (this.styleSettings.colorMode === 'dual' || this.styleSettings.colorMode === 'gradient') {
           // 双色或渐变模式：提取两个颜色
           extractedColors = await this.musicColorExtractor.extractMultipleColors(coverUrl, song.id, 2);
+        } else if (this.styleSettings.colorMode === 'advanced-gradient') {
+          // 高级渐变模式：根据设置的颜色数量提取相应数量的颜色
+          const colorCount = this.styleSettings.gradientColorCount || 3;
+          extractedColors = await this.musicColorExtractor.extractMultipleColors(coverUrl, song.id, colorCount);
         } else {
           // 默认提取一个颜色
           const color = await this.musicColorExtractor.extractPrimaryColor(coverUrl, song.id);
@@ -4121,6 +4127,47 @@ export default {
         root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor || primaryColor} 100%)`);
         root.style.setProperty('--gradient-color1', primaryColor);
         root.style.setProperty('--gradient-color2', secondaryColor || primaryColor);
+      } else if (this.styleSettings.colorMode === 'advanced-gradient') {
+        // 高级渐变模式：使用提取的所有颜色
+        const colorArray = Array.isArray(colors) ? colors : [colors];
+        const gradientDirection = this.styleSettings.gradientDirection || '135deg';
+        const customAngle = this.styleSettings.customGradientAngle || 135;
+        
+        // 生成渐变CSS
+        let gradientCSS;
+        if (gradientDirection === 'custom') {
+          gradientCSS = `linear-gradient(${customAngle}deg, ${colorArray.join(', ')})`;
+        } else if (gradientDirection === 'radial') {
+          gradientCSS = `radial-gradient(circle, ${colorArray.join(', ')})`;
+        } else {
+          // 修复渐变方向的CSS语法
+          let cssDirection = gradientDirection;
+          if (gradientDirection === 'to-right') cssDirection = 'to right';
+          else if (gradientDirection === 'to-left') cssDirection = 'to left';
+          else if (gradientDirection === 'to-bottom') cssDirection = 'to bottom';
+          else if (gradientDirection === 'to-top') cssDirection = 'to top';
+          else if (gradientDirection === 'to-bottom-right') cssDirection = 'to bottom right';
+          else if (gradientDirection === 'to-bottom-left') cssDirection = 'to bottom left';
+          else if (gradientDirection === 'to-top-right') cssDirection = 'to top right';
+          else if (gradientDirection === 'to-top-left') cssDirection = 'to top left';
+          
+          gradientCSS = `linear-gradient(${cssDirection}, ${colorArray.join(', ')})`;
+        }
+        
+        // 应用高级渐变
+        root.style.setProperty('--title-color', gradientCSS);
+        root.style.setProperty('--component-color', colorArray[0]);
+        root.style.setProperty('--avatar-color', gradientCSS);
+        root.style.setProperty('--gradient-primary', gradientCSS);
+        
+        // 设置渐变颜色变量供其他组件使用
+        colorArray.forEach((color, index) => {
+          root.style.setProperty(`--gradient-color-${index + 1}`, color);
+        });
+        
+        // 使用第一个颜色作为主色调
+        root.style.setProperty('--primary-color', colorArray[0]);
+        root.style.setProperty('--primary-hover', colorArray[colorArray.length - 1] || colorArray[0]);
       }
       
       // 生成颜色变体
@@ -4726,7 +4773,8 @@ body[data-color-mode="dual"] .dynamic-island {
   background: linear-gradient(135deg, var(--primary-color, #ec4899), var(--secondary-color, #3b82f6));
 }
 
-body[data-color-mode="gradient"] .dynamic-island {
+body[data-color-mode="gradient"] .dynamic-island,
+body[data-color-mode="advanced-gradient"] .dynamic-island {
   background: var(--gradient-primary, linear-gradient(135deg, #ec4899 0%, #3b82f6 100%));
 }
 
@@ -4936,7 +4984,8 @@ body[data-color-mode="gradient"] .dynamic-island {
   background: linear-gradient(135deg, var(--primary-color-dark, #c0399d), var(--secondary-color-dark, #2c6cb0));
 }
 
-.theme-dark body[data-color-mode="gradient"] .dynamic-island {
+.theme-dark body[data-color-mode="gradient"] .dynamic-island,
+.theme-dark body[data-color-mode="advanced-gradient"] .dynamic-island {
   background: var(--gradient-primary-dark, linear-gradient(135deg, #c0399d 0%, #2c6cb0 100%));
 }
 

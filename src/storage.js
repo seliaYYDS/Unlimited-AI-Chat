@@ -201,6 +201,7 @@ export class StorageManager {
                 sdHeight: 1000,
                 sdSampler: 'DPM++ 2M Karras',
                 // 样式设置
+                autoTheme: false, // 是否自动切换主题
                 theme: 'light', // 'light' 或 'dark'
                 primaryColor: '#ec4899', // 主色调
                 secondaryColor: '#3b82f6', // 副色调
@@ -215,7 +216,12 @@ export class StorageManager {
                 enableAnimations: true, // 是否启用动画
                 messageBubbleStyle: 'default', // 'default', 'rounded', 'minimal'
                 chatLayout: 'standard', // 'standard', 'compact', 'expanded'
-                colorMode: 'single', // 'single', 'dual', 'gradient'
+                colorMode: 'single', // 'single', 'dual', 'gradient', 'advanced-gradient'
+                // 高级渐变模式设置
+                gradientDirection: '135deg', // 渐变方向
+                gradientColorCount: 3, // 渐变颜色数量
+                advancedGradientColors: ['#ec4899', '#3b82f6', '#10b981'], // 高级渐变颜色数组
+                customGradientAngle: 135, // 自定义渐变角度
                 // 流光效果设置
                 enableShineEffect: true, // 是否启用流光效果
                 shineColor: '#ec4899', // 流光颜色
@@ -232,11 +238,20 @@ export class StorageManager {
 
             if (settings) {
                 const parsedSettings = JSON.parse(settings)
+                
                 // 确保数值参数为正确类型
                 parsedSettings.temperature = Number(parsedSettings.temperature) || 0.7
                 parsedSettings.maxTokens = Number(parsedSettings.maxTokens) || 1000
                 // 确保清理设置参数为正确类型
                 parsedSettings.autoClearDays = Number(parsedSettings.autoClearDays) || 3
+                // 确保高级渐变模式参数为正确类型
+                parsedSettings.gradientColorCount = Number(parsedSettings.gradientColorCount) || 3
+                parsedSettings.customGradientAngle = Number(parsedSettings.customGradientAngle) || 135
+                // 确保高级渐变颜色数组存在
+                if (!parsedSettings.advancedGradientColors || !Array.isArray(parsedSettings.advancedGradientColors)) {
+                    parsedSettings.advancedGradientColors = ['#ec4899', '#3b82f6', '#10b981']
+                }
+                
                 return parsedSettings
             }
 

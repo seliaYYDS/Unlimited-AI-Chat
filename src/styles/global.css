@@ -1008,12 +1008,14 @@ body {
 }
 
 /* 渐变模式下的按钮样式 */
-[data-color-mode="gradient"] .btn.primary {
+[data-color-mode="gradient"] .btn.primary,
+[data-color-mode="advanced-gradient"] .btn.primary {
   background: var(--gradient-primary);
   color: white;
 }
 
-[data-color-mode="gradient"] .btn.primary:hover {
+[data-color-mode="gradient"] .btn.primary:hover,
+[data-color-mode="advanced-gradient"] .btn.primary:hover {
   background: var(--gradient-primary);
   filter: brightness(1.1);
 }
@@ -1029,15 +1031,18 @@ body {
 }
 
 /* 渐变模式下的次按钮样式 */
-[data-color-mode="gradient"] .btn.secondary {
+[data-color-mode="gradient"] .btn.secondary,
+[data-color-mode="advanced-gradient"] .btn.secondary {
   background: transparent;
   color: white;
-  border: 1px solid var(--gradient-color1);
+  border: 1px solid var(--primary-color);
   background: var(--gradient-primary);
 }
 
-[data-color-mode="gradient"] .btn.secondary:hover {
+[data-color-mode="gradient"] .btn.secondary:hover,
+[data-color-mode="advanced-gradient"] .btn.secondary:hover {
   filter: brightness(1.1);
+  border-color: var(--primary-hover);
   border-color: var(--gradient-color2);
 }
 

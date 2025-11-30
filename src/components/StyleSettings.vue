@@ -4,6 +4,17 @@
       <h4 class="section-title">主题设置</h4>
 
       <div class="form-group">
+        <CustomCheckbox
+          :model-value="settings.autoTheme"
+          label="自动切换主题"
+          @update:model-value="updateSetting('autoTheme', $event)"
+        />
+        <div class="form-hint">
+          开启后，将根据当地时间自动切换亮色/暗色主题
+        </div>
+      </div>
+
+      <div v-if="!settings.autoTheme" class="form-group">
         <label>主题模式</label>
         <div class="theme-options">
           <div
@@ -101,6 +112,48 @@
         </div>
       </div>
 
+      <!-- AI生成配色 - 双色模式 -->
+      <div v-if="settings.colorMode === 'dual'" class="form-group">
+        <label>AI生成配色</label>
+        <div class="ai-color-generator">
+          <div class="ai-input-group">
+            <input
+              type="text"
+              class="ai-prompt-input"
+              v-model="aiColorPrompt"
+              placeholder="输入意象，如：海洋、森林、日落..."
+              @keyup.enter="generateAIColors"
+            >
+            <button 
+              class="ai-generate-btn" 
+              @click="generateAIColors"
+              :disabled="!aiColorPrompt.trim() || generatingColors"
+            >
+              <span v-if="!generatingColors">生成</span>
+              <span v-else>生成中...</span>
+            </button>
+          </div>
+          
+          <!-- AI配色预览 -->
+          <div v-if="generatedColors" class="ai-color-preview">
+            <div class="preview-colors">
+              <div class="preview-color-item">
+                <div class="preview-color" :style="{ backgroundColor: generatedColors.color1 }"></div>
+                <span class="color-code">{{ generatedColors.color1 }}</span>
+              </div>
+              <div class="preview-color-item">
+                <div class="preview-color" :style="{ backgroundColor: generatedColors.color2 }"></div>
+                <span class="color-code">{{ generatedColors.color2 }}</span>
+              </div>
+            </div>
+            <div class="preview-actions">
+              <button class="btn apply-btn" @click="applyGeneratedColors">应用配色</button>
+              <button class="btn secondary cancel-btn" @click="cancelGeneratedColors">取消</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 渐变模式 -->
       <div v-if="settings.colorMode === 'gradient'" class="form-group">
         <label>渐变色一</label>
@@ -144,6 +197,189 @@
         </div>
       </div>
 
+      <!-- AI生成配色 - 渐变模式 -->
+      <div v-if="settings.colorMode === 'gradient'" class="form-group">
+        <label>AI生成配色</label>
+        <div class="ai-color-generator">
+          <div class="ai-input-group">
+            <input
+              type="text"
+              class="ai-prompt-input"
+              v-model="aiColorPrompt"
+              placeholder="输入意象，如：海洋、森林、日落..."
+              @keyup.enter="generateAIColors"
+            >
+            <button 
+              class="ai-generate-btn" 
+              @click="generateAIColors"
+              :disabled="!aiColorPrompt.trim() || generatingColors"
+            >
+              <span v-if="!generatingColors">生成</span>
+              <span v-else>生成中...</span>
+            </button>
+          </div>
+          
+          <!-- AI配色预览 -->
+          <div v-if="generatedColors" class="ai-color-preview">
+            <div class="preview-colors">
+              <div class="preview-gradient" :style="{ background: `linear-gradient(135deg, ${generatedColors.color1}, ${generatedColors.color2})` }"></div>
+              <div class="gradient-color-codes">
+                <span class="color-code">{{ generatedColors.color1 }}</span>
+                <span class="color-code">{{ generatedColors.color2 }}</span>
+              </div>
+            </div>
+            <div class="preview-actions">
+              <button class="btn apply-btn" @click="applyGeneratedColors">应用配色</button>
+              <button class="btn secondary cancel-btn" @click="cancelGeneratedColors">取消</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 高级渐变模式 -->
+      <div v-if="settings.colorMode === 'advanced-gradient'">
+        <!-- 渐变方向/模式 -->
+        <div class="form-group">
+          <label>渐变方向</label>
+          <CustomSelect
+            :model-value="settings.gradientDirection"
+            :options="gradientDirectionOptions"
+            placeholder="选择渐变方向"
+            @update:model-value="updateSetting('gradientDirection', $event)"
+          />
+        </div>
+
+        <!-- 自定义角度调整 -->
+        <div v-if="settings.gradientDirection === 'custom'" class="form-group">
+          <div class="custom-angle-control">
+            <CustomSlider
+              :model-value="settings.customGradientAngle || 135"
+              :min="0"
+              :max="360"
+              :step="1"
+              label="渐变角度"
+              @update:model-value="updateCustomAngle"
+            />
+            <span class="angle-display">{{ settings.customGradientAngle || 135 }}°</span>
+          </div>
+        </div>
+
+        <!-- 渐变颜色数量 -->
+        <div class="form-group">
+          <label>渐变颜色数量</label>
+          <div class="gradient-color-count">
+            <div class="color-count-controls">
+              <button 
+                class="color-count-btn decrease"
+                @click="decreaseColorCount"
+                :disabled="(settings.gradientColorCount || 3) <= 2"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+              <span class="color-count-display">{{ settings.gradientColorCount || 3 }} 色</span>
+              <button 
+                class="color-count-btn increase"
+                @click="increaseColorCount"
+                :disabled="(settings.gradientColorCount || 3) >= 5"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 渐变颜色列表 -->
+        <div class="form-group">
+          <label>渐变颜色</label>
+          <div class="advanced-gradient-colors">
+            <div 
+              v-for="(color, index) in gradientColors" 
+              :key="index"
+              class="gradient-color-item"
+            >
+              <div class="color-label">色 {{ index + 1 }}</div>
+              <div class="color-picker-group">
+                <input
+                  type="color"
+                  class="color-picker"
+                  :value="color"
+                  @change="updateGradientColor(index, $event.target.value)"
+                >
+                <div class="color-presets">
+                  <div
+                    v-for="presetColor in colorPresets"
+                    :key="presetColor"
+                    class="color-preset"
+                    :style="{ backgroundColor: presetColor }"
+                    @click="updateGradientColor(index, presetColor)"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 渐变预览 -->
+        <div class="form-group">
+          <label>渐变预览</label>
+          <div class="gradient-preview-container">
+            <div 
+              class="gradient-preview" 
+              :style="{ background: generateGradientPreview() }"
+            ></div>
+            <div class="gradient-css-code">
+              <code>{{ generateGradientCSS() }}</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI生成配色 - 高级渐变模式 -->
+        <div class="form-group">
+          <label>AI生成配色</label>
+          <div class="ai-color-generator">
+            <div class="ai-input-group">
+              <input
+                type="text"
+                class="ai-prompt-input"
+                v-model="aiColorPrompt"
+                placeholder="输入意象，如：海洋、森林、日落..."
+                @keyup.enter="generateAdvancedGradientColors"
+              >
+              <button 
+                class="ai-generate-btn" 
+                @click="generateAdvancedGradientColors"
+                :disabled="!aiColorPrompt.trim() || generatingColors"
+              >
+                <span v-if="!generatingColors">生成</span>
+                <span v-else>生成中...</span>
+              </button>
+            </div>
+            
+            <!-- AI配色预览 -->
+            <div v-if="generatedAdvancedColors" class="ai-color-preview">
+              <div class="preview-colors">
+                <div class="preview-gradient" :style="{ background: generateAdvancedGradientPreview() }"></div>
+                <div class="gradient-color-codes">
+                  <span 
+                    v-for="(color, index) in generatedAdvancedColors" 
+                    :key="index"
+                    class="color-code"
+                  >{{ color }}</span>
+                </div>
+              </div>
+              <div class="preview-actions">
+                <button class="btn apply-btn" @click="applyAdvancedGeneratedColors">应用配色</button>
+                <button class="btn secondary cancel-btn" @click="cancelAdvancedGeneratedColors">取消</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="form-group">
         <CustomCheckbox
           :model-value="settings.enableMusicColorSync"
@@ -172,7 +408,7 @@
           <div v-if="loadingSystemFonts" class="font-loading-indicator">
             <span class="loading-text">正在检测系统字体...</span>
           </div>
-          <div class="font-preview" :style="{ fontFamily: settings.fontFamily || 'system-ui' }">
+          <div class="font-preview" :style="getFontPreviewStyle()">
             字体预览 AaBbCc 123 汉字测试
           </div>
         </div>
@@ -198,7 +434,7 @@
             placeholder="选择副字体"
             @update:model-value="updateSetting('secondaryFontFamily', $event)"
           />
-          <div class="font-preview" :style="{ fontFamily: settings.secondaryFontFamily || 'system-ui' }">
+          <div class="font-preview" :style="getSecondaryFontPreviewStyle()">
             副字体预览 AaBbCc 123 汉字测试
           </div>
         </div>
@@ -546,6 +782,7 @@
 
 <script>
 import { StorageManager } from '../storage.js'
+import { AIService } from '../aiService.js'
 import { FontDetector } from '../utils/fontDetector.js'
 import CustomSelect from './CustomSelect.vue'
 import CustomSlider from './CustomSlider.vue'
@@ -558,6 +795,7 @@ export default {
     CustomSlider,
     CustomCheckbox
   },
+  emits: ['update:settings', 'notify'],
   props: {
     settings: {
       type: Object,
@@ -567,9 +805,15 @@ export default {
   data() {
     return {
       storageManager: null,
+      aiService: null,
       fontDetector: null,
       systemFonts: [],
       loadingSystemFonts: false,
+      aiColorPrompt: '',
+      generatingColors: false,
+      generatedColors: null,
+      generatedAdvancedColors: null,
+      gradientColors: [],
 
       // 选项配置
       themeOptions: [
@@ -589,7 +833,21 @@ export default {
       colorModeOptions: [
         { value: 'single', label: '单色模式' },
         { value: 'dual', label: '双色模式' },
-        { value: 'gradient', label: '渐变模式' }
+        { value: 'gradient', label: '渐变模式' },
+        { value: 'advanced-gradient', label: '高级渐变' }
+      ],
+
+      gradientDirectionOptions: [
+        { value: 'to-right', label: '向右渐变' },
+        { value: 'to-left', label: '向左渐变' },
+        { value: 'to-bottom', label: '向下渐变' },
+        { value: 'to-top', label: '向上渐变' },
+        { value: 'to-bottom-right', label: '右下渐变' },
+        { value: 'to-bottom-left', label: '左下渐变' },
+        { value: 'to-top-right', label: '右上渐变' },
+        { value: 'to-top-left', label: '左上渐变' },
+        { value: 'custom', label: '自定义角度' },
+        { value: 'radial', label: '径向渐变' }
       ],
 
       get fontFamilyOptions() {
@@ -708,10 +966,25 @@ export default {
     }
 
   },
-  mounted() {
+  created() {
     this.storageManager = new StorageManager()
+    this.aiService = new AIService(this.storageManager)
     this.fontDetector = new FontDetector()
+  },
+  mounted() {
     this.loadSystemFonts()
+  },
+  watch: {
+    'settings.colorMode': {
+      handler(newMode) {
+        if (newMode === 'advanced-gradient') {
+          this.$nextTick(() => {
+            this.initializeAdvancedGradient()
+          })
+        }
+      },
+      immediate: true
+    }
   },
   methods: {
     updateSetting(key, value) {
@@ -728,6 +1001,8 @@ export default {
       this.$emit('update:settings', {
 
         ...this.settings,
+
+        autoTheme: false,
 
         theme: 'light',
 
@@ -806,6 +1081,298 @@ export default {
       } finally {
         this.loadingSystemFonts = false
       }
+    },
+
+    // 获取主字体预览样式
+    getFontPreviewStyle() {
+      let fontFamily = this.settings.fontFamily || 'system-ui'
+      
+      // 如果启用了副字体，在预览中也应用副字体
+      if (this.settings.enableSecondaryFont && this.settings.secondaryFontFamily) {
+        if (this.settings.secondaryFontFamily !== fontFamily) {
+          fontFamily = `${fontFamily}, ${this.settings.secondaryFontFamily}`
+        }
+      }
+      
+      return { fontFamily }
+    },
+
+    // 获取副字体预览样式
+    getSecondaryFontPreviewStyle() {
+      return { fontFamily: this.settings.secondaryFontFamily || 'system-ui' }
+    },
+
+    // AI生成配色
+    async generateAIColors() {
+      if (!this.aiColorPrompt.trim()) {
+        this.showNotification('请输入配色意象', 'error')
+        return
+      }
+
+      this.generatingColors = true
+      this.generatedColors = null
+
+      try {
+        const settings = this.storageManager.getSettings()
+        let colorScheme
+
+        if (settings.apiType === 'network') {
+          // 使用网络API生成配色
+          colorScheme = await this.aiService.generateColorScheme(this.aiColorPrompt, settings)
+        } else {
+          // 使用本地模型生成配色
+          colorScheme = await this.aiService.generateLocalColorScheme(this.aiColorPrompt)
+        }
+
+        this.generatedColors = colorScheme
+        this.showNotification('配色生成成功', 'success')
+      } catch (error) {
+        console.error('生成配色失败:', error)
+        this.showNotification(`生成配色失败: ${error.message}`, 'error')
+      } finally {
+        this.generatingColors = false
+      }
+    },
+
+    // 应用生成的配色
+    applyGeneratedColors() {
+      if (!this.generatedColors) return
+
+      if (this.settings.colorMode === 'dual') {
+        // 确保两个颜色都被正确应用
+        const newSettings = {
+          ...this.settings,
+          primaryColor: this.generatedColors.color1,
+          secondaryColor: this.generatedColors.color2
+        }
+        this.$emit('update:settings', newSettings)
+      } else if (this.settings.colorMode === 'gradient') {
+        // 确保两个渐变色都被正确应用
+        const newSettings = {
+          ...this.settings,
+          gradientColor1: this.generatedColors.color1,
+          gradientColor2: this.generatedColors.color2
+        }
+        this.$emit('update:settings', newSettings)
+      }
+
+      this.showNotification('配色已应用', 'success')
+      this.cancelGeneratedColors()
+    },
+
+    // 取消生成的配色
+    cancelGeneratedColors() {
+      this.generatedColors = null
+      this.aiColorPrompt = ''
+    },
+
+    // 初始化高级渐变模式
+    initializeAdvancedGradient() {
+      // 确保gradientColors数组被正确初始化，参考其他颜色的做法
+      if (this.settings.advancedGradientColors && this.settings.advancedGradientColors.length > 0) {
+        this.gradientColors = [...this.settings.advancedGradientColors]
+      } else {
+        // 如果没有保存的颜色，使用默认颜色
+        const colorCount = this.settings.gradientColorCount || 3
+        this.gradientColors = this.colorPresets.slice(0, colorCount)
+        this.updateSetting('advancedGradientColors', this.gradientColors)
+      }
+    },
+
+    // 更新渐变颜色数量
+    updateGradientColorCount(count) {
+      this.updateSetting('gradientColorCount', count)
+      // 直接更新颜色数组，传递新的数量
+      this.updateGradientColors(count)
+    },
+
+    // 增加颜色数量
+    increaseColorCount() {
+      const currentCount = parseInt(this.settings.gradientColorCount) || 3
+      if (currentCount < 5) {
+        const newCount = currentCount + 1
+        // 确保有足够的颜色
+        let newColors = [...this.gradientColors]
+        while (newColors.length < newCount) {
+          newColors.push(this.colorPresets[newColors.length % this.colorPresets.length])
+        }
+        
+        // 更新本地数组
+        this.gradientColors = newColors
+        
+        // 更新设置
+        const newSettings = {
+          ...this.settings,
+          gradientColorCount: newCount,
+          advancedGradientColors: newColors
+        }
+        this.$emit('update:settings', newSettings)
+      }
+    },
+
+    // 减少颜色数量
+    decreaseColorCount() {
+      const currentCount = parseInt(this.settings.gradientColorCount) || 3
+      if (currentCount > 2) {
+        const newCount = currentCount - 1
+        
+        // 截断到新数量
+        let newColors = this.gradientColors.slice(0, newCount)
+        
+        // 更新本地数组
+        this.gradientColors = newColors
+        
+        // 更新设置
+        const newSettings = {
+          ...this.settings,
+          gradientColorCount: newCount,
+          advancedGradientColors: newColors
+        }
+        this.$emit('update:settings', newSettings)
+      }
+    },
+
+    // 更新渐变颜色数组
+    updateGradientColors(count = null) {
+      // 如果没有传递count参数，使用当前设置中的数量
+      const targetCount = count !== null ? count : Math.max(2, Math.min(5, this.settings.gradientColorCount || 3))
+      const currentColors = this.settings.advancedGradientColors || []
+      
+      // 确保有足够的颜色
+      let newColors = [...currentColors]
+      while (newColors.length < targetCount) {
+        newColors.push(this.colorPresets[newColors.length % this.colorPresets.length])
+      }
+      
+      // 如果颜色太多，截断
+      if (newColors.length > targetCount) {
+        newColors = newColors.slice(0, targetCount)
+      }
+      
+      this.gradientColors = newColors
+      this.updateSetting('advancedGradientColors', newColors)
+    },
+
+    // 更新单个渐变颜色
+    updateGradientColor(index, color) {
+      const newColors = [...this.gradientColors]
+      newColors[index] = color
+      this.gradientColors = newColors
+      this.updateSetting('advancedGradientColors', newColors)
+    },
+
+    // 生成渐变预览
+    generateGradientPreview() {
+      const direction = this.settings.gradientDirection || '135deg'
+      const colors = this.gradientColors.length > 0 ? this.gradientColors : ['#ec4899', '#3b82f6', '#10b981']
+      
+      // 修复渐变方向的CSS语法
+      let cssDirection = direction
+      if (direction === 'to-right') cssDirection = 'to right'
+      else if (direction === 'to-left') cssDirection = 'to left'
+      else if (direction === 'to-bottom') cssDirection = 'to bottom'
+      else if (direction === 'to-top') cssDirection = 'to top'
+      else if (direction === 'to-bottom-right') cssDirection = 'to bottom right'
+      else if (direction === 'to-bottom-left') cssDirection = 'to bottom left'
+      else if (direction === 'to-top-right') cssDirection = 'to top right'
+      else if (direction === 'to-top-left') cssDirection = 'to top left'
+      else if (direction === 'custom') cssDirection = `${this.settings.customGradientAngle || 135}deg`
+      
+      if (direction === 'radial') {
+        return `radial-gradient(circle, ${colors.join(', ')})`
+      } else {
+        return `linear-gradient(${cssDirection}, ${colors.join(', ')})`
+      }
+    },
+
+    // 生成渐变CSS代码
+    generateGradientCSS() {
+      return this.generateGradientPreview()
+    },
+
+    // 生成高级渐变配色
+    async generateAdvancedGradientColors() {
+      if (!this.aiColorPrompt.trim()) {
+        this.showNotification('请输入配色意象', 'error')
+        return
+      }
+
+      this.generatingColors = true
+      this.generatedAdvancedColors = null
+
+      try {
+        const settings = this.storageManager.getSettings()
+        const colorCount = this.settings.gradientColorCount || 3
+        
+        let colors
+
+        if (settings.apiType === 'network') {
+          // 使用网络API生成多个配色
+          colors = await this.aiService.generateAdvancedColorScheme(this.aiColorPrompt, colorCount, settings)
+        } else {
+          // 使用本地模型生成多个配色
+          colors = await this.aiService.generateLocalAdvancedColorScheme(this.aiColorPrompt, colorCount)
+        }
+
+        this.generatedAdvancedColors = colors
+        this.showNotification('配色生成成功', 'success')
+      } catch (error) {
+        console.error('生成高级配色失败:', error)
+        this.showNotification(`生成配色失败: ${error.message}`, 'error')
+      } finally {
+        this.generatingColors = false
+      }
+    },
+
+    // 生成高级渐变预览
+    generateAdvancedGradientPreview() {
+      const direction = this.settings.gradientDirection || '135deg'
+      const colors = this.generatedAdvancedColors || ['#ec4899', '#3b82f6', '#10b981']
+      
+      // 修复渐变方向的CSS语法
+      let cssDirection = direction
+      if (direction === 'to-right') cssDirection = 'to right'
+      else if (direction === 'to-left') cssDirection = 'to left'
+      else if (direction === 'to-bottom') cssDirection = 'to bottom'
+      else if (direction === 'to-top') cssDirection = 'to top'
+      else if (direction === 'to-bottom-right') cssDirection = 'to bottom right'
+      else if (direction === 'to-bottom-left') cssDirection = 'to bottom left'
+      else if (direction === 'to-top-right') cssDirection = 'to top right'
+      else if (direction === 'to-top-left') cssDirection = 'to top left'
+      else if (direction === 'custom') cssDirection = `${this.settings.customGradientAngle || 135}deg`
+      
+      if (direction === 'radial') {
+        return `radial-gradient(circle, ${colors.join(', ')})`
+      } else {
+        return `linear-gradient(${cssDirection}, ${colors.join(', ')})`
+      }
+    },
+
+    // 应用生成的高级配色
+    applyAdvancedGeneratedColors() {
+      if (!this.generatedAdvancedColors) return
+
+      const newSettings = {
+        ...this.settings,
+        advancedGradientColors: this.generatedAdvancedColors
+      }
+      
+      this.gradientColors = this.generatedAdvancedColors
+      this.$emit('update:settings', newSettings)
+      
+      this.showNotification('配色已应用', 'success')
+      this.cancelAdvancedGeneratedColors()
+    },
+
+    // 取消生成的高级配色
+    cancelAdvancedGeneratedColors() {
+      this.generatedAdvancedColors = null
+      this.aiColorPrompt = ''
+    },
+
+    // 更新自定义角度
+    updateCustomAngle(angle) {
+      this.updateSetting('customGradientAngle', angle)
     }
   }
 }
@@ -1196,6 +1763,305 @@ export default {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+/* AI生成配色样式 */
+.ai-color-generator {
+  margin-top: 12px;
+}
+
+.ai-input-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ai-prompt-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.ai-prompt-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.ai-prompt-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.ai-generate-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--primary-color);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+
+.ai-generate-btn:hover:not(:disabled) {
+  background: var(--primary-color);
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.ai-generate-btn:disabled {
+  background: var(--text-tertiary);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ai-color-preview {
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.preview-colors {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.preview-color-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview-color {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  border: 2px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.preview-gradient {
+  width: 120px;
+  height: 60px;
+  border-radius: 8px;
+  border: 2px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.gradient-color-codes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.color-code {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: monospace;
+  background: var(--bg-tertiary);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.apply-btn {
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.apply-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.cancel-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--text-tertiary);
+}
+
+/* 高级渐变模式样式 */
+.gradient-color-count {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.color-count-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-count-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.color-count-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+  transform: scale(1.05);
+}
+
+.color-count-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.color-count-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+}
+
+.color-count-btn svg {
+  transition: transform 0.2s ease;
+}
+
+.color-count-btn:hover:not(:disabled) svg {
+  transform: scale(1.1);
+}
+
+.color-count-display {
+  font-size: 14px;
+  color: var(--text-secondary);
+  min-width: 60px;
+  text-align: center;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.custom-angle-control {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.angle-display {
+  font-size: 14px;
+  color: var(--text-secondary);
+  min-width: 50px;
+  text-align: center;
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.advanced-gradient-colors {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gradient-color-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.gradient-color-item:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.color-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  min-width: 40px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.gradient-preview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gradient-preview {
+  width: 100%;
+  height: 80px;
+  border-radius: 8px;
+  border: 2px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.gradient-css-code {
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.gradient-css-code code {
+  background: none;
+  padding: 0;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .theme-options {
@@ -1204,6 +2070,33 @@ export default {
 
   .option-buttons {
     justify-content: center;
+  }
+
+  .ai-input-group {
+    flex-direction: column;
+  }
+
+  .preview-colors {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .preview-actions {
+    flex-direction: column;
+  }
+
+  .color-count-controls {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .gradient-color-item {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .color-label {
+    min-width: auto;
   }
 }
 </style>

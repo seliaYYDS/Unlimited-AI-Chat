@@ -91,6 +91,13 @@ export default {
   border-color: var(--primary-color);
 }
 
+/* 渐变模式下的复选框 */
+[data-color-mode="gradient"] .custom-checkbox.checked .checkbox-control,
+[data-color-mode="advanced-gradient"] .custom-checkbox.checked .checkbox-control {
+  background: var(--gradient-primary);
+  border-color: var(--primary-color);
+}
+
 .checkbox-checkmark {
   opacity: 0;
   transform: scale(0.5);

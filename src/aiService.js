@@ -1103,4 +1103,237 @@ export class AIService {
 
         return replies.slice(0, 4)
     }
+
+    // 生成配色方案
+    async generateColorScheme(prompt, settings) {
+        const { apiEndpoint, apiKey, modelName } = settings
+
+        if (!apiEndpoint || !apiKey) {
+            throw new Error('请配置API端点和密钥')
+        }
+
+        const provider = this.detectAPIProvider(apiEndpoint)
+        const fullUrl = this.buildRequestUrl(apiEndpoint, provider)
+        const headers = this.buildRequestHeaders(apiKey, provider)
+
+        const colorPrompt = `请根据用户提供的意象"${prompt}"，生成一组和谐的配色方案。
+
+要求：
+1. 返回2个十六进制颜色值（格式如 #FF5733）
+2. 颜色应该和谐搭配，适合作为UI主题色
+3. 颜色要有足够的对比度，确保可读性
+4. 只返回JSON格式，不要添加任何其他文字
+5. JSON格式：{"color1": "#RRGGBB", "color2": "#RRGGBB"}
+
+示例：
+{"color1": "#FF6B6B", "color2": "#4ECDC4"}`
+
+        const requestBody = {
+            model: modelName,
+            messages: [
+                {
+                    role: 'user',
+                    content: colorPrompt
+                }
+            ],
+            temperature: 0.8,
+            max_tokens: 100
+        }
+
+        try {
+            const response = await fetch(fullUrl, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestBody)
+            })
+
+            if (!response.ok) {
+                throw new Error(`API请求失败: ${response.status}`)
+            }
+
+            const data = await response.json()
+            const content = this.parseResponseContent(data, provider)
+
+            if (!content) {
+                throw new Error('无法解析配色方案')
+            }
+
+            // 尝试解析JSON
+            try {
+                const colorScheme = JSON.parse(content.trim())
+                // 验证颜色格式
+                if (colorScheme.color1 && colorScheme.color2 && 
+                    /^#[0-9A-F]{6}$/i.test(colorScheme.color1) && 
+                    /^#[0-9A-F]{6}$/i.test(colorScheme.color2)) {
+                    return colorScheme
+                } else {
+                    throw new Error('配色格式不正确')
+                }
+            } catch (parseError) {
+                // 如果解析失败，尝试从文本中提取颜色
+                const colorMatches = content.match(/#[0-9A-F]{6}/gi)
+                if (colorMatches && colorMatches.length >= 2) {
+                    return {
+                        color1: colorMatches[0],
+                        color2: colorMatches[1]
+                    }
+                } else {
+                    throw new Error('无法从响应中提取有效颜色')
+                }
+            }
+        } catch (error) {
+            console.error('生成配色方案失败:', error)
+            throw error
+        }
+    }
+
+    // 本地模型生成配色方案（模拟实现）
+    async generateLocalColorScheme(prompt) {
+        // 模拟网络延迟
+        await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 800))
+
+        // 基于关键词生成预设配色
+        const colorSchemes = {
+            '海洋': { color1: '#006994', color2: '#00D9FF' },
+            '森林': { color1: '#2D5016', color2: '#73A942' },
+            '日落': { color1: '#FF6B35', color2: '#F7931E' },
+            '夜晚': { color1: '#2C3E50', color2: '#3498DB' },
+            '春天': { color1: '#52C234', color2: '#A8E063' },
+            '秋天': { color1: '#D84315', color2: '#FF8A65' },
+            '糖果': { color1: '#FF6B9D', color2: '#C44569' },
+            '科技': { color1: '#00BCD4', color2: '#3F51B5' },
+            '温暖': { color1: '#FF5722', color2: '#FFC107' },
+            '清凉': { color1: '#00ACC1', color2: '#26C6DA' }
+        }
+
+        // 检查提示词中是否包含关键词
+        for (const [keyword, colors] of Object.entries(colorSchemes)) {
+            if (prompt.includes(keyword)) {
+                return colors
+            }
+        }
+
+        // 如果没有匹配的关键词，返回随机配色
+        const defaultSchemes = [
+            { color1: '#FF6B6B', color2: '#4ECDC4' },
+            { color1: '#A8E6CF', color2: '#FFD3B6' },
+            { color1: '#FF8B94', color2: '#A8D8EA' },
+            { color1: '#C7CEEA', color2: '#FFDAC1' },
+            { color1: '#B2E1D4', color2: '#FFAAA5' }
+        ]
+
+        return defaultSchemes[Math.floor(Math.random() * defaultSchemes.length)]
+    }
+
+    // 生成高级渐变配色方案
+    async generateAdvancedColorScheme(prompt, colorCount, settings) {
+        const { apiEndpoint, apiKey, modelName } = settings
+
+        if (!apiEndpoint || !apiKey) {
+            throw new Error('请配置API端点和密钥')
+        }
+
+        const provider = this.detectAPIProvider(apiEndpoint)
+        const fullUrl = this.buildRequestUrl(apiEndpoint, provider)
+        const headers = this.buildRequestHeaders(apiKey, provider)
+
+        const advancedColorPrompt = `请根据用户提供的意象"${prompt}"，生成一组${colorCount}个颜色的和谐渐变配色方案。
+
+要求：
+1. 返回${colorCount}个十六进制颜色值（格式如 #FF5733）
+2. 颜色应该和谐搭配，适合作为渐变主题色
+3. 颜色之间要有良好的过渡效果
+4. 只返回JSON格式，不要添加任何其他文字
+5. JSON格式：{"colors": ["#RRGGBB", "#RRGGBB", "#RRGGBB", ...]}
+
+示例（3色）：
+{"colors": ["#FF6B6B", "#4ECDC4", "#45B7D1"]}`
+
+        const requestBody = {
+            model: modelName,
+            messages: [
+                {
+                    role: 'user',
+                    content: advancedColorPrompt
+                }
+            ],
+            temperature: 0.8,
+            max_tokens: 200
+        }
+
+        try {
+            const response = await fetch(fullUrl, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestBody)
+            })
+
+            if (!response.ok) {
+                throw new Error(`API请求失败: ${response.status}`)
+            }
+
+            const data = await response.json()
+            const content = this.parseResponseContent(data, provider)
+
+            if (!content) {
+                throw new Error('无法解析高级配色方案')
+            }
+
+            // 尝试解析JSON
+            try {
+                const colorScheme = JSON.parse(content.trim())
+                if (colorScheme.colors && Array.isArray(colorScheme.colors) && colorScheme.colors.length >= colorCount) {
+                    // 验证颜色格式
+                    const validColors = colorScheme.colors.slice(0, colorCount).filter(color => /^#[0-9A-F]{6}$/i.test(color))
+                    if (validColors.length === colorCount) {
+                        return validColors
+                    }
+                }
+                throw new Error('配色格式不正确')
+            } catch (parseError) {
+                // 如果解析失败，尝试从文本中提取颜色
+                const colorMatches = content.match(/#[0-9A-F]{6}/gi)
+                if (colorMatches && colorMatches.length >= colorCount) {
+                    return colorMatches.slice(0, colorCount)
+                } else {
+                    throw new Error('无法从响应中提取有效颜色')
+                }
+            }
+        } catch (error) {
+            console.error('生成高级配色方案失败:', error)
+            throw error
+        }
+    }
+
+    // 本地模型生成高级渐变配色方案（模拟实现）
+    async generateLocalAdvancedColorScheme(prompt, colorCount) {
+        // 模拟网络延迟
+        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000))
+
+        // 基于关键词生成预设配色
+        const advancedColorSchemes = {
+            '海洋': ['#006994', '#00A8CC', '#00D9FF', '#7FDBFF', '#B3E5FC'],
+            '森林': ['#2D5016', '#4A7C2E', '#73A942', '#8BC34A', '#A8E063'],
+            '日落': ['#FF6B35', '#F7931E', '#FFC107', '#FFD54F', '#FFE082'],
+            '夜晚': ['#2C3E50', '#34495E', '#3498DB', '#5DADE2', '#85C1E2'],
+            '春天': ['#52C234', '#66BB6A', '#4CAF50', '#8BC34A', '#A8E063'],
+            '秋天': ['#D84315', '#E64A19', '#FF8A65', '#FFAB91', '#FFCCBC'],
+            '糖果': ['#FF6B9D', '#C44569', '#F8B500', '#FF6B6B', '#C44569'],
+            '科技': ['#00BCD4', '#3F51B5', '#2196F3', '#03A9F4', '#00ACC1'],
+            '温暖': ['#FF5722', '#FF7043', '#FF8A65', '#FFAB91', '#FFC107'],
+            '清凉': ['#00ACC1', '#26C6DA', '#4DD0E1', '#80DEEA', '#B2EBF2']
+        }
+
+        // 检查提示词中是否包含关键词
+        for (const [keyword, colors] of Object.entries(advancedColorSchemes)) {
+            if (prompt.includes(keyword)) {
+                return colors.slice(0, colorCount)
+            }
+        }
+
+        // 如果没有匹配的关键词，生成随机配色
+        const baseColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F']
+        const shuffled = baseColors.sort(() => 0.5 - Math.random())
+        return shuffled.slice(0, colorCount)
+    }
 }

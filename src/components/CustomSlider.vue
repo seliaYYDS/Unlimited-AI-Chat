@@ -192,7 +192,8 @@ export default {
 }
 
 /* 渐变模式下的滑块值 */
-[data-color-mode="gradient"] .slider-value {
+[data-color-mode="gradient"] .slider-value,
+[data-color-mode="advanced-gradient"] .slider-value {
   background: var(--gradient-primary);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -228,7 +229,8 @@ export default {
 }
 
 /* 渐变模式下的滑块进度条 */
-[data-color-mode="gradient"] .slider-progress {
+[data-color-mode="gradient"] .slider-progress,
+[data-color-mode="advanced-gradient"] .slider-progress {
   background: var(--gradient-primary);
 }
 
@@ -247,7 +249,8 @@ export default {
 }
 
 /* 渐变模式下的滑块手柄 */
-[data-color-mode="gradient"] .slider-thumb {
+[data-color-mode="gradient"] .slider-thumb,
+[data-color-mode="advanced-gradient"] .slider-thumb {
   background: var(--gradient-primary);
 }
 
@@ -281,7 +284,8 @@ export default {
 }
 
 /* 渐变模式下的滑块光晕 */
-[data-color-mode="gradient"] .slider-thumb-glow {
+[data-color-mode="gradient"] .slider-thumb-glow,
+[data-color-mode="advanced-gradient"] .slider-thumb-glow {
   background: var(--gradient-primary);
 }
 

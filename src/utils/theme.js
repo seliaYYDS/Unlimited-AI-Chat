@@ -3,7 +3,9 @@ export class ThemeManager {
   constructor(storageManager) {
     this.storageManager = storageManager
     this.currentTheme = this.getStoredTheme() || 'light'
+    this.autoThemeInterval = null
     this.applyTheme(this.currentTheme)
+    this.initAutoTheme()
   }
 
   // 获取存储的主题
@@ -49,6 +51,19 @@ export class ThemeManager {
   // 应用样式设置
   applyStyleSettings(settings) {
     const root = document.documentElement
+
+    // 处理自动主题切换
+    if (settings.autoTheme !== undefined) {
+      if (settings.autoTheme) {
+        this.enableAutoTheme()
+      } else {
+        this.disableAutoTheme()
+        // 如果禁用自动主题，应用手动选择的主题
+        if (settings.theme) {
+          this.applyTheme(settings.theme)
+        }
+      }
+    }
 
     // 根据颜色模式应用相应颜色
 
@@ -102,7 +117,9 @@ export class ThemeManager {
 
         root.style.setProperty('--secondary-color', settings.secondaryColor)
 
-        root.style.setProperty('--avatar-color', settings.secondaryColor)
+        // 不要覆盖主色调设置的avatar-color，保持主色调的设置
+
+        // root.style.setProperty('--avatar-color', settings.secondaryColor)
 
       }
 
@@ -152,18 +169,69 @@ export class ThemeManager {
 
       // 渐变样式将在CSS中使用这些变量
 
+    } else if (settings.colorMode === 'advanced-gradient') {
+      // 高级渐变模式：应用多个渐变色和自定义方向
+
+      if (settings.advancedGradientColors && settings.advancedGradientColors.length > 0) {
+        const colors = settings.advancedGradientColors
+        const direction = settings.gradientDirection || '135deg'
+        
+        // 生成渐变CSS
+        let gradientCSS
+        if (direction === 'radial') {
+          gradientCSS = `radial-gradient(circle, ${colors.join(', ')})`
+        } else {
+          // 修复渐变方向的CSS语法
+          let cssDirection = direction
+          if (direction === 'to-right') cssDirection = 'to right'
+          else if (direction === 'to-left') cssDirection = 'to left'
+          else if (direction === 'to-bottom') cssDirection = 'to bottom'
+          else if (direction === 'to-top') cssDirection = 'to top'
+          else if (direction === 'to-bottom-right') cssDirection = 'to bottom right'
+          else if (direction === 'to-bottom-left') cssDirection = 'to bottom left'
+          else if (direction === 'to-top-right') cssDirection = 'to top right'
+          else if (direction === 'to-top-left') cssDirection = 'to top left'
+          else if (direction === 'custom') cssDirection = `${settings.customGradientAngle || 135}deg`
+          
+          gradientCSS = `linear-gradient(${cssDirection}, ${colors.join(', ')})`
+        }
+        
+        // 应用渐变到各个元素
+        root.style.setProperty('--gradient-primary', gradientCSS)
+        root.style.setProperty('--title-color', gradientCSS)
+        root.style.setProperty('--avatar-color', gradientCSS)
+        
+        // 使用第一个颜色作为主色调
+        root.style.setProperty('--primary-color', colors[0])
+        root.style.setProperty('--component-color', colors[0])
+        
+        // 使用最后一个颜色作为悬停状态
+        root.style.setProperty('--primary-hover', colors[colors.length - 1])
+        
+        // 设置渐变颜色变量供其他组件使用
+        colors.forEach((color, index) => {
+          root.style.setProperty(`--gradient-color-${index + 1}`, color)
+        })
+      }
     }
 
     // 应用字体
     if (settings.fontFamily) {
       let fontFamily = settings.fontFamily
       
-      // 如果启用了副字体，将副字体添加到字体栈中
+      // 如果启用了副字体，使用unicode-range和CSS字体回退机制
       if (settings.enableSecondaryFont && settings.secondaryFontFamily) {
         // 确保副字体不与主字体重复
         if (settings.secondaryFontFamily !== settings.fontFamily) {
+          // 创建字体栈，主字体在前，副字体作为回退
           fontFamily = `${settings.fontFamily}, ${settings.secondaryFontFamily}`
+          
+          // 生成副字体的CSS规则，专门处理中文字符
+          this.createSecondaryFontRule(settings.secondaryFontFamily)
         }
+      } else {
+        // 如果禁用了副字体，移除相关的CSS规则
+        this.removeSecondaryFontRule()
       }
       
       root.style.setProperty('--font-family', fontFamily)
@@ -492,6 +560,89 @@ export class ThemeManager {
   // 检查是否为暗色主题
   isDark() {
     return this.currentTheme === 'dark'
+  }
+
+  // 创建副字体CSS规则
+  createSecondaryFontRule(secondaryFontFamily) {
+    // 查找或创建副字体样式元素
+    let styleElement = document.getElementById('secondary-font-style')
+    if (!styleElement) {
+      styleElement = document.createElement('style')
+      styleElement.id = 'secondary-font-style'
+      document.head.appendChild(styleElement)
+    }
+    
+    // 创建针对中文字符的字体回退规则
+    // 使用CSS字体回退机制，当主字体不支持中文字符时自动使用副字体
+    const cssRule = `
+      @font-face {
+        font-family: 'fallback-chinese';
+        src: local('${secondaryFontFamily}');
+        unicode-range: U+4E00-U+9FFF, U+3400-U+4DBF, U+20000-U+2A6DF, U+2A700-U+2B73F, U+2B740-U+2B81F, U+2B820-U+2CEAF, U+F900-U+FAFF, U+2F800-U+2FA1F;
+        font-display: swap;
+      }
+      
+      /* 确保中文字符使用副字体 */
+      * {
+        font-family: var(--font-family), 'fallback-chinese', system-ui, sans-serif;
+      }
+    `
+    
+    styleElement.textContent = cssRule
+  }
+
+  // 移除副字体CSS规则
+  removeSecondaryFontRule() {
+    const styleElement = document.getElementById('secondary-font-style')
+    if (styleElement) {
+      styleElement.remove()
+    }
+  }
+
+  // 初始化自动主题
+  initAutoTheme() {
+    const settings = this.storageManager.getSettings()
+    if (settings.autoTheme) {
+      this.enableAutoTheme()
+    }
+  }
+
+  // 启用自动主题切换
+  enableAutoTheme() {
+    // 立即应用一次基于当前时间的主题
+    this.applyTimeBasedTheme()
+    
+    // 设置定时器，每分钟检查一次
+    this.disableAutoTheme() // 先清除可能存在的定时器
+    this.autoThemeInterval = setInterval(() => {
+      this.applyTimeBasedTheme()
+    }, 60000) // 每分钟检查一次
+  }
+
+  // 禁用自动主题切换
+  disableAutoTheme() {
+    if (this.autoThemeInterval) {
+      clearInterval(this.autoThemeInterval)
+      this.autoThemeInterval = null
+    }
+  }
+
+  // 根据时间应用主题
+  applyTimeBasedTheme() {
+    const hour = new Date().getHours()
+    const isDaytime = hour >= 6 && hour < 18 // 6:00-18:00 为白天
+    
+    const targetTheme = isDaytime ? 'light' : 'dark'
+    
+    // 只有当主题需要改变时才应用
+    if (this.currentTheme !== targetTheme) {
+      this.applyTheme(targetTheme)
+      
+      // 更新设置中的主题值，但不触发重新渲染
+      const settings = this.storageManager.getSettings()
+      settings.theme = targetTheme
+      this.storageManager.saveSettings(settings)
+    }
   }
 
   // 检查是否为亮色主题
