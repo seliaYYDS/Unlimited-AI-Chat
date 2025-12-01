@@ -282,7 +282,7 @@
               <button 
                 class="color-count-btn increase"
                 @click="increaseColorCount"
-                :disabled="(settings.gradientColorCount || 3) >= 5"
+                :disabled="(settings.gradientColorCount || 3) >= 8"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1189,7 +1189,7 @@ export default {
     // 增加颜色数量
     increaseColorCount() {
       const currentCount = parseInt(this.settings.gradientColorCount) || 3
-      if (currentCount < 5) {
+      if (currentCount < 8) {
         const newCount = currentCount + 1
         // 确保有足够的颜色
         let newColors = [...this.gradientColors]
@@ -1235,7 +1235,7 @@ export default {
     // 更新渐变颜色数组
     updateGradientColors(count = null) {
       // 如果没有传递count参数，使用当前设置中的数量
-      const targetCount = count !== null ? count : Math.max(2, Math.min(5, this.settings.gradientColorCount || 3))
+      const targetCount = count !== null ? count : Math.max(2, Math.min(8, this.settings.gradientColorCount || 3))
       const currentColors = this.settings.advancedGradientColors || []
       
       // 确保有足够的颜色

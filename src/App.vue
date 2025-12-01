@@ -1954,8 +1954,11 @@ export default {
     },
 
     updateStyleSettings(newSettings) {
+      const wasColorSyncEnabled = this.styleSettings.enableMusicColorSync;
+      const isColorSyncEnabled = newSettings.enableMusicColorSync;
+      
       // 检查是否禁用了音乐封面颜色联动
-      if (this.styleSettings.enableMusicColorSync && !newSettings.enableMusicColorSync) {
+      if (wasColorSyncEnabled && !isColorSyncEnabled) {
         this.restoreOriginalThemeColor();
       }
       
@@ -1963,8 +1966,11 @@ export default {
       this.applyStyleSettings()
       
       // 如果启用了音乐封面颜色联动且有当前播放的歌曲，重新提取颜色
-      if (newSettings.enableMusicColorSync && this.currentMusic && this.isMusicPlaying) {
-        this.extractAndApplyMusicColor(this.currentMusic);
+      if (!wasColorSyncEnabled && isColorSyncEnabled && this.currentMusic && this.isMusicPlaying) {
+        // 延迟一下确保样式已应用
+        setTimeout(() => {
+          this.extractAndApplyMusicColor(this.currentMusic);
+        }, 100);
       }
     },
 
@@ -4028,6 +4034,11 @@ export default {
       if (!status.isPlaying && this.styleSettings.enableMusicColorSync) {
         this.restoreOriginalThemeColor();
       }
+      
+      // 如果音乐从暂停状态恢复播放且启用了音乐封面颜色联动，重新提取颜色
+      if (status.isPlaying && this.styleSettings.enableMusicColorSync && status.currentSong) {
+        this.extractAndApplyMusicColor(status.currentSong);
+      }
     },
     
     // 处理当前歌曲变化
@@ -4098,6 +4109,16 @@ export default {
           gradientColor1: this.styleSettings.gradientColor1,
           gradientColor2: this.styleSettings.gradientColor2
         };
+        
+        // 如果是高级渐变模式，也保存渐变颜色数组
+        if (this.styleSettings.colorMode === 'advanced-gradient') {
+          const colorCount = this.styleSettings.gradientColorCount || 3;
+          const gradientColors = [];
+          for (let i = 0; i < colorCount; i++) {
+            gradientColors.push(this.styleSettings[`gradientColor${i + 1}`] || colorArray[i % colorArray.length]);
+          }
+          this.originalThemeColor.gradientColors = gradientColors;
+        }
       }
       
       // 直接更新所有相关的CSS变量，确保全面覆盖
@@ -4228,6 +4249,16 @@ export default {
           root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${this.originalThemeColor.gradientColor1} 0%, ${this.originalThemeColor.gradientColor2} 100%)`);
           root.style.setProperty('--gradient-color1', this.originalThemeColor.gradientColor1);
           root.style.setProperty('--gradient-color2', this.originalThemeColor.gradientColor2);
+        } else if (this.styleSettings.colorMode === 'advanced-gradient') {
+          // 高级渐变模式：恢复所有渐变颜色
+          const gradientColors = this.originalThemeColor.gradientColors || [this.originalThemeColor.gradientColor1, this.originalThemeColor.gradientColor2];
+          gradientColors.forEach((color, index) => {
+            root.style.setProperty(`--gradient-color${index + 1}`, color);
+          });
+          root.style.setProperty('--gradient-primary', this.generateGradientCSS(gradientColors));
+          root.style.setProperty('--title-color', `linear-gradient(135deg, ${gradientColors[0]} 0%, ${gradientColors[gradientColors.length - 1]} 100%)`);
+          root.style.setProperty('--component-color', gradientColors[0]);
+          root.style.setProperty('--avatar-color', `linear-gradient(135deg, ${gradientColors[0]} 0%, ${gradientColors[gradientColors.length - 1]} 100%)`);
         }
         
         // 恢复颜色变体
