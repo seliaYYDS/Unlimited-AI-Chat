@@ -35,6 +35,11 @@
           @click.stop="onToolClick('quick-chat')"
           @touchend.stop="onToolTouchEnd($event, 'quick-chat')"
         >快速对话</div>
+        <div 
+          class="tool-item" 
+          @click.stop="onToolClick('image-generator')"
+          @touchend.stop="onToolTouchEnd($event, 'image-generator')"
+        >AI图片生成</div>
       </div>
     </div>
   </div>

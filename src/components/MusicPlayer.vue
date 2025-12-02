@@ -337,7 +337,36 @@
             </div>
             <div class="song-details">
               <div class="song-name">{{ currentSong ? currentSong.name : '未播放' }}</div>
-              <div class="song-artist">{{ currentSong ? ((currentSong.ar && Array.isArray(currentSong.ar) ? currentSong.ar.map(a => a.name).join(', ') : (currentSong.artists && Array.isArray(currentSong.artists) ? currentSong.artists.map(a => a.name).join(', ') : currentSong.artist || '未知艺术家'))) : '选择一首歌曲开始播放' }}</div>
+              <div class="song-artist">
+                <template v-if="currentSong">
+                  <template v-if="currentSong.ar && Array.isArray(currentSong.ar)">
+                    <span 
+                      v-for="(artist, index) in currentSong.ar" 
+                      :key="artist.id"
+                      class="artist-name clickable"
+                      @click.stop="getArtistDetail(artist.id)"
+                    >
+                      {{ artist.name }}
+                      <span v-if="index < currentSong.ar.length - 1" class="artist-separator">, </span>
+                    </span>
+                  </template>
+                  <template v-else-if="currentSong.artists && Array.isArray(currentSong.artists)">
+                    <span 
+                      v-for="(artist, index) in currentSong.artists" 
+                      :key="artist.id"
+                      class="artist-name clickable"
+                      @click.stop="getArtistDetail(artist.id)"
+                    >
+                      {{ artist.name }}
+                      <span v-if="index < currentSong.artists.length - 1" class="artist-separator">, </span>
+                    </span>
+                  </template>
+                  <span v-else class="artist-name clickable" @click.stop="handleArtistClick(currentSong)">{{ currentSong.artist || '未知艺术家' }}</span>
+                </template>
+                <template v-else>
+                  选择一首歌曲开始播放
+                </template>
+              </div>
               <!-- 歌曲加载状态提示 -->
               <div v-if="isLoadingSong" class="loading-status">
                 <div class="loading-dots">
@@ -363,25 +392,38 @@
             <span class="time-display">{{ formatTime(duration) }}</span>
           </div>
           
-          <div class="control-buttons">
-            <button @click="skipPrevious" class="control-btn" :disabled="!currentSong">
+          <div class="player-controls-main">
+            <div class="control-buttons">
+              <button @click="skipPrevious" class="control-btn" :disabled="!currentSong">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                </svg>
+              </button>
+              <button @click="togglePlayPause" class="control-btn large" :disabled="!currentSong">
+                <svg v-if="isPlaying" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                </svg>
+                <svg v-else width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              </button>
+              <button @click="skipNext" class="control-btn" :disabled="!currentSong">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <div class="play-mode-wrapper">
+            <button @click="togglePlayMode" class="control-btn play-mode-btn" :disabled="!currentSong" :title="getCurrentPlayModeLabel()">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                <path :d="getCurrentPlayModeIcon()"/>
               </svg>
             </button>
-            <button @click="togglePlayPause" class="control-btn large" :disabled="!currentSong">
-              <svg v-if="isPlaying" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-              </svg>
-              <svg v-else width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
-            </button>
-            <button @click="skipNext" class="control-btn" :disabled="!currentSong">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
-              </svg>
-            </button>
+            <div v-if="showPlayModeTooltip" class="play-mode-tooltip">
+              {{ getCurrentPlayModeLabel() }}
+            </div>
           </div>
           
           <div class="volume-control">
@@ -425,15 +467,15 @@
           <div v-else-if="artistDetail" class="artist-info">
             <div class="artist-basic-info">
               <div class="artist-avatar">
-                <img :src="artistDetail.picUrl || defaultAlbumArt" :alt="artistDetail.name" />
+                <img :src="artistDetail.avatar || artistDetail.picUrl || defaultAlbumArt" :alt="artistDetail.name" />
               </div>
               <div class="artist-details">
                 <h2 class="artist-name">{{ artistDetail.name }}</h2>
                 <p class="artist-description" v-if="artistDetail.briefDesc">{{ artistDetail.briefDesc }}</p>
                 <div class="artist-stats">
-                  <span class="stat-item">歌曲数: {{ artistDetail.musicSize || 0 }}</span>
-                  <span class="stat-item">专辑数: {{ artistDetail.albumSize || 0 }}</span>
-                  <span class="stat-item">MV数: {{ artistDetail.mvSize || 0 }}</span>
+                  <span class="stat-item" data-label="歌曲">{{ artistDetail.musicSize || 0 }}</span>
+                  <span class="stat-item" data-label="专辑">{{ artistDetail.albumSize || 0 }}</span>
+                  <span class="stat-item" data-label="MV">{{ artistDetail.mvSize || 0 }}</span>
                 </div>
                 <div class="artist-meta" v-if="artistDetail.identify">
                   <span class="identify-tag">{{ artistDetail.identify }}</span>
@@ -491,14 +533,11 @@
                 <div 
                   v-for="(song, index) in artistAllSongs" 
                   :key="song.id"
-                  class="artist-song-item"
+                  class="artist-song-item no-cover"
                   @click="selectArtistSong(index, 'all')"
                 >
                   <div class="song-index">{{ index + 1 }}</div>
-                  <div class="song-cover">
-                    <img :src="song.picUrl || defaultAlbumArt" :alt="song.name" />
-                  </div>
-                  <div class="song-info">
+                  <div class="song-info-full">
                     <div class="song-title">{{ song.name }}</div>
                     <div class="song-album">{{ song.albumName }}</div>
                   </div>
@@ -506,23 +545,28 @@
                 </div>
               </div>
               
-              <!-- 加载更多按钮 -->
-              <div v-if="artistAllSongsHasMore" class="load-more-container">
-                <button @click="loadMoreArtistAllSongs" class="load-more-btn" :disabled="isLoadingArtistAllSongs">
-                  <span v-if="!isLoadingArtistAllSongs">加载更多</span>
-                  <div v-else class="search-loader">
-                    <div class="loader-circle"></div>
-                  </div>
-                </button>
-                <div class="results-info">
-                  已加载 {{ artistAllSongs.length }} 首歌曲
+              <!-- 分页信息 -->
+            <div v-if="artistAllSongs.length > 0" class="pagination-info">
+              <div class="pagination-stats">
+                <span>显示 {{ Math.min(artistAllSongs.length, artistAllSongsTotal) }} / {{ artistAllSongsTotal }} 首歌曲</span>
+                <span v-if="artistAllSongsTotal > 100">（第 {{ artistAllSongsPage }} 页）</span>
+              </div>
+            </div>
+            
+            <!-- 加载更多按钮 -->
+            <div v-if="artistAllSongsHasMore" class="load-more-container">
+              <button @click="loadMoreArtistAllSongs" class="load-more-btn" :disabled="isLoadingArtistAllSongs">
+                <span v-if="!isLoadingArtistAllSongs">加载更多 (下一页)</span>
+                <div v-else class="search-loader">
+                  <div class="loader-circle"></div>
                 </div>
-              </div>
-              
-              <!-- 无更多歌曲提示 -->
-              <div v-else-if="artistAllSongs.length > 0" class="no-more-results">
-                已显示全部 {{ artistAllSongs.length }} 首歌曲
-              </div>
+              </button>
+            </div>
+            
+            <!-- 无更多歌曲提示 -->
+            <div v-else-if="artistAllSongs.length > 0 && artistAllSongsTotal > 0" class="no-more-results">
+              <span>已加载全部 {{ artistAllSongsTotal }} 首歌曲</span>
+            </div>
             </div>
             
             <!-- 专辑列表 -->
@@ -585,7 +629,7 @@
                 <p class="album-publish-date">发行时间: {{ new Date(albumDetail.publishTime).toLocaleDateString() }}</p>
                 <p class="album-description" v-if="albumDetail.description">{{ albumDetail.description }}</p>
                 <div class="album-stats">
-                  <span class="stat-item">歌曲数: {{ albumDetail.size || 0 }}</span>
+                  <span class="stat-item" data-label="歌曲">{{ albumDetail.size || 0 }}</span>
                 </div>
               </div>
             </div>
@@ -636,6 +680,8 @@
 </template>
 
 <script>
+import { MusicColorExtractor } from '../utils/musicColorExtractor.js'
+
 export default {
   name: 'MusicPlayer',
   props: {
@@ -666,6 +712,8 @@ export default {
       isSearching: false,
       isLoadingSong: false,
       defaultAlbumArt: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23e0e0e0"/><text x="50" y="55" font-family="Arial" font-size="12" fill="%23666" text-anchor="middle">专辑封面</text></svg>',
+      // 音乐颜色提取器实例
+      musicColorExtractor: null,
       // 歌手详情相关
       showArtistDetail: false,
       artistDetail: null,
@@ -678,6 +726,7 @@ export default {
       artistAllSongsPage: 1,
       artistAllSongsHasMore: false,
       isLoadingArtistAllSongs: false,
+      artistAllSongsTotal: 0,
       // 专辑详情相关
       showAlbumDetail: false,
       albumDetail: null,
@@ -736,7 +785,22 @@ export default {
       animationFrameId: null,
       // 容器尺寸
       containerWidth: 800,
-      containerHeight: 500
+      containerHeight: 500,
+      // 播放顺序相关
+      playMode: 'list', // 播放模式: 'single' 单曲循环, 'list' 列表循环, 'order' 顺序, 'random' 随机
+      playModes: [
+        { value: 'single', label: '单曲循环', icon: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z' },
+        { value: 'list', label: '列表循环', icon: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z' },
+        { value: 'order', label: '顺序播放', icon: 'M3 5v14h2V5H3zm4 0v14h2V5H7zm4 0v14h2V5h-2zm4 0v14h2V5h-2z' },
+        { value: 'random', label: '随机播放', icon: 'M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z' }
+      ],
+      // 随机播放历史记录
+      randomPlayHistory: [],
+      // 顺序播放的原始索引
+      originalPlaylistOrder: [],
+      // 播放模式提示相关
+      showPlayModeTooltip: false,
+      playModeTooltipTimer: null
     }
   },
   computed: {
@@ -786,18 +850,26 @@ export default {
   mounted() {
     // 加载保存的音量设置
     this.loadSavedVolume();
+    // 加载保存的播放模式
+    this.loadPlayMode();
     this.initAudio();
     this.loadDefaultPlaylist();
     // 添加点击外部关闭下拉菜单的事件监听
     document.addEventListener('click', this.handleClickOutside);
     // 初始化网格项目引用数组
     this.gridItemRefs = [];
+    // 初始化音乐颜色提取器
+    this.musicColorExtractor = new MusicColorExtractor();
   },
   beforeUnmount() {
     // 移除事件监听
     document.removeEventListener('click', this.handleClickOutside);
     // 停止物理模拟
     this.stopPhysicsSimulation();
+    // 清理播放模式提示定时器
+    if (this.playModeTooltipTimer) {
+      clearTimeout(this.playModeTooltipTimer);
+    }
   },
   methods: {
     initAudio() {
@@ -1172,7 +1244,7 @@ export default {
         const response = await fetch(`${this.apiUrl}/album?id=${albumId}`);
         const data = await response.json();
         
-        console.log('专辑详情数据:', data);
+        
         
         if (data.code === 200 && data.album) {
           this.albumDetail = data.album;
@@ -1249,6 +1321,10 @@ export default {
       if (song.album && song.album.picUrl) {
         return song.album.picUrl;
       }
+      // 检查是否有其他可能的封面字段
+      if (song.picUrl) {
+        return song.picUrl;
+      }
       // 如果都没有，返回默认封面
       return this.defaultAlbumArt;
     },
@@ -1261,8 +1337,8 @@ export default {
       this.artistAllSongsPage++;
       
       try {
-        const offset = (this.artistAllSongsPage - 1) * 50;
-        const response = await fetch(`${this.apiUrl}/artist/songs?id=${this.artistDetail.id}&limit=50&offset=${offset}&order=hot`);
+        const offset = (this.artistAllSongsPage - 1) * 100;
+        const response = await fetch(`${this.apiUrl}/artist/songs?id=${this.artistDetail.id}&limit=100&offset=${offset}&order=hot`);
         const data = await response.json();
         
         if (data.code === 200 && data.songs) {
@@ -1279,11 +1355,11 @@ export default {
           }));
           
           this.artistAllSongs = [...this.artistAllSongs, ...newSongs];
-          this.artistAllSongsHasMore = data.songs.length === 50;
+          this.artistAllSongsHasMore = data.songs.length === 100;
         }
       } catch (error) {
         console.error('加载更多歌手歌曲失败:', error);
-        this.$emit('notify', `加载更多歌曲失败: ${error.message}`, 'danger');
+        this.$emit('notify', '加载更多歌手歌曲失败', 'danger');
       } finally {
         this.isLoadingArtistAllSongs = false;
       }
@@ -1409,28 +1485,75 @@ export default {
     skipNext() {
       if (!this.currentSong || this.currentPlaylist.length === 0) return;
       
-      const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
-      const nextIndex = (currentIndex + 1) % this.currentPlaylist.length;
-      this.selectSong(nextIndex);
+      if (this.playMode === 'random') {
+        // 随机播放模式下，手动下一首应该随机选择一首歌
+        this.playRandomNext();
+      } else {
+        const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
+        const nextIndex = (currentIndex + 1) % this.currentPlaylist.length;
+        this.selectSong(nextIndex);
+      }
     },
     
     skipPrevious() {
       if (!this.currentSong || this.currentPlaylist.length === 0) return;
       
-      const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
-      const prevIndex = currentIndex === 0 ? this.currentPlaylist.length - 1 : currentIndex - 1;
-      this.selectSong(prevIndex);
+      if (this.playMode === 'random') {
+        // 随机播放模式下，手动上一首应该随机选择一首歌
+        this.playRandomNext();
+      } else {
+        const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
+        const prevIndex = currentIndex === 0 ? this.currentPlaylist.length - 1 : currentIndex - 1;
+        this.selectSong(prevIndex);
+      }
     },
     
     playNext() {
       if (this.currentPlaylist.length === 0) return;
       
-      const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
-      if (currentIndex !== -1 && currentIndex < this.currentPlaylist.length - 1) {
-        this.selectSong(currentIndex + 1);
-      } else {
-        // 循环播放
-        this.selectSong(0);
+      switch (this.playMode) {
+        case 'single':
+          // 单曲循环：重新播放当前歌曲
+          if (this.currentSong) {
+            this.selectSong(this.currentPlaylist.findIndex(song => song.id === this.currentSong.id));
+          }
+          break;
+          
+        case 'list':
+          // 列表循环：播放下一首，到末尾后从头开始
+          const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
+          if (currentIndex !== -1 && currentIndex < this.currentPlaylist.length - 1) {
+            this.selectSong(currentIndex + 1);
+          } else {
+            this.selectSong(0);
+          }
+          break;
+          
+        case 'order':
+          // 顺序播放：播放下一首，到末尾后停止
+          const orderIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
+          if (orderIndex !== -1 && orderIndex < this.currentPlaylist.length - 1) {
+            this.selectSong(orderIndex + 1);
+          } else {
+            // 播放结束，停止播放
+            this.isPlaying = false;
+            this.currentTime = 0;
+          }
+          break;
+          
+        case 'random':
+          // 随机播放：从未播放的歌曲中随机选择
+          this.playRandomNext();
+          break;
+          
+        default:
+          // 默认为列表循环
+          const defaultIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
+          if (defaultIndex !== -1 && defaultIndex < this.currentPlaylist.length - 1) {
+            this.selectSong(defaultIndex + 1);
+          } else {
+            this.selectSong(0);
+          }
       }
     },
     
@@ -1545,7 +1668,7 @@ export default {
         const hotSongsData = await hotSongsResponse.json();
         
         // 获取歌手全部歌曲
-        const allSongsResponse = await fetch(`${this.apiUrl}/artist/songs?id=${artistId}&limit=50&order=hot`);
+        const allSongsResponse = await fetch(`${this.apiUrl}/artist/songs?id=${artistId}&limit=100&order=hot`);
         const allSongsData = await allSongsResponse.json();
         
         // 获取歌手专辑
@@ -1556,58 +1679,70 @@ export default {
         const descResponse = await fetch(`${this.apiUrl}/artist/desc?id=${artistId}`);
         const descData = await descResponse.json();
         
-        console.log('歌手详情数据:', detailData);
-        console.log('歌手热门歌曲数据:', hotSongsData);
-        console.log('歌手全部歌曲数据:', allSongsData);
-        console.log('歌手专辑数据:', albumsData);
-        console.log('歌手描述数据:', descData);
         
-        // 处理歌手基本信息 - 参考搜索歌手的数据结构
+        
+        // 处理歌手基本信息
         if (detailData.code === 200) {
-          // 直接使用API返回的数据结构
-          if (detailData.artist) {
-            this.artistDetail = {
-              ...detailData.artist,
-              // 确保头像URL正确，参考搜索歌手的逻辑
-              picUrl: detailData.artist.picUrl || detailData.artist.img1v1Url || this.defaultAlbumArt,
-              // 处理默认头像
-              img1v1Url: detailData.artist.img1v1Url
-            };
-          } else if (detailData.data) {
-            this.artistDetail = {
-              ...detailData.data,
-              picUrl: detailData.data.picUrl || detailData.data.img1v1Url || this.defaultAlbumArt,
-              img1v1Url: detailData.data.img1v1Url
-            };
-          } else {
-            this.artistDetail = {
-              ...detailData,
-              picUrl: detailData.picUrl || detailData.img1v1Url || this.defaultAlbumArt,
-              img1v1Url: detailData.img1v1Url
-            };
-          }
+          // 根据API文档，歌手详情在data.artist中
+          const artistData = detailData.data?.artist || detailData.artist || detailData.data;
           
-          // 处理默认头像 - 如果img1v1Url包含default则使用默认图片
-          if (this.artistDetail.img1v1Url && this.artistDetail.img1v1Url.includes('/default/')) {
-            this.artistDetail.picUrl = this.defaultAlbumArt;
-          }
-          
-          // 确保基本信息完整
-          this.artistDetail.name = this.artistDetail.name || '未知歌手';
-          
-          // 添加歌手描述
-          if (descData.code === 200) {
-            if (descData.briefDesc) {
-              this.artistDetail.briefDesc = descData.briefDesc;
-            } else if (descData.desc) {
-              this.artistDetail.briefDesc = descData.desc;
+          if (artistData) {
+            // 处理头像URL - 使用avatar字段
+            let avatarUrl = artistData.avatar || artistData.picUrl || artistData.img1v1Url;
+            
+            // 检查是否为默认头像
+            const isDefaultAvatar = !avatarUrl || 
+                (artistData.img1v1Url && artistData.img1v1Url.includes('/default/')) ||
+                avatarUrl.includes('/default/');
+            
+            if (isDefaultAvatar) {
+              avatarUrl = this.defaultAlbumArt;
             }
+            
+            this.artistDetail = {
+              id: artistData.id,
+              name: artistData.name || '未知歌手',
+              picUrl: avatarUrl, // 保持picUrl字段以兼容模板
+              avatar: avatarUrl,  // 添加avatar字段
+              img1v1Url: artistData.img1v1Url,
+              // 统计数据
+              musicSize: artistData.musicSize || artistData.songSize || 0,
+              albumSize: artistData.albumSize || 0,
+              mvSize: artistData.mvSize || 0,
+              // 其他信息
+              identify: artistData.identify,
+              briefDesc: '',
+              // 添加颜色相关字段
+              extractedColor: null
+            };
+            
+            // 添加歌手描述
+            if (descData.code === 200) {
+              if (descData.briefDesc) {
+                this.artistDetail.briefDesc = descData.briefDesc;
+              } else if (descData.desc) {
+                this.artistDetail.briefDesc = descData.desc;
+              }
+            }
+            
+            // 如果不是默认头像，提取头像颜色
+            if (!isDefaultAvatar && avatarUrl) {
+              this.extractArtistAvatarColor(avatarUrl, artistData.id);
+            }
+          } else {
+            // 如果没有找到歌手数据，使用默认值
+            this.artistDetail = {
+              id: artistId,
+              name: '未知歌手',
+              picUrl: this.defaultAlbumArt,
+              avatar: this.defaultAlbumArt,
+              musicSize: 0,
+              albumSize: 0,
+              mvSize: 0,
+              briefDesc: '',
+              extractedColor: null
+            };
           }
-          
-          // 确保统计数据存在，参考搜索歌手的字段名
-          this.artistDetail.musicSize = this.artistDetail.musicSize || this.artistDetail.songSize || 0;
-          this.artistDetail.albumSize = this.artistDetail.albumSize || 0;
-          this.artistDetail.mvSize = this.artistDetail.mvSize || 0;
         }
         
         // 处理热门歌曲
@@ -1640,8 +1775,9 @@ export default {
           }));
           
           // 检查是否有更多歌曲
-          this.artistAllSongsHasMore = allSongsData.songs.length === 50;
+          this.artistAllSongsHasMore = allSongsData.songs.length === 100;
           this.artistAllSongsPage = 1;
+          this.artistAllSongsTotal = allSongsData.total || allSongsData.songs.length;
         }
         
         // 处理专辑
@@ -2019,6 +2155,204 @@ export default {
       if (this.gridItemHoverStates[index] !== isHovering) {
         this.gridItemHoverStates[index] = isHovering;
       }
+    },
+    
+    // 提取歌手头像颜色
+    async extractArtistAvatarColor(avatarUrl, artistId) {
+      try {
+        // 使用已有的音乐颜色提取器
+        const color = await this.musicColorExtractor.extractPrimaryColor(avatarUrl, `artist_${artistId}`);
+        
+        if (this.artistDetail) {
+          this.artistDetail.extractedColor = color;
+          
+          // 应用颜色到歌手名称
+          this.applyArtistNameColor(color);
+        }
+      } catch (error) {
+        // 颜色提取失败，使用默认样式
+      }
+    },
+    
+    // 应用歌手名称颜色
+    applyArtistNameColor(color) {
+      if (!color || !this.artistDetail) return;
+      
+      // 查找歌手名称元素
+      const artistNameElement = document.querySelector('.artist-details .artist-name');
+      if (artistNameElement) {
+        // 创建渐变色
+        const lightColor = this.lightenColor(color, 0.2);
+        const gradientCSS = `linear-gradient(135deg, ${color} 0%, ${lightColor} 100%)`;
+        
+        // 应用渐变样式
+        artistNameElement.style.background = gradientCSS;
+        artistNameElement.style.webkitBackgroundClip = 'text';
+        artistNameElement.style.webkitTextFillColor = 'transparent';
+        artistNameElement.style.backgroundClip = 'text';
+        artistNameElement.style.color = 'transparent';
+      }
+    },
+    
+    // 颜色变亮方法
+    lightenColor(color, amount) {
+      const hex = color.replace('#', '');
+      const num = parseInt(hex, 16);
+      const r = Math.min(255, ((num >> 16) & 0xff) + Math.floor(255 * amount));
+      const g = Math.min(255, ((num >> 8) & 0xff) + Math.floor(255 * amount));
+      const b = Math.min(255, (num & 0xff) + Math.floor(255 * amount));
+      return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+    },
+    
+    // 处理歌手点击事件（当只有歌手名称时）
+    handleArtistClick(song) {
+      if (!song) return;
+      
+      // 尝试从歌曲中提取歌手信息
+      if (song.ar && Array.isArray(song.ar) && song.ar.length > 0) {
+        this.getArtistDetail(song.ar[0].id);
+      } else if (song.artists && Array.isArray(song.artists) && song.artists.length > 0) {
+        this.getArtistDetail(song.artists[0].id);
+      } else {
+        // 如果没有歌手ID，尝试搜索歌手
+        this.searchArtistByName(song.artist || '未知艺术家');
+      }
+    },
+    
+    // 通过歌手名称搜索歌手
+    async searchArtistByName(artistName) {
+      if (!artistName || artistName === '未知艺术家') {
+        this.$emit('notify', '无法识别歌手信息', 'warning');
+        return;
+      }
+      
+      try {
+        this.isSearching = true;
+        const response = await fetch(`${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(artistName)}&type=100&limit=10`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200 && data.result && data.result.artists && data.result.artists.length > 0) {
+            // 取第一个匹配的歌手
+            const artist = data.result.artists[0];
+            this.getArtistDetail(artist.id);
+          } else {
+            this.$emit('notify', `未找到歌手: ${artistName}`, 'warning');
+          }
+        } else {
+          this.$emit('notify', '搜索歌手失败', 'danger');
+        }
+      } catch (error) {
+        console.error('搜索歌手失败:', error);
+        this.$emit('notify', '搜索歌手失败', 'danger');
+      } finally {
+        this.isSearching = false;
+      }
+    },
+    
+    // 随机播放下一首
+    playRandomNext() {
+      if (this.currentPlaylist.length === 0) return;
+      
+      // 获取未播放过的歌曲索引
+      const unplayedIndices = [];
+      for (let i = 0; i < this.currentPlaylist.length; i++) {
+        if (!this.randomPlayHistory.includes(i)) {
+          unplayedIndices.push(i);
+        }
+      }
+      
+      if (unplayedIndices.length === 0) {
+        // 所有歌曲都已播放过，重置历史记录
+        this.randomPlayHistory = [];
+        // 重新获取未播放的歌曲索引
+        for (let i = 0; i < this.currentPlaylist.length; i++) {
+          unplayedIndices.push(i);
+        }
+      }
+      
+      // 随机选择一首未播放的歌曲
+      const randomIndex = Math.floor(Math.random() * unplayedIndices.length);
+      const nextSongIndex = unplayedIndices[randomIndex];
+      
+      // 记录已播放的歌曲
+      this.randomPlayHistory.push(nextSongIndex);
+      
+      // 播放选中的歌曲
+      this.selectSong(nextSongIndex);
+    },
+    
+    // 切换播放模式
+    togglePlayMode() {
+      const currentIndex = this.playModes.findIndex(mode => mode.value === this.playMode);
+      const nextIndex = (currentIndex + 1) % this.playModes.length;
+      this.playMode = this.playModes[nextIndex].value;
+      
+      // 重置随机播放历史（当切换到随机模式时）
+      if (this.playMode === 'random') {
+        this.randomPlayHistory = [];
+        // 如果当前有歌曲在播放，将其加入历史记录
+        if (this.currentSong) {
+          const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
+          if (currentIndex !== -1) {
+            this.randomPlayHistory.push(currentIndex);
+          }
+        }
+      }
+      
+      // 保存播放模式到localStorage
+      this.savePlayMode();
+      
+      // 显示当前播放模式提示（在控件上显示）
+      this.showPlayModeTooltip();
+    },
+    
+    // 获取当前播放模式标签
+    getCurrentPlayModeLabel() {
+      const currentMode = this.playModes.find(mode => mode.value === this.playMode);
+      return currentMode ? currentMode.label : '未知';
+    },
+    
+    // 获取当前播放模式图标
+    getCurrentPlayModeIcon() {
+      const currentMode = this.playModes.find(mode => mode.value === this.playMode);
+      return currentMode ? currentMode.icon : '';
+    },
+    
+    // 保存播放模式到localStorage
+    savePlayMode() {
+      try {
+        localStorage.setItem('musicPlayerPlayMode', this.playMode);
+      } catch (error) {
+        console.error('保存播放模式失败:', error);
+      }
+    },
+    
+    // 从localStorage加载播放模式
+    loadPlayMode() {
+      try {
+        const savedMode = localStorage.getItem('musicPlayerPlayMode');
+        if (savedMode && this.playModes.find(mode => mode.value === savedMode)) {
+          this.playMode = savedMode;
+        }
+      } catch (error) {
+        console.error('加载播放模式失败:', error);
+      }
+    },
+    
+    // 显示播放模式提示
+    showPlayModeTooltip() {
+      // 清除之前的定时器
+      if (this.playModeTooltipTimer) {
+        clearTimeout(this.playModeTooltipTimer);
+      }
+      
+      // 显示提示
+      this.showPlayModeTooltip = true;
+      
+      // 2秒后自动隐藏
+      this.playModeTooltipTimer = setTimeout(() => {
+        this.showPlayModeTooltip = false;
+      }, 2000);
     }
   }
 }
@@ -2338,6 +2672,21 @@ export default {
   text-overflow: ellipsis;
 }
 
+.artist-name.clickable {
+  cursor: pointer;
+  color: var(--primary-color, #4a90e2);
+  transition: color 0.2s ease;
+}
+
+.artist-name.clickable:hover {
+  color: var(--primary-hover, #357abd);
+  text-decoration: underline;
+}
+
+.artist-separator {
+  margin: 0 2px;
+}
+
 .song-duration {
   font-size: 0.75em;
   opacity: 0.7;
@@ -2463,6 +2812,14 @@ export default {
   box-shadow: 0 6px 16px rgba(var(--primary-color-rgb), 0.6);
 }
 
+.player-controls-main {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  position: relative;
+}
+
 .control-buttons {
   display: flex;
   justify-content: center;
@@ -2505,6 +2862,81 @@ export default {
   height: 60px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
+
+.play-mode-wrapper {
+  position: absolute;
+  right: 20px;
+  top: 0;
+  top:46%;
+  height: 8%; /* 与player-controls-main相同的高度 */
+  display: flex;
+  align-items: center;
+}
+
+.play-mode-btn {
+  position: relative;
+}
+
+.play-mode-btn::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 1000;
+}
+
+.play-mode-btn:hover::after {
+  opacity: 1;
+}
+
+.play-mode-tooltip {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--primary-color, #4a90e2);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1000;
+  animation: fadeInUp 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.play-mode-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--primary-color, #4a90e2);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 
 .volume-control {
   display: flex;
@@ -2983,8 +3415,9 @@ export default {
   justify-content: center;
   align-items: center;
   z-index: 10001;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: fadeIn 0.3s ease;
 }
 
 .artist-detail-modal-content {
@@ -2992,98 +3425,177 @@ export default {
   max-width: 800px;
   max-height: 85vh;
   background: var(--bg-primary);
-  border-radius: var(--radius-lg);
+  border-radius: 20px;
   display: flex;
   flex-direction: column;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   overflow: hidden;
-  animation: modalPopIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  animation: slideUpScale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid var(--border-color);
 }
 
 .artist-detail-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 20px 20px 0 0;
 }
 
 .artist-detail-header h3 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   font-weight: 600;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .artist-detail-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: 2rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color) var(--bg-hover);
+}
+
+.artist-detail-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.artist-detail-body::-webkit-scrollbar-track {
+  background: var(--bg-hover);
+  border-radius: 10px;
+}
+
+.artist-detail-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  border-radius: 10px;
 }
 
 .artist-basic-info {
   display: flex;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
+  gap: 2rem;
+  margin-bottom: 2rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.artist-basic-info::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--primary-color));
+  animation: shimmer 3s ease-in-out infinite;
 }
 
 /* 歌手标签页样式 */
 .artist-tabs {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 2rem;
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
 }
 
 .artist-tab {
-  padding: 0.75rem 1.5rem;
+  padding: 0.875rem 2rem;
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.9rem;
-  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 0.95rem;
+  font-weight: 600;
   position: relative;
+  overflow: hidden;
+}
+
+.artist-tab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 12px;
 }
 
 .artist-tab:hover {
   color: var(--text-primary);
-  background: var(--bg-hover);
+  transform: translateY(-2px);
+}
+
+.artist-tab:hover::before {
+  opacity: 0.1;
 }
 
 .artist-tab.active {
-  color: var(--primary-color);
-  background: var(--bg-hover);
+  color: white;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  box-shadow: 0 6px 20px rgba(var(--primary-color-rgb), 0.3);
+  transform: translateY(-2px);
 }
 
-.artist-tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--primary-color);
+.artist-tab.active::before {
+  opacity: 1;
+}
+
+.artist-tab span {
+  position: relative;
+  z-index: 1;
 }
 
 .artist-avatar {
   flex-shrink: 0;
-  width: 120px;
-  height: 120px;
-  border-radius: var(--radius-lg);
+  width: 140px;
+  height: 140px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  position: relative;
+  transition: all 0.3s ease;
+  border: 3px solid var(--bg-primary);
+}
+
+.artist-avatar:hover {
+  transform: scale(1.05) rotate(2deg);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+}
+
+.artist-avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.2));
+  pointer-events: none;
 }
 
 .artist-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: all 0.3s ease;
+}
+
+.artist-avatar:hover img {
+  transform: scale(1.1);
 }
 
 .artist-details {
@@ -3091,127 +3603,335 @@ export default {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  position: relative;
 }
 
 .artist-details .artist-name {
-  font-size: 1.8rem;
-  font-weight: 700;
+  font-size: 2.2rem;
+  font-weight: 800;
   color: var(--text-primary);
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.75rem 0;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: textShimmer 3s ease-in-out infinite;
 }
 
 .artist-description {
   color: var(--text-secondary);
-  margin: 0.5rem 0 1rem 0;
-  line-height: 1.5;
+  margin: 0.75rem 0 1.5rem 0;
+  line-height: 1.6;
+  font-size: 1rem;
+  padding: 1rem;
+  background: var(--bg-primary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
 }
 
 .artist-stats {
   display: flex;
-  gap: 1.5rem;
-  margin-bottom: 0.75rem;
+  gap: 2rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
 .stat-item {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, var(--bg-primary), var(--bg-hover));
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.stat-item::before {
+  content: attr(data-label);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.25rem;
 }
 
 .artist-meta {
-  margin-top: 0.5rem;
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .identify-tag {
   display: inline-block;
-  padding: 0.25rem 0.75rem;
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-color-dark));
+  padding: 0.5rem 1.25rem;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
   color: white;
-  border-radius: 1rem;
-  font-size: 0.8rem;
-  font-weight: 500;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(var(--primary-color-rgb), 0.3);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.identify-tag::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.identify-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(var(--primary-color-rgb), 0.4);
+}
+
+.identify-tag:hover::before {
+  left: 100%;
 }
 
 .artist-section {
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
 }
 
 .artist-section h3 {
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 1.3rem;
+  font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 1rem 0;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid var(--primary-color);
+  margin: 0 0 1.5rem 0;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 12px;
+  border-left: 4px solid var(--primary-color);
+}
+
+.artist-section h3 {
+  padding-left: 0.5rem;
+  border-left: 3px solid var(--primary-color);
 }
 
 .artist-songs-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .artist-song-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  border-radius: var(--radius-md);
+  gap: 1.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: 16px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.artist-song-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 16px;
 }
 
 .artist-song-item:hover {
-  background: var(--bg-hover);
-  transform: translateX(4px);
+  transform: translateX(8px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.artist-song-item:hover::before {
+  opacity: 0.05;
+}
+
+.artist-song-item:active {
+  transform: translateX(8px) scale(0.98);
 }
 
 .song-index {
   flex-shrink: 0;
-  width: 30px;
-  text-align: center;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 12px;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.9rem;
+  border: 1px solid var(--border-color);
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.artist-song-item:hover .song-index {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: white;
+  border-color: var(--primary-color);
+  transform: scale(1.1);
 }
 
 .song-cover {
   flex-shrink: 0;
-  width: 50px;
-  height: 50px;
-  border-radius: var(--radius-sm);
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.artist-song-item:hover .song-cover {
+  transform: scale(1.1) rotate(3deg);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.song-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.3));
+  border-radius: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.artist-song-item:hover .song-cover::after {
+  opacity: 1;
 }
 
 .song-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: all 0.3s ease;
+}
+
+.artist-song-item:hover .song-cover img {
+  transform: scale(1.1);
 }
 
 .artist-song-item .song-info {
   flex: 1;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .artist-song-item .song-title {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+  transition: color 0.3s ease;
+}
+
+.artist-song-item:hover .song-title {
+  color: var(--primary-color);
+}
+
+.artist-song-item .song-album {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .artist-song-item .song-album {
-  font-size: 0.85rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--border-color);
+}
+
+.artist-song-item .song-duration {
   color: var(--text-secondary);
+  font-size: 0.9rem;
+  background: var(--bg-secondary);
+  padding: 0.375rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.artist-song-item:hover .song-duration {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: white;
+  border-color: var(--primary-color);
+  transform: scale(1.05);
+}
+
+/* 无封面歌曲列表样式 */
+.artist-song-item.no-cover {
+  gap: 1rem;
+  padding: 0.875rem 1.125rem;
+}
+
+.artist-song-item.no-cover .song-index {
+  width: 32px;
+  height: 32px;
+  font-size: 0.85rem;
+}
+
+.artist-song-item.no-cover .song-info-full {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.artist-song-item.no-cover .song-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.25rem;
+  font-size: 0.95rem;
+}
+
+.artist-song-item.no-cover .song-album {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.artist-song-item .song-duration {
-  color: var(--text-secondary);
+.artist-song-item.no-cover .song-duration {
   font-size: 0.85rem;
+  padding: 0.25rem 0.625rem;
+}
+
+.artist-song-item.no-cover:hover {
+  transform: translateX(6px) scale(1.01);
 }
 
 .artist-albums-list {
@@ -3379,18 +4099,53 @@ export default {
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  border-radius: var(--radius-lg);
-  transition: all 0.2s ease;
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.song-search-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent, rgba(var(--primary-color-rgb), 0.05));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 .song-search-item:hover {
   background: var(--bg-hover);
-  transform: translateX(2px);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.song-search-item:hover::before {
+  opacity: 1;
 }
 
 .song-search-item.playing {
-  background: rgba(var(--primary-color-rgb), 0.1);
+  background: linear-gradient(135deg, rgba(var(--primary-color-rgb), 0.1), rgba(var(--primary-color-rgb), 0.05));
   border-left: 3px solid var(--primary-color);
+  box-shadow: 0 4px 15px rgba(var(--primary-color-rgb), 0.2);
+}
+
+.song-search-item.playing::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--primary-color), var(--primary-color-light));
+  animation: pulse 2s infinite;
 }
 
 /* 圆角封面容器 */
@@ -3401,10 +4156,16 @@ export default {
 .song-cover-rounded {
   width: 56px;
   height: 56px;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   position: relative;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.song-search-item:hover .song-cover-rounded {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
   cursor: pointer;
 }
@@ -3456,30 +4217,45 @@ export default {
 }
 
 .song-search-item .song-title {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: all 0.3s ease;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 1.05em;
 }
 
 .song-search-item .song-title:hover {
   color: var(--primary-color);
+  transform: translateX(2px);
 }
 
 .song-search-item .song-artist {
-  font-size: 0.9rem;
+  font-size: 0.9em;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.3s ease;
+}
+
+.song-search-item:hover .song-artist {
+  color: var(--text-primary);
 }
 
 .song-search-item .song-album {
-  font-size: 0.8rem;
+  font-size: 0.85em;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.3s ease;
+}
+
+.song-search-item:hover .song-album {
+  color: var(--text-secondary);
 }
 
 /* 右侧操作区域 */
@@ -3504,21 +4280,68 @@ export default {
   gap: 1rem;
   padding: 1rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.playlist-result-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent, rgba(var(--primary-color-rgb), 0.05));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 .playlist-result-item:hover {
   background: var(--bg-hover);
-  transform: translateX(4px);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.playlist-result-item:hover::before {
+  opacity: 1;
 }
 
 .playlist-cover {
   flex-shrink: 0;
-  width: 60px;
-  height: 60px;
-  border-radius: var(--radius-md);
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.playlist-result-item:hover .playlist-cover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.playlist-cover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, rgba(var(--primary-color-rgb), 0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.playlist-result-item:hover .playlist-cover::after {
+  opacity: 1;
 }
 
 .playlist-cover img {
@@ -3533,22 +4356,34 @@ export default {
 }
 
 .playlist-name {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 1.05em;
+  transition: color 0.3s ease;
+}
+
+.playlist-result-item:hover .playlist-name {
+  color: var(--primary-color);
 }
 
 .playlist-description {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  line-height: 1.4;
+  transition: color 0.3s ease;
+}
+
+.playlist-result-item:hover .playlist-description {
+  color: var(--text-primary);
 }
 
 .playlist-meta {
@@ -3570,21 +4405,73 @@ export default {
   gap: 1rem;
   padding: 1rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.artist-result-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent, rgba(var(--primary-color-rgb), 0.05));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 .artist-result-item:hover {
   background: var(--bg-hover);
-  transform: translateX(4px);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.artist-result-item:hover::before {
+  opacity: 1;
 }
 
 .artist-avatar-small {
   flex-shrink: 0;
-  width: 50px;
-  height: 50px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.artist-result-item:hover .artist-avatar-small {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.artist-avatar-small::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: linear-gradient(45deg, var(--primary-color), var(--primary-color-light)) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: destination-out;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.artist-result-item:hover .artist-avatar-small::after {
+  opacity: 1;
 }
 
 .artist-avatar-small img {
@@ -3598,16 +4485,39 @@ export default {
 }
 
 .artist-name-small {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.1em;
+  transition: color 0.3s ease;
+}
+
+.artist-result-item:hover .artist-name-small {
+  color: var(--primary-color);
 }
 
 .artist-stats-small {
   display: flex;
   gap: 1rem;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
+  transition: color 0.3s ease;
+}
+
+.artist-result-item:hover .artist-stats-small {
+  color: var(--text-primary);
+}
+
+.artist-stats-small span {
+  padding: 2px 8px;
+  background: rgba(var(--primary-color-rgb), 0.1);
+  border-radius: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.artist-result-item:hover .artist-stats-small span {
+  background: rgba(var(--primary-color-rgb), 0.2);
 }
 
 /* 专辑搜索结果样式 */
@@ -3617,21 +4527,68 @@ export default {
   gap: 1rem;
   padding: 1rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.album-result-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent, rgba(var(--primary-color-rgb), 0.05));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 .album-result-item:hover {
   background: var(--bg-hover);
-  transform: translateX(4px);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.album-result-item:hover::before {
+  opacity: 1;
 }
 
 .album-cover-small {
   flex-shrink: 0;
-  width: 50px;
-  height: 50px;
-  border-radius: var(--radius-md);
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.album-result-item:hover .album-cover-small {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.album-cover-small::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, rgba(var(--primary-color-rgb), 0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.album-result-item:hover .album-cover-small::after {
+  opacity: 1;
 }
 
 .album-cover-small img {
@@ -3645,22 +4602,50 @@ export default {
 }
 
 .album-name-small {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.05em;
+  transition: color 0.3s ease;
+}
+
+.album-result-item:hover .album-name-small {
+  color: var(--primary-color);
 }
 
 .album-artist-small {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--text-secondary);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+  transition: color 0.3s ease;
+}
+
+.album-result-item:hover .album-artist-small {
+  color: var(--text-primary);
 }
 
 .album-meta-small {
   display: flex;
   gap: 1rem;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
+  transition: color 0.3s ease;
+}
+
+.album-result-item:hover .album-meta-small {
+  color: var(--text-secondary);
+}
+
+.album-meta-small span {
+  padding: 2px 8px;
+  background: rgba(var(--primary-color-rgb), 0.1);
+  border-radius: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.album-result-item:hover .album-meta-small span {
+  background: rgba(var(--primary-color-rgb), 0.2);
 }
 
 /* 专辑详情弹窗样式 */
@@ -3675,8 +4660,9 @@ export default {
   justify-content: center;
   align-items: center;
   z-index: 10002;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: fadeIn 0.3s ease;
 }
 
 .album-detail-modal-content {
@@ -3684,57 +4670,117 @@ export default {
   max-width: 800px;
   max-height: 85vh;
   background: var(--bg-primary);
-  border-radius: var(--radius-lg);
+  border-radius: 20px;
   display: flex;
   flex-direction: column;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   overflow: hidden;
-  animation: modalPopIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  animation: slideUpScale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid var(--border-color);
 }
 
 .album-detail-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: 1.5rem 2rem;
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 20px 20px 0 0;
 }
 
 .album-detail-header h3 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   font-weight: 600;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .album-detail-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: 2rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color) var(--bg-hover);
+}
+
+.album-detail-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.album-detail-body::-webkit-scrollbar-track {
+  background: var(--bg-hover);
+  border-radius: 10px;
+}
+
+.album-detail-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  border-radius: 10px;
 }
 
 .album-basic-info {
   display: flex;
-  gap: 1.5rem;
+  gap: 2rem;
   margin-bottom: 2rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
+  padding: 2rem;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.album-basic-info::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--primary-color));
+  animation: shimmer 3s ease-in-out infinite;
 }
 
 .album-cover-large {
   flex-shrink: 0;
-  width: 150px;
-  height: 150px;
-  border-radius: var(--radius-lg);
+  width: 180px;
+  height: 180px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+  position: relative;
+  transition: all 0.3s ease;
+  border: 3px solid var(--bg-primary);
+}
+
+.album-cover-large:hover {
+  transform: scale(1.05) rotate(-2deg);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.album-cover-large::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.2));
+  pointer-events: none;
 }
 
 .album-cover-large img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: all 0.3s ease;
+}
+
+.album-cover-large:hover img {
+  transform: scale(1.1);
 }
 
 .album-details {
@@ -3742,118 +4788,269 @@ export default {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  position: relative;
 }
 
 .album-details .album-name {
-  font-size: 1.8rem;
-  font-weight: 700;
+  font-size: 2.2rem;
+  font-weight: 800;
   color: var(--text-primary);
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.75rem 0;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: textShimmer 3s ease-in-out infinite;
 }
 
 .album-artist {
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   color: var(--text-secondary);
-  margin: 0.25rem 0;
+  margin: 0.5rem 0;
+}
+
+.album-artist {
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--border-color);
 }
 
 .album-publish-date {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--text-muted);
-  margin: 0.25rem 0;
+  margin: 0.5rem 0;
+}
+
+.album-publish-date {
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--border-color);
 }
 
 .album-description {
   color: var(--text-secondary);
-  margin: 0.5rem 0 1rem 0;
-  line-height: 1.5;
+  margin: 1rem 0 1.5rem 0;
+  line-height: 1.6;
+  font-size: 1rem;
+  padding: 1rem;
+  background: var(--bg-primary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
 }
 
 .album-stats {
   display: flex;
-  gap: 1.5rem;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, var(--bg-primary), var(--bg-hover));
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
+}
+
+.stat-item::before {
+  content: attr(data-label);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.25rem;
 }
 
 .album-section {
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
 }
 
 .album-section h3 {
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 1.3rem;
+  font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 1rem 0;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid var(--primary-color);
+  margin: 0 0 1.5rem 0;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 12px;
+  border-left: 4px solid var(--primary-color);
+}
+
+.album-section h3 {
+  padding-left: 0.5rem;
+  border-left: 3px solid var(--primary-color);
 }
 
 .album-songs-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .album-song-item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  border-radius: var(--radius-md);
+  gap: 1.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: 16px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.album-song-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 16px;
 }
 
 .album-song-item:hover {
-  background: var(--bg-hover);
-  transform: translateX(4px);
+  transform: translateX(8px) scale(1.02);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color);
 }
 
-.song-index {
+.album-song-item:hover::before {
+  opacity: 0.05;
+}
+
+.album-song-item:active {
+  transform: translateX(8px) scale(0.98);
+}
+
+.album-song-item .song-index {
   flex-shrink: 0;
-  width: 30px;
-  text-align: center;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 12px;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-color);
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.album-song-item:hover .song-index {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: white;
+  border-color: var(--primary-color);
+  transform: scale(1.1);
 }
 
 .album-song-item .song-cover {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-sm);
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.album-song-item:hover .song-cover {
+  transform: scale(1.1) rotate(3deg);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.album-song-item .song-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.3));
+  border-radius: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.album-song-item:hover .song-cover::after {
+  opacity: 1;
 }
 
 .album-song-item .song-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: all 0.3s ease;
+}
+
+.album-song-item:hover .song-cover img {
+  transform: scale(1.1);
 }
 
 .album-song-item .song-info {
   flex: 1;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .album-song-item .song-title {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+  transition: color 0.3s ease;
+}
+
+.album-song-item:hover .song-title {
+  color: var(--primary-color);
+}
+
+.album-song-item .song-artist {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .album-song-item .song-artist {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--border-color);
 }
 
 .album-song-item .song-duration {
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+  background: var(--bg-secondary);
+  padding: 0.375rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.album-song-item:hover .song-duration {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: white;
+  border-color: var(--primary-color);
+  transform: scale(1.05);
 }
 
 /* 加载动画样式 */
@@ -3976,6 +5173,33 @@ export default {
   padding: 1rem;
   border-top: 1px solid var(--border-color);
   margin-top: 1rem;
+}
+
+.pagination-info {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  margin-top: 1rem;
+}
+
+.pagination-stats {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pagination-stats span {
+  padding: 0.25rem 0.75rem;
+  background: var(--bg-primary);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
 }
 
 .load-more-btn {
@@ -4299,5 +5523,55 @@ export default {
   flex-direction: column;
   min-height: 0;
   max-height: none; /* 移除高度限制 */
+}
+
+/* 动画关键帧 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUpScale {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes textShimmer {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
 }
 </style>

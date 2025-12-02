@@ -294,6 +294,7 @@
                   v-if="!message.isGeneratingImage && !message.imageData"
                   class="action-btn generate-img-btn"
                   @click="generateImageForMessage(message)"
+                  @touchend="handleImageGenerateTouch($event, message)"
                   :disabled="!isSDConfigured"
                   :title="isSDConfigured ? '生成当前场景的图像' : '请先配置SD图像生成设置'"
                 >
@@ -315,7 +316,7 @@
                 <img :src="message.imageData" :alt="'生成的图片'" />
                 <!-- 图片控制按钮 - 移动到图片下方 -->
                 <div class="image-controls message-actions">
-                  <button class="action-btn regenerate-img-btn" @click="regenerateImage(message)" title="重新生成图片">
+                  <button class="action-btn regenerate-img-btn" @click="regenerateImage(message)" @touchend="handleRegenerateTouch($event, message)" title="重新生成图片">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
                     </svg>
@@ -331,7 +332,7 @@
 
               <!-- 图片控制按钮（当图片被隐藏时） -->
               <div v-if="message.imageData && !message.imageExpanded" class="image-controls message-actions">
-                <button class="action-btn regenerate-img-btn" @click="regenerateImage(message)" title="重新生成图片">
+                <button class="action-btn regenerate-img-btn" @click="regenerateImage(message)" @touchend="handleRegenerateTouch($event, message)" title="重新生成图片">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
                   </svg>
@@ -1055,6 +1056,241 @@
 
 
 
+    <!-- AI图片生成器界面 -->
+    <div v-if="showImageGeneratorModal" class="image-generator-modal-overlay show" @click="closeImageGeneratorModal">
+      <div class="image-generator-modal-content" @click.stop>
+        <div class="image-generator-header">
+          <h3>AI图片生成器</h3>
+          <button class="close-btn" @click="closeImageGeneratorModal">×</button>
+        </div>
+        
+        <div class="image-generator-body">
+          <div class="image-generator-input-section">
+            <div class="form-group">
+              <label>正面提示词</label>
+              <textarea
+                v-model="imageGeneratorPrompt"
+                placeholder="描述你想要生成的图片..."
+                class="image-generator-textarea"
+                :disabled="imageGeneratorIsGenerating"
+                rows="4"
+              ></textarea>
+            </div>
+            
+            <div class="form-group">
+              <label>负面提示词</label>
+              <textarea
+                v-model="imageGeneratorNegativePrompt"
+                placeholder="不希望出现在图片中的内容..."
+                class="image-generator-textarea negative"
+                :disabled="imageGeneratorIsGenerating"
+                rows="2"
+              ></textarea>
+            </div>
+            
+            <div class="image-generator-controls">
+              <div class="control-row">
+                <div class="control-item">
+                  <CustomSlider
+                    v-model="settings.sdSteps"
+                    :min="1"
+                    :max="50"
+                    :step="1"
+                    label="采样步数"
+                    unit=""
+                    :disabled="imageGeneratorIsGenerating"
+                  />
+                </div>
+                
+                <div class="control-item">
+                  <CustomSlider
+                    v-model="settings.sdCfgScale"
+                    :min="1"
+                    :max="20"
+                    :step="0.5"
+                    label="CFG Scale"
+                    unit=""
+                    :disabled="imageGeneratorIsGenerating"
+                  />
+                </div>
+              </div>
+              
+              <div class="control-row">
+                <div class="control-item">
+                  <CustomSlider
+                    v-model="settings.sdWidth"
+                    :min="256"
+                    :max="2048"
+                    :step="64"
+                    label="宽度"
+                    unit="px"
+                    :disabled="imageGeneratorIsGenerating"
+                  />
+                </div>
+                
+                <div class="control-item">
+                  <CustomSlider
+                    v-model="settings.sdHeight"
+                    :min="256"
+                    :max="2048"
+                    :step="64"
+                    label="高度"
+                    unit="px"
+                    :disabled="imageGeneratorIsGenerating"
+                  />
+                </div>
+              </div>
+              
+              <div class="control-row">
+                <div class="control-item">
+                  <label>模型</label>
+                  <CustomSelect
+                    v-model="settings.sdModel"
+                    :options="sdModels.map(model => ({ value: model, label: model }))"
+                    :disabled="imageGeneratorIsGenerating"
+                    placeholder="选择模型"
+                  />
+                </div>
+                
+                <div class="control-item">
+                  <label>采样方法</label>
+                  <CustomSelect
+                    v-model="settings.sdSampler"
+                    :options="[
+                      { value: 'Euler a', label: 'Euler a' },
+                      { value: 'Euler', label: 'Euler' },
+                      { value: 'LMS', label: 'LMS' },
+                      { value: 'DPM++ 2M Karras', label: 'DPM++ 2M Karras' },
+                      { value: 'DPM++ SDE Karras', label: 'DPM++ SDE Karras' }
+                    ]"
+                    :disabled="imageGeneratorIsGenerating"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div class="image-generator-actions">
+              <button 
+                @click="generateImage" 
+                :disabled="imageGeneratorIsGenerating || !imageGeneratorPrompt.trim()"
+                class="generate-btn"
+                :class="{ 'generating': imageGeneratorIsGenerating }"
+              >
+                <div v-if="imageGeneratorIsGenerating" class="loading-spinner"></div>
+                <span v-else>生成图片</span>
+              </button>
+              
+              <button 
+                @click="clearImageGenerator" 
+                :disabled="imageGeneratorIsGenerating"
+                class="clear-btn"
+                @mouseenter="showClearTooltip = true"
+                @mouseleave="showClearTooltip = false"
+              >
+                清空
+                <div class="tooltip" v-if="showClearTooltip">清空所有输入和图片</div>
+              </button>
+            </div>
+          </div>
+          
+          <div class="image-generator-preview-section">
+            <div class="preview-container">
+              <div v-if="imageGeneratorIsGenerating" class="generating-status">
+                <div class="loading-spinner large"></div>
+                <div class="progress-info">
+                  <div class="progress-bar">
+                    <div class="progress-fill" :style="{ width: imageGeneratorProgress + '%' }"></div>
+                  </div>
+                  <span class="progress-text">{{ imageGeneratorProgress }}%</span>
+                </div>
+                <p class="generating-text">正在生成图片...</p>
+              </div>
+              
+              <div v-else-if="imageGeneratorCurrentImage" class="generated-image-container">
+                <div 
+                  class="image-viewer"
+                  @wheel.prevent="handleImageZoom"
+                  @mousedown="startImageDrag"
+                  @touchstart="startImageDrag"
+                  :style="{ cursor: isDragging ? 'grabbing' : 'grab' }"
+                >
+                  <img 
+                    :src="imageGeneratorCurrentImage" 
+                    alt="生成的图片" 
+                    class="generated-image"
+                    :style="{
+                      transform: `translate(${imagePosition.x}px, ${imagePosition.y}px) scale(${imageScale})`
+                    }"
+                    @load="resetImageView"
+                    draggable="false"
+                  >
+                </div>
+                
+                <div class="image-controls">
+                  <button @click="zoomIn" class="zoom-btn" title="放大">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zm.5-7H9v2H7v1h2v2h1v-2h2V9h-2z"/>
+                    </svg>
+                  </button>
+                  <button @click="zoomOut" class="zoom-btn" title="缩小">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM7 9h5v1H7z"/>
+                    </svg>
+                  </button>
+                  <button @click="resetImageView" class="zoom-btn" title="重置视图">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h2c0 2.21 1.79 4 4 4s4-1.79 4-4-1.79-4-4-4z"/>
+                    </svg>
+                  </button>
+                  <span class="zoom-level">{{ Math.round(imageScale * 100) }}%</span>
+                </div>
+                
+                <div class="image-actions">
+                  <button @click="downloadImage" class="action-btn download" title="下载图片">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                    </svg>
+                  </button>
+                  <button @click="saveToHistory" class="action-btn save" title="保存到历史">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+                    </svg>
+                  </button>
+                  <button @click="copyPrompt" class="action-btn copy" title="复制提示词">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7l-3-3zm-2 16H8V7h9v12z"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              <div v-else class="empty-preview">
+                <div class="empty-icon">🎨</div>
+                <p>输入提示词开始生成图片</p>
+              </div>
+            </div>
+            
+            <div class="history-section" v-if="imageGeneratorHistory.length > 0">
+              <h4>生成历史</h4>
+              <div class="history-grid">
+                <div 
+                  v-for="(item, index) in imageGeneratorHistory.slice(-12)" 
+                  :key="index"
+                  class="history-item"
+                  @click="loadFromHistory(item)"
+                >
+                  <img :src="item.image" :alt="item.prompt">
+                  <div class="history-overlay">
+                    <span class="history-prompt">{{ item.prompt.substring(0, 30) }}...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 草稿纸界面 -->
 
     <div v-if="showNotepadModal" class="notepad-modal-overlay show" @click="closeNotepadModal">
@@ -1399,7 +1635,8 @@ export default {
       showConfirmModal: false,
 
       showQuickChatModal: false,
-      showNotepadModal: false,
+    showNotepadModal: false,
+    showImageGeneratorModal: false,
       showMusicPlayer: false,
       currentTool: 'pen',
       penColor: '#000000',
@@ -1696,6 +1933,29 @@ export default {
 
 
 
+      // 图片生成器相关状态
+
+      imageGeneratorPrompt: '',
+
+      imageGeneratorNegativePrompt: '',
+
+      imageGeneratorIsGenerating: false,
+
+      imageGeneratorProgress: 0,
+
+      imageGeneratorHistory: [],
+
+      imageGeneratorCurrentImage: null,
+    showClearTooltip: false,
+    // 图片查看器状态
+    imageScale: 1,
+    imagePosition: { x: 0, y: 0 },
+    isDragging: false,
+    dragStart: { x: 0, y: 0 },
+    imageViewerReset: false,
+
+
+
       // 消息编辑相关状态
 
 
@@ -1831,6 +2091,14 @@ export default {
     // 移除键盘事件监听器
 
     document.removeEventListener('keydown', this.handleNotepadKeydown)
+
+    
+
+    // 移除图片拖拽事件监听器
+    document.removeEventListener('mousemove', this.handleGlobalDrag)
+    document.removeEventListener('mouseup', this.handleGlobalDragEnd)
+    document.removeEventListener('touchmove', this.handleGlobalDrag)
+    document.removeEventListener('touchend', this.handleGlobalDragEnd)
 
     
 
@@ -3538,6 +3806,14 @@ export default {
 
           break;
 
+        case 'image-generator':
+
+          // AI图片生成功能
+
+          this.openImageGeneratorModal();
+
+          break;
+
         default:
 
           console.log('未知工具:', toolName);
@@ -3865,6 +4141,548 @@ export default {
 
 
 
+    // 打开AI图片生成器界面
+
+    openImageGeneratorModal() {
+
+      this.showImageGeneratorModal = true;
+
+      // 初始化SD模型列表
+
+      if (this.sdModels.length === 0) {
+
+        this.refreshSDModels();
+
+      }
+
+    },
+
+
+
+    // 关闭AI图片生成器界面
+
+    closeImageGeneratorModal() {
+
+      this.showImageGeneratorModal = false;
+
+    },
+
+
+
+    // 生成图片
+
+    async generateImage() {
+
+      if (!this.imageGeneratorPrompt.trim() || this.imageGeneratorIsGenerating) return;
+
+
+
+      this.imageGeneratorIsGenerating = true;
+
+      this.imageGeneratorProgress = 0;
+
+
+
+      // 添加震动反馈（如果支持）
+
+      if (navigator.vibrate) {
+
+        navigator.vibrate(50);
+
+      }
+
+
+
+      try {
+
+        const imageData = await this.generateImageWithSD(
+
+          this.imageGeneratorPrompt,
+
+          (progress) => {
+
+            this.imageGeneratorProgress = progress;
+
+            // 添加进度变化反馈
+
+            if (progress % 25 === 0 && navigator.vibrate) {
+
+              navigator.vibrate(10);
+
+            }
+
+          }
+
+        );
+
+
+
+        this.imageGeneratorCurrentImage = imageData;
+        
+        // 重置图片查看器状态
+        this.imageScale = 1;
+        this.imagePosition = { x: 0, y: 0 };
+        this.isDragging = false;
+        
+        this.showNotification('图片生成成功！', 'success');
+
+        
+
+        // 成功震动反馈
+
+        if (navigator.vibrate) {
+
+          navigator.vibrate([50, 30, 50]);
+
+        }
+
+
+
+        // 添加成功动画
+
+        this.$nextTick(() => {
+
+          const previewContainer = document.querySelector('.preview-container');
+
+          if (previewContainer) {
+
+            previewContainer.classList.add('success-animation');
+
+            setTimeout(() => {
+
+              previewContainer.classList.remove('success-animation');
+
+            }, 1000);
+
+          }
+
+        });
+
+      } catch (error) {
+
+        console.error('图片生成失败:', error);
+
+        this.showNotification('图片生成失败: ' + error.message, 'error');
+
+        
+
+        // 错误震动反馈
+
+        if (navigator.vibrate) {
+
+          navigator.vibrate([100, 50, 100]);
+
+        }
+
+      } finally {
+
+        this.imageGeneratorIsGenerating = false;
+
+        this.imageGeneratorProgress = 0;
+
+      }
+
+    },
+
+
+
+    // 清空图片生成器
+
+    clearImageGenerator() {
+
+      this.imageGeneratorPrompt = '';
+
+      this.imageGeneratorNegativePrompt = '';
+
+      this.imageGeneratorCurrentImage = null;
+
+      // 重置图片查看器状态
+
+      this.imageScale = 1;
+
+      this.imagePosition = { x: 0, y: 0 };
+
+      this.isDragging = false;
+
+    },
+
+
+
+    // 下载图片
+
+    downloadImage() {
+
+      if (!this.imageGeneratorCurrentImage) return;
+
+
+
+      // 震动反馈
+
+      if (navigator.vibrate) {
+
+        navigator.vibrate(30);
+
+      }
+
+
+
+      const link = document.createElement('a');
+
+      link.href = this.imageGeneratorCurrentImage;
+
+      link.download = `ai-generated-${Date.now()}.png`;
+
+      link.click();
+
+
+
+      // 添加下载成功反馈
+
+      this.showNotification('图片已开始下载', 'success');
+
+
+
+      // 添加下载动画
+
+      this.$nextTick(() => {
+
+        const downloadBtn = document.querySelector('.action-btn.download');
+
+        if (downloadBtn) {
+
+          downloadBtn.classList.add('download-success');
+
+          setTimeout(() => {
+
+            downloadBtn.classList.remove('download-success');
+
+          }, 800);
+
+        }
+
+      });
+
+    },
+
+
+
+    // 保存到历史
+
+    saveToHistory() {
+
+      if (!this.imageGeneratorCurrentImage) return;
+
+
+
+      const historyItem = {
+
+        image: this.imageGeneratorCurrentImage,
+
+        prompt: this.imageGeneratorPrompt,
+
+        negativePrompt: this.imageGeneratorNegativePrompt,
+
+        timestamp: Date.now()
+
+      };
+
+
+
+      this.imageGeneratorHistory.push(historyItem);
+
+
+
+      // 限制历史记录数量
+
+      if (this.imageGeneratorHistory.length > 50) {
+
+        this.imageGeneratorHistory = this.imageGeneratorHistory.slice(-50);
+
+      }
+
+
+
+      this.showNotification('已保存到历史记录', 'success');
+
+    },
+
+
+
+    // 从历史加载
+
+    loadFromHistory(item) {
+
+      this.imageGeneratorCurrentImage = item.image;
+
+      this.imageGeneratorPrompt = item.prompt;
+
+      this.imageGeneratorNegativePrompt = item.negativePrompt || '';
+
+    },
+
+
+
+    // 复制提示词
+
+    copyPrompt() {
+
+      if (!this.imageGeneratorPrompt) return;
+
+
+
+      navigator.clipboard.writeText(this.imageGeneratorPrompt).then(() => {
+
+        this.showNotification('提示词已复制到剪贴板', 'success');
+
+      }).catch(() => {
+
+        this.showNotification('复制失败', 'error');
+
+      });
+
+    },
+
+
+
+    // 图片查看器方法
+
+    handleImageZoom(event) {
+
+      if (!this.imageGeneratorCurrentImage) return;
+
+      
+
+      event.preventDefault();
+
+      event.stopPropagation();
+
+      
+
+      const delta = event.deltaY > 0 ? 0.9 : 1.1;
+
+      const newScale = this.imageScale * delta;
+
+      
+
+      // 限制缩放范围
+
+      if (newScale >= 0.1 && newScale <= 5) {
+
+        this.imageScale = newScale;
+
+      }
+
+    },
+
+
+
+    zoomIn() {
+
+      if (this.imageScale < 5) {
+
+        this.imageScale = Math.min(this.imageScale * 1.2, 5);
+
+      }
+
+    },
+
+
+
+    zoomOut() {
+
+      if (this.imageScale > 0.1) {
+
+        this.imageScale = Math.max(this.imageScale / 1.2, 0.1);
+
+      }
+
+    },
+
+
+
+    resetImageView() {
+
+      this.imageScale = 1;
+
+      this.imagePosition = { x: 0, y: 0 };
+
+      this.imageViewerReset = true;
+
+      
+
+      // 添加重置动画
+
+      this.$nextTick(() => {
+
+        const imageContainer = document.querySelector('.generated-image-container');
+
+        if (imageContainer) {
+
+          imageContainer.classList.add('reset-animation');
+
+          setTimeout(() => {
+
+            imageContainer.classList.remove('reset-animation');
+
+            this.imageViewerReset = false;
+
+          }, 300);
+
+        }
+
+      });
+
+    },
+
+
+
+    startImageDrag(event) {
+
+      if (!this.imageGeneratorCurrentImage) return;
+
+      
+
+      this.isDragging = true;
+
+      
+
+      const clientX = event.type.includes('touch') ? event.touches[0].clientX : event.clientX;
+
+      const clientY = event.type.includes('touch') ? event.touches[0].clientY : event.clientY;
+
+      
+
+      this.dragStart = {
+
+        x: clientX - this.imagePosition.x,
+
+        y: clientY - this.imagePosition.y
+
+      };
+
+      
+
+      // 添加全局事件监听器
+      document.addEventListener('mousemove', this.handleGlobalDrag);
+      document.addEventListener('mouseup', this.handleGlobalDragEnd);
+      document.addEventListener('touchmove', this.handleGlobalDrag);
+      document.addEventListener('touchend', this.handleGlobalDragEnd);
+
+      event.preventDefault();
+
+    },
+
+
+
+    handleGlobalDrag(event) {
+
+      if (!this.isDragging || !this.imageGeneratorCurrentImage) return;
+
+      
+
+      const clientX = event.type.includes('touch') ? event.touches[0].clientX : event.clientX;
+
+      const clientY = event.type.includes('touch') ? event.touches[0].clientY : event.clientY;
+
+      
+
+      this.imagePosition = {
+
+        x: clientX - this.dragStart.x,
+
+        y: clientY - this.dragStart.y
+
+      };
+
+      
+
+      event.preventDefault();
+
+    },
+
+
+
+    handleGlobalDragEnd() {
+
+      this.isDragging = false;
+
+      // 移除全局事件监听器
+      document.removeEventListener('mousemove', this.handleGlobalDrag);
+      document.removeEventListener('mouseup', this.handleGlobalDragEnd);
+      document.removeEventListener('touchmove', this.handleGlobalDrag);
+      document.removeEventListener('touchend', this.handleGlobalDragEnd);
+    },
+
+
+
+    dragImage(event) {
+
+      // 保留原有方法作为备用
+      if (!this.isDragging || !this.imageGeneratorCurrentImage) return;
+
+      const clientX = event.type.includes('touch') ? event.touches[0].clientX : event.clientX;
+
+      const clientY = event.type.includes('touch') ? event.touches[0].clientY : event.clientY;
+
+      this.imagePosition = {
+
+        x: clientX - this.dragStart.x,
+
+        y: clientY - this.dragStart.y
+
+      };
+
+      event.preventDefault();
+
+    },
+
+
+
+    endImageDrag() {
+
+      // 保留原有方法作为备用
+      this.isDragging = false;
+
+    },
+
+
+
+    // 处理移动端图片生成按钮触摸事件
+    handleImageGenerateTouch(event, message) {
+      // 防止事件冒泡和默认行为
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // 添加触觉反馈（如果设备支持）
+      if (navigator.vibrate) {
+        navigator.vibrate(30);
+      }
+      
+      // 延迟执行以确保触摸事件完全处理
+      setTimeout(() => {
+        this.generateImageForMessage(message);
+      }, 50);
+    },
+
+    // 处理移动端重新生成按钮触摸事件
+    handleRegenerateTouch(event, message) {
+      // 防止事件冒泡和默认行为
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // 添加触觉反馈（如果设备支持）
+      if (navigator.vibrate) {
+        navigator.vibrate(30);
+      }
+      
+      // 延迟执行以确保触摸事件完全处理
+      setTimeout(() => {
+        this.regenerateImage(message);
+      }, 50);
+    },
+
+
+
     // 发送快速对话消息
 
     async handleQuickChatSendMessage() {
@@ -4103,21 +4921,30 @@ export default {
       
       // 保存原始颜色，以便恢复
       if (!this.originalThemeColor) {
-        this.originalThemeColor = {
-          primaryColor: this.styleSettings.primaryColor,
-          secondaryColor: this.styleSettings.secondaryColor,
-          gradientColor1: this.styleSettings.gradientColor1,
-          gradientColor2: this.styleSettings.gradientColor2
-        };
-        
-        // 如果是高级渐变模式，也保存渐变颜色数组
-        if (this.styleSettings.colorMode === 'advanced-gradient') {
-          const colorCount = this.styleSettings.gradientColorCount || 3;
-          const gradientColors = [];
-          for (let i = 0; i < colorCount; i++) {
-            gradientColors.push(this.styleSettings[`gradientColor${i + 1}`] || colorArray[i % colorArray.length]);
-          }
-          this.originalThemeColor.gradientColors = gradientColors;
+        // 根据当前颜色模式保存相应的原始颜色
+        if (this.styleSettings.colorMode === 'gradient') {
+          // 渐变模式：保存gradientColor1和gradientColor2
+          this.originalThemeColor = {
+            colorMode: 'gradient',
+            gradientColor1: this.styleSettings.gradientColor1,
+            gradientColor2: this.styleSettings.gradientColor2
+          };
+        } else if (this.styleSettings.colorMode === 'advanced-gradient') {
+          // 高级渐变模式：保存所有渐变颜色
+          this.originalThemeColor = {
+            colorMode: 'advanced-gradient',
+            gradientColors: this.styleSettings.advancedGradientColors || [],
+            gradientDirection: this.styleSettings.gradientDirection,
+            customGradientAngle: this.styleSettings.customGradientAngle,
+            gradientColorCount: this.styleSettings.gradientColorCount || 3
+          };
+        } else {
+          // 单色和双色模式：保存primaryColor和secondaryColor
+          this.originalThemeColor = {
+            colorMode: this.styleSettings.colorMode,
+            primaryColor: this.styleSettings.primaryColor,
+            secondaryColor: this.styleSettings.secondaryColor
+          };
         }
       }
       
@@ -4214,56 +5041,97 @@ export default {
     // 恢复原始主题色
     restoreOriginalThemeColor() {
       if (this.originalThemeColor) {
-        const originalSettings = {
-          ...this.styleSettings,
-          primaryColor: this.originalThemeColor.primaryColor,
-          secondaryColor: this.originalThemeColor.secondaryColor,
-          gradientColor1: this.originalThemeColor.gradientColor1,
-          gradientColor2: this.originalThemeColor.gradientColor2
-        };
-        
         // 重新应用原始样式设置
-        this.themeManager.applyStyleSettings(originalSettings);
+        this.themeManager.applyStyleSettings(this.styleSettings);
         
         // 确保所有相关变量都恢复到原始值
         const root = document.documentElement;
-        root.style.setProperty('--primary-color', this.originalThemeColor.primaryColor);
-        root.style.setProperty('--primary-color-rgb', this.hexToRgb(this.originalThemeColor.primaryColor));
         
-        // 根据当前颜色模式恢复相关变量
-        if (this.styleSettings.colorMode === 'single') {
+        // 根据保存的颜色模式恢复相关变量
+        if (this.originalThemeColor.colorMode === 'single') {
+          // 单色模式
+          root.style.setProperty('--primary-color', this.originalThemeColor.primaryColor);
+          root.style.setProperty('--primary-color-rgb', this.hexToRgb(this.originalThemeColor.primaryColor));
           root.style.setProperty('--title-color', this.originalThemeColor.primaryColor);
           root.style.setProperty('--component-color', this.originalThemeColor.primaryColor);
           root.style.setProperty('--avatar-color', this.originalThemeColor.primaryColor);
           root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${this.originalThemeColor.primaryColor} 0%, ${this.lightenColor(this.originalThemeColor.primaryColor, 0.2)} 100%)`);
-        } else if (this.styleSettings.colorMode === 'dual') {
+          root.style.setProperty('--primary-hover', this.lightenColor(this.originalThemeColor.primaryColor, 0.1));
+          root.style.setProperty('--primary-active', this.darkenColor(this.originalThemeColor.primaryColor, 0.1));
+        } else if (this.originalThemeColor.colorMode === 'dual') {
+          // 双色模式
+          root.style.setProperty('--primary-color', this.originalThemeColor.primaryColor);
+          root.style.setProperty('--primary-color-rgb', this.hexToRgb(this.originalThemeColor.primaryColor));
           root.style.setProperty('--title-color', this.originalThemeColor.primaryColor);
           root.style.setProperty('--component-color', this.originalThemeColor.primaryColor);
           root.style.setProperty('--avatar-color', this.originalThemeColor.secondaryColor || this.originalThemeColor.primaryColor);
           root.style.setProperty('--secondary-color', this.originalThemeColor.secondaryColor || this.originalThemeColor.primaryColor);
           root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${this.originalThemeColor.primaryColor} 0%, ${this.originalThemeColor.secondaryColor || this.originalThemeColor.primaryColor} 100%)`);
-        } else if (this.styleSettings.colorMode === 'gradient') {
-          root.style.setProperty('--title-color', `linear-gradient(135deg, ${this.originalThemeColor.gradientColor1} 0%, ${this.originalThemeColor.gradientColor2} 100%)`);
-          root.style.setProperty('--component-color', this.originalThemeColor.gradientColor1);
-          root.style.setProperty('--avatar-color', `linear-gradient(135deg, ${this.originalThemeColor.gradientColor1} 0%, ${this.originalThemeColor.gradientColor2} 100%)`);
-          root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${this.originalThemeColor.gradientColor1} 0%, ${this.originalThemeColor.gradientColor2} 100%)`);
+          root.style.setProperty('--primary-hover', this.lightenColor(this.originalThemeColor.primaryColor, 0.1));
+          root.style.setProperty('--primary-active', this.darkenColor(this.originalThemeColor.primaryColor, 0.1));
+        } else if (this.originalThemeColor.colorMode === 'gradient') {
+          // 渐变模式
+          const gradientCSS = `linear-gradient(135deg, ${this.originalThemeColor.gradientColor1} 0%, ${this.originalThemeColor.gradientColor2} 100%)`;
           root.style.setProperty('--gradient-color1', this.originalThemeColor.gradientColor1);
           root.style.setProperty('--gradient-color2', this.originalThemeColor.gradientColor2);
-        } else if (this.styleSettings.colorMode === 'advanced-gradient') {
-          // 高级渐变模式：恢复所有渐变颜色
-          const gradientColors = this.originalThemeColor.gradientColors || [this.originalThemeColor.gradientColor1, this.originalThemeColor.gradientColor2];
+          root.style.setProperty('--title-color', gradientCSS);
+          root.style.setProperty('--component-color', this.originalThemeColor.gradientColor1);
+          root.style.setProperty('--avatar-color', gradientCSS);
+          root.style.setProperty('--gradient-primary', gradientCSS);
+          root.style.setProperty('--primary-color', this.originalThemeColor.gradientColor1);
+          root.style.setProperty('--primary-color-rgb', this.hexToRgb(this.originalThemeColor.gradientColor1));
+          root.style.setProperty('--primary-hover', this.lightenColor(this.originalThemeColor.gradientColor1, 0.1));
+          root.style.setProperty('--primary-active', this.darkenColor(this.originalThemeColor.gradientColor1, 0.1));
+        } else if (this.originalThemeColor.colorMode === 'advanced-gradient') {
+          // 高级渐变模式
+          const gradientColors = this.originalThemeColor.gradientColors || [];
+          const gradientDirection = this.originalThemeColor.gradientDirection || '135deg';
+          const customAngle = this.originalThemeColor.customGradientAngle || 135;
+          
+          // 如果没有保存的渐变颜色，使用默认颜色
+          if (gradientColors.length === 0) {
+            gradientColors.push('#ec4899', '#3b82f6', '#8b5cf6');
+          }
+          
+          // 生成渐变CSS
+          let gradientCSS;
+          if (gradientDirection === 'custom') {
+            gradientCSS = `linear-gradient(${customAngle}deg, ${gradientColors.join(', ')})`;
+          } else if (gradientDirection === 'radial') {
+            gradientCSS = `radial-gradient(circle, ${gradientColors.join(', ')})`;
+          } else {
+            let cssDirection = gradientDirection;
+            if (gradientDirection === 'to-right') cssDirection = 'to right';
+            else if (gradientDirection === 'to-left') cssDirection = 'to left';
+            else if (gradientDirection === 'to-bottom') cssDirection = 'to bottom';
+            else if (gradientDirection === 'to-top') cssDirection = 'to top';
+            else if (gradientDirection === 'to-bottom-right') cssDirection = 'to bottom right';
+            else if (gradientDirection === 'to-bottom-left') cssDirection = 'to bottom left';
+            else if (gradientDirection === 'to-top-right') cssDirection = 'to top right';
+            else if (gradientDirection === 'to-top-left') cssDirection = 'to top left';
+            
+            gradientCSS = `linear-gradient(${cssDirection}, ${gradientColors.join(', ')})`;
+          }
+          
+          // 应用高级渐变
           gradientColors.forEach((color, index) => {
-            root.style.setProperty(`--gradient-color${index + 1}`, color);
+            root.style.setProperty(`--gradient-color-${index + 1}`, color);
           });
-          root.style.setProperty('--gradient-primary', this.generateGradientCSS(gradientColors));
-          root.style.setProperty('--title-color', `linear-gradient(135deg, ${gradientColors[0]} 0%, ${gradientColors[gradientColors.length - 1]} 100%)`);
+          root.style.setProperty('--gradient-primary', gradientCSS);
+          root.style.setProperty('--title-color', gradientCSS);
           root.style.setProperty('--component-color', gradientColors[0]);
-          root.style.setProperty('--avatar-color', `linear-gradient(135deg, ${gradientColors[0]} 0%, ${gradientColors[gradientColors.length - 1]} 100%)`);
+          root.style.setProperty('--avatar-color', gradientCSS);
+          root.style.setProperty('--primary-color', gradientColors[0]);
+          root.style.setProperty('--primary-color-rgb', this.hexToRgb(gradientColors[0]));
+          root.style.setProperty('--primary-hover', this.lightenColor(gradientColors[0], 0.1));
+          root.style.setProperty('--primary-active', this.darkenColor(gradientColors[0], 0.1));
+          
+          // 确保样式设置中的高级渐变颜色也被恢复
+          this.styleSettings.advancedGradientColors = [...gradientColors];
+          this.styleSettings.gradientDirection = gradientDirection;
+          this.styleSettings.customGradientAngle = customAngle;
+          this.styleSettings.gradientColorCount = this.originalThemeColor.gradientColorCount || gradientColors.length;
         }
-        
-        // 恢复颜色变体
-        root.style.setProperty('--primary-hover', this.lightenColor(this.originalThemeColor.primaryColor, 0.1));
-        root.style.setProperty('--primary-active', this.darkenColor(this.originalThemeColor.primaryColor, 0.1));
         
         // 恢复悬浮球组件的颜色
         const floatingBallElement = document.querySelector('.floating-ball');
@@ -4304,6 +5172,32 @@ export default {
       return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
     },
     
+    // 生成渐变CSS
+    generateGradientCSS(colors) {
+      if (!colors || colors.length === 0) {
+        return 'linear-gradient(135deg, #ec4899 0%, #3b82f6 100%)';
+      }
+      
+      const direction = this.styleSettings.gradientDirection || '135deg';
+      
+      if (direction === 'radial') {
+        return `radial-gradient(circle, ${colors.join(', ')})`;
+      } else {
+        let cssDirection = direction;
+        if (direction === 'to-right') cssDirection = 'to right';
+        else if (direction === 'to-left') cssDirection = 'to left';
+        else if (direction === 'to-bottom') cssDirection = 'to bottom';
+        else if (direction === 'to-top') cssDirection = 'to top';
+        else if (direction === 'to-bottom-right') cssDirection = 'to bottom right';
+        else if (direction === 'to-bottom-left') cssDirection = 'to bottom left';
+        else if (direction === 'to-top-right') cssDirection = 'to top right';
+        else if (direction === 'to-top-left') cssDirection = 'to top left';
+        else if (direction === 'custom') cssDirection = `${this.styleSettings.customGradientAngle || 135}deg`;
+        
+        return `linear-gradient(${cssDirection}, ${colors.join(', ')})`;
+      }
+    },
+
     // 格式化音乐进度显示
     formatMusicProgress() {
       if (!this.currentMusic || !this.currentMusic.duration) {
@@ -4419,7 +5313,7 @@ export default {
 
 .action-btn {
 
-  background: none;
+  background: transparent;
 
   border: none;
 
@@ -4445,6 +5339,21 @@ export default {
 
   background-color: var(--bg-hover);
 
+}
+
+/* 移动端特定样式 */
+@media (hover: none) and (pointer: coarse) {
+  .action-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px;
+  }
+  
+  .action-btn:active {
+    opacity: 1;
+    background-color: var(--bg-hover);
+    transform: scale(0.95);
+  }
 }
 
 
@@ -5251,13 +6160,19 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   opacity: 0;
 
-  transition: opacity var(--duration-normal) var(--ease-out);
+  visibility: hidden;
+
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 
   /* 添加模糊效果 */
 
   backdrop-filter: blur(var(--modal-backdrop-blur, 0px));
 
   -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 0px)); /* Safari 支持 */
+
+  /* 添加弹性动画效果 */
+
+  transform: scale(0.8);
 
 }
 
@@ -5266,6 +6181,10 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 .quick-chat-modal-overlay.show {
 
   opacity: 1;
+
+  visibility: visible;
+
+  transform: scale(1);
 
 }
 
@@ -5283,19 +6202,31 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   background: var(--bg-primary);
 
-  border-radius: var(--radius-lg);
+  border-radius: 20px;
 
   display: flex;
 
   flex-direction: column;
 
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(var(--primary-color-rgb, 236, 72, 153), 0.1);
 
   overflow: hidden;
 
-  transform: scale(0.9);
+  transform: translateY(30px) scale(0.95);
 
-  transition: transform var(--duration-normal) var(--ease-out);
+  opacity: 0;
+
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  border: 1px solid transparent;
+
+  background-clip: padding-box;
+
+  position: relative;
+
+  /* 添加流光动画效果 */
+
+  animation: quickChatModalEntrance 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 
 }
 
@@ -5303,7 +6234,9 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
 .quick-chat-modal-overlay.show .quick-chat-modal-content {
 
-  transform: scale(1);
+  transform: translateY(0) scale(1);
+
+  opacity: 1;
 
 }
 
@@ -5327,13 +6260,23 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   align-items: center;
 
-  padding: 15px 20px;
+  padding: 20px 24px;
 
   border-bottom: 1px solid var(--border-color);
 
-  background: var(--gradient-primary);
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
 
   color: white;
+
+  border-radius: 20px 20px 0 0;
+
+  position: relative;
+
+  overflow: hidden;
+
+  /* 添加头部背景动画 */
+
+  animation: headerGradientShift 4s ease-in-out infinite;
 
 }
 
@@ -5393,7 +6336,9 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   background: rgba(255, 255, 255, 0.3);
 
-  transform: scale(1.1);
+  transform: scale(1.1) rotate(90deg);
+
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 
 }
 
@@ -5403,7 +6348,7 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   flex: 1;
 
-  padding: 20px;
+  padding: 24px;
 
   overflow-y: auto;
 
@@ -5411,9 +6356,19 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   flex-direction: column;
 
-  gap: 15px;
+  gap: 16px;
 
   background: var(--bg-secondary);
+
+  position: relative;
+
+  /* 添加消息容器渐变背景 */
+
+  background-image: 
+
+    radial-gradient(circle at 20% 50%, rgba(var(--primary-color-rgb, 236, 72, 153), 0.05) 0%, transparent 50%),
+
+    radial-gradient(circle at 80% 80%, rgba(var(--secondary-color-rgb, 59, 130, 246), 0.05) 0%, transparent 50%);
 
 }
 
@@ -5431,29 +6386,31 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   max-width: 80%;
 
-  padding: 12px 16px;
+  padding: 14px 18px;
 
-  border-radius: var(--radius-lg);
+  border-radius: 18px;
 
   line-height: 1.5;
 
   position: relative;
 
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 
-  animation: messageFadeIn 0.3s ease-out;
+  animation: messageSlideIn 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+
+  transition: all 0.2s ease;
 
 }
 
 
 
-@keyframes messageFadeIn {
+@keyframes messageSlideIn {
 
   from {
 
     opacity: 0;
 
-    transform: translateY(10px);
+    transform: translateY(20px) scale(0.95);
 
   }
 
@@ -5461,10 +6418,9 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
     opacity: 1;
 
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
 
   }
-
 }
 
 
@@ -5547,13 +6503,19 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   display: flex;
 
-  padding: 15px;
+  padding: 20px;
 
-  background: var(--bg-primary);
+  background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
 
   border-top: 1px solid var(--border-color);
 
-  gap: 10px;
+  gap: 12px;
+
+  border-radius: 0 0 20px 20px;
+
+  position: relative;
+
+  overflow: hidden;
 
 }
 
@@ -5573,11 +6535,11 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   flex: 1;
 
-  padding: 12px 15px;
+  padding: 14px 18px;
 
   border: 1px solid var(--border-color);
 
-  border-radius: var(--radius-lg);
+  border-radius: 16px;
 
   resize: none;
 
@@ -5591,9 +6553,11 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   outline: none;
 
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
+
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 
   color: var(--text-primary);
 
@@ -5605,7 +6569,9 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   border-color: var(--primary-color);
 
-  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.2);
+  box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 236, 72, 153), 0.15), 0 4px 12px rgba(var(--primary-color-rgb, 236, 72, 153), 0.1);
+
+  transform: translateY(-1px);
 
 }
 
@@ -5625,15 +6591,15 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
 .quick-chat-send-btn {
 
-  width: 46px;
+  width: 50px;
 
-  height: 46px;
+  height: 50px;
 
-  border-radius: 50%;
+  border-radius: 16px;
 
   border: none;
 
-  background: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
 
   color: white;
 
@@ -5780,13 +6746,13 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   background: var(--bg-primary);
 
-  border-radius: var(--radius-lg);
+  border-radius: 20px;
 
   display: flex;
 
   flex-direction: column;
 
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(var(--primary-color-rgb, 236, 72, 153), 0.1);
 
   overflow: hidden;
 
@@ -5794,15 +6760,17 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   opacity: 0;
 
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-
-  /* 添加微妙的边框动画 */
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 
   border: 1px solid transparent;
 
   background-clip: padding-box;
 
   position: relative;
+
+  /* 添加流光动画效果 */
+
+  animation: modalEntrance 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 
 }
 
@@ -5884,13 +6852,23 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   align-items: center;
 
-  padding: 12px 15px;
+  padding: 16px 20px;
 
-  background: var(--bg-secondary);
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
 
   border-bottom: 1px solid var(--border-color);
 
-  gap: 10px;
+  gap: 12px;
+
+  border-radius: 20px 20px 0 0;
+
+  position: relative;
+
+  overflow: hidden;
+
+  /* 添加工具栏背景动画 */
+
+  animation: toolbarShine 3s ease-in-out infinite;
 
 }
 
@@ -5904,11 +6882,11 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
 .tool-btn {
 
-  width: 40px;
+  width: 44px;
 
-  height: 40px;
+  height: 44px;
 
-  border-radius: 50%;
+  border-radius: 12px;
 
   border: 1px solid var(--border-color);
 
@@ -5924,11 +6902,13 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   justify-content: center;
 
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 
   position: relative;
 
   overflow: hidden;
+
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 
   /* 添加阴影效果 */
 
@@ -5975,9 +6955,13 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
 .tool-btn:hover {
 
-  background: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
 
   color: white;
+
+  transform: translateY(-2px) scale(1.05);
+
+  box-shadow: 0 4px 16px rgba(var(--primary-color-rgb, 236, 72, 153), 0.3);
 
   border-color: var(--primary-color);
 
@@ -6291,15 +7275,27 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   width: 100%;
 
-  background: var(--bg-primary);
+  background: white;
 
   cursor: crosshair;
 
   touch-action: none; /* 防止触摸事件触发默认行为 */
 
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 
   position: relative;
+
+  border-radius: 0 0 20px 20px;
+
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.05);
+
+  /* 添加纸张纹理效果 */
+
+  background-image: 
+
+    repeating-linear-gradient(0deg, transparent, transparent 20px, rgba(0, 0, 0, 0.01) 20px, rgba(0, 0, 0, 0.01) 21px),
+
+    repeating-linear-gradient(90deg, transparent, transparent 20px, rgba(0, 0, 0, 0.01) 20px, rgba(0, 0, 0, 0.01) 21px);
 
   /* 添加画布加载动画 */
 
@@ -6674,6 +7670,86 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
 }
 
+@keyframes modalEntrance {
+
+  0% {
+
+    transform: translateY(30px) scale(0.95);
+
+    opacity: 0;
+
+  }
+
+  50% {
+
+    transform: translateY(-5px) scale(1.02);
+
+  }
+
+  100% {
+
+    transform: translateY(0) scale(1);
+
+    opacity: 1;
+
+  }
+}
+
+@keyframes toolbarShine {
+
+  0%, 100% {
+
+    background-position: 0% 50%;
+
+  }
+
+  50% {
+
+    background-position: 100% 50%;
+
+  }
+}
+
+@keyframes quickChatModalEntrance {
+
+  0% {
+
+    transform: translateY(30px) scale(0.95);
+
+    opacity: 0;
+
+  }
+
+  50% {
+
+    transform: translateY(-5px) scale(1.02);
+
+  }
+
+  100% {
+
+    transform: translateY(0) scale(1);
+
+    opacity: 1;
+
+  }
+}
+
+@keyframes headerGradientShift {
+
+  0%, 100% {
+
+    background-position: 0% 50%;
+
+  }
+
+  50% {
+
+    background-position: 100% 50%;
+
+  }
+}
+
 
 /* 添加焦点样式 */
 
@@ -6712,6 +7788,707 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   }
 
+}
+
+/* AI图片生成器界面样式 */
+.image-generator-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, var(--modal-backdrop-opacity, 0.5));
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(var(--modal-backdrop-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--modal-backdrop-blur, 0px));
+  transform: scale(0.8);
+}
+
+.image-generator-modal-overlay.show {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+}
+
+.image-generator-modal-content {
+  width: 95%;
+  max-width: 1200px;
+  height: 85%;
+  max-height: 800px;
+  background: var(--bg-primary);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(var(--primary-color-rgb, 236, 72, 153), 0.1);
+  overflow: hidden;
+  transform: translateY(30px) scale(0.95);
+  opacity: 0;
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  position: relative;
+  animation: imageGenModalEntrance 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.image-generator-modal-overlay.show .image-generator-modal-content {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.image-generator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  border-radius: 20px 20px 0 0;
+  position: relative;
+  overflow: hidden;
+  animation: headerGradientShift 4s ease-in-out infinite;
+}
+
+.image-generator-header h3 {
+  margin: 0;
+  font-size: 1.5em;
+  font-weight: 600;
+}
+
+.image-generator-header .close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 1.5em;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.image-generator-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.image-generator-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.image-generator-input-section {
+  width: 40%;
+  padding: 24px;
+  border-right: 1px solid var(--border-color);
+  overflow-y: auto;
+  background: var(--bg-secondary);
+}
+
+.image-generator-preview-section {
+  width: 60%;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  position: relative;
+}
+
+.image-generator-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.image-generator-textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 236, 72, 153), 0.15), 0 4px 12px rgba(var(--primary-color-rgb, 236, 72, 153), 0.1);
+  transform: translateY(-1px);
+}
+
+.image-generator-textarea {
+  position: relative;
+}
+
+.image-generator-textarea::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 12px;
+  background: linear-gradient(45deg, transparent, rgba(var(--primary-color-rgb, 236, 72, 153), 0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.image-generator-textarea:focus::after {
+  opacity: 1;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(100%);
+  }
+}
+
+.image-generator-textarea.negative {
+  min-height: 60px;
+}
+
+.image-generator-controls {
+  margin-top: 20px;
+}
+
+.control-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.control-item {
+  flex: 1;
+}
+
+.control-item label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.control-item input[type="range"] {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.control-item select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.control-value {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.image-generator-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.generate-btn {
+  flex: 1;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(var(--primary-color-rgb, 236, 72, 153), 0.3);
+}
+
+.generate-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(var(--primary-color-rgb, 236, 72, 153), 0.4);
+}
+
+.generate-btn.generating {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.generate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.clear-btn {
+  padding: 12px 20px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.clear-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+
+.clear-btn {
+  position: relative;
+  overflow: visible;
+}
+
+.tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  z-index: 1000;
+  margin-bottom: 8px;
+}
+
+.tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.8);
+}
+
+.clear-btn:hover .tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.preview-container {
+  height: 400px;
+  border: 2px dashed var(--border-color);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  margin-bottom: 24px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.preview-container.success-animation {
+  animation: successPulse 1s ease-out;
+  border-color: var(--secondary-color);
+  background: rgba(var(--secondary-color-rgb, 59, 130, 246), 0.1);
+}
+
+@keyframes successPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(var(--secondary-color-rgb, 59, 130, 246), 0.4);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 20px rgba(var(--secondary-color-rgb, 59, 130, 246), 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(var(--secondary-color-rgb, 59, 130, 246), 0);
+  }
+}
+
+.generating-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.progress-info {
+  width: 200px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+  transition: width 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: progressShimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes progressShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.progress-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.generating-text {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.generated-image-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.image-viewer {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  z-index: 1;
+}
+
+.image-viewer:active {
+  cursor: grabbing;
+}
+
+.generated-image {
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s ease-out;
+  user-select: none;
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+}
+
+.image-controls {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 8px 12px;
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.generated-image-container:hover .image-controls {
+  opacity: 1;
+}
+
+.zoom-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.zoom-btn:active {
+  transform: scale(0.95);
+}
+
+.zoom-level {
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 40px;
+  text-align: center;
+}
+
+.generated-image-container.reset-animation {
+  animation: viewReset 0.3s ease-out;
+}
+
+@keyframes viewReset {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.image-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.generated-image-container:hover .image-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  transform: scale(1.1);
+}
+
+.action-btn.download:hover {
+  transform: scale(1.1) rotate(5deg);
+}
+
+.action-btn.save:hover {
+  transform: scale(1.1) rotate(-5deg);
+}
+
+.action-btn.copy:hover {
+  transform: scale(1.1) rotate(5deg);
+}
+
+.action-btn.download.download-success {
+  animation: downloadSuccess 0.8s ease-out;
+}
+
+@keyframes downloadSuccess {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.2) rotate(180deg);
+  }
+  100% {
+    transform: scale(1) rotate(360deg);
+  }
+}
+
+.empty-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-muted);
+}
+
+.empty-icon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.history-section h4 {
+  margin: 0 0 16px 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+}
+
+.history-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  border: 2px solid transparent;
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+
+.history-item:hover {
+  transform: scale(1.05) translateY(-2px);
+  border-color: var(--primary-color);
+  box-shadow: 0 8px 24px rgba(var(--primary-color-rgb, 236, 72, 153), 0.3);
+  z-index: 10;
+}
+
+.history-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.history-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+  color: white;
+  padding: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.history-item:hover .history-overlay {
+  opacity: 1;
+}
+
+.history-prompt {
+  font-size: 11px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@keyframes imageGenModalEntrance {
+  0% {
+    transform: translateY(30px) scale(0.95);
+    opacity: 0;
+    filter: blur(10px);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.02);
+    opacity: 0.8;
+    filter: blur(2px);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.loading-spinner.large {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border-color);
+  border-top: 4px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  position: relative;
+}
+
+.loading-spinner.large::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border: 4px solid transparent;
+  border-top: 4px solid var(--secondary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear reverse infinite;
 }
 
 </style>
