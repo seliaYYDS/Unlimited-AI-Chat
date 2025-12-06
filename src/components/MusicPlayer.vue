@@ -1,5 +1,5 @@
 <template>
-  <div class="music-player-modal-overlay" v-if="visible" @click="closePlayer">
+  <div class="music-player-modal-overlay" v-if="visible && !isMinimized" @click="closePlayer">
     <div class="music-player-modal-content" @click.stop>
       <div class="music-player-header">
         <div class="header-left">
@@ -85,6 +85,11 @@
             </div>
           </div>
           
+          <button class="minimize-btn" @click="minimizePlayer" title="最小化">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 13H5v-2h14v2z"/>
+            </svg>
+          </button>
           <button class="close-btn" @click="closePlayer">×</button>
         </div>
       </div>
@@ -1013,6 +1018,160 @@
       @user-info-updated="handleUserInfoUpdated"
     />
   </div>
+  
+  <!-- 最小化悬浮播放器 -->
+  <div 
+    v-if="visible && isMinimized" 
+    class="mini-player"
+    :style="{ left: displayPosition.x + 'px', top: displayPosition.y + 'px' }"
+    @mousedown="startDragMiniPlayer"
+  >
+    <div class="mini-player-header">
+      <div class="mini-song-info">
+        <div class="mini-cover">
+          <img :src="(currentSong && ((currentSong.al && currentSong.al.picUrl) || currentSong.picUrl || (currentSong.album && currentSong.album.picUrl))) || defaultAlbumArt" :alt="currentSong ? currentSong.name : '未播放'" />
+        </div>
+        <div class="mini-details">
+          <div class="mini-title">{{ currentSong ? currentSong.name : '未播放' }}</div>
+          <div class="mini-artist">
+            <template v-if="currentSong">
+              <template v-if="currentSong.ar && Array.isArray(currentSong.ar)">
+                <span 
+                  v-for="(artist, index) in currentSong.ar" 
+                  :key="artist.id"
+                  class="mini-artist-name"
+                >
+                  {{ artist.name }}
+                  <span v-if="index < currentSong.ar.length - 1">, </span>
+                </span>
+              </template>
+              <template v-else-if="currentSong.artists && Array.isArray(currentSong.artists)">
+                <span 
+                  v-for="(artist, index) in currentSong.artists" 
+                  :key="artist.id"
+                  class="mini-artist-name"
+                >
+                  {{ artist.name }}
+                  <span v-if="index < currentSong.artists.length - 1">, </span>
+                </span>
+              </template>
+              <span v-else>{{ currentSong.artist || '未知艺术家' }}</span>
+            </template>
+            <template v-else>
+              选择一首歌曲开始播放
+            </template>
+          </div>
+        </div>
+      </div>
+      <div class="mini-controls">
+        <button @click="restorePlayer" class="mini-restore-btn" title="恢复播放器">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
+          </svg>
+        </button>
+        <button @click="closePlayer" class="mini-close-btn" title="关闭">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    
+    <div class="mini-progress">
+      <input 
+        type="range" 
+        class="mini-progress-slider" 
+        :value="progress" 
+        @input="seekMusic" 
+        :max="100" 
+        :disabled="!currentSong"
+      />
+      <div class="mini-time">
+        <span>{{ formatTime(currentTime) }}</span>
+        <span>{{ formatTime(duration) }}</span>
+      </div>
+    </div>
+    
+    <div class="mini-player-controls">
+      <button @click="skipPrevious" class="mini-control-btn" :disabled="!currentSong">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+        </svg>
+      </button>
+      <button @click="togglePlayPause" class="mini-control-btn" :disabled="!currentSong">
+        <svg v-if="isPlaying" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+        </svg>
+        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+      </button>
+      <button @click="skipNext" class="mini-control-btn" :disabled="!currentSong">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+        </svg>
+      </button>
+      
+      <div class="mini-separator"></div>
+      
+      <button @click="togglePlayMode" class="mini-control-btn" :disabled="!currentSong" :title="getCurrentPlayModeLabel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path :d="getCurrentPlayModeIcon()"/>
+        </svg>
+      </button>
+      
+      <button 
+        class="mini-control-btn" 
+        @click.stop="togglePlaylistMenu"
+        :class="{ active: showPlaylistMenu }"
+        title="播放列表"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+        </svg>
+        <span class="mini-playlist-count" v-if="playlist.length > 0">{{ playlist.length }}</span>
+      </button>
+    </div>
+    
+    <!-- 播放列表菜单 -->
+    <div v-if="showPlaylistMenu" 
+         class="mini-playlist-menu" 
+         :class="{ 'menu-down': playlistMenuDirection === 'down' }"
+         @click.stop>
+      <div class="mini-playlist-header">
+        <h4>播放列表</h4>
+        <button class="mini-close-playlist-btn" @click="showPlaylistMenu = false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="mini-playlist-content">
+        <div v-if="playlist.length === 0" class="mini-empty-playlist">
+          <p>播放列表为空</p>
+        </div>
+        
+        <div v-else class="mini-playlist-items">
+          <div 
+            v-for="(song, index) in playlist" 
+            :key="song.id || index"
+            :class="['mini-playlist-item', { 
+              'playing': currentSong && currentSong.id === song.id
+            }]"
+            @click="selectSongFromPlaylist(index)"
+          >
+            <div class="mini-item-info">
+              <div class="mini-item-index">{{ index + 1 }}</div>
+              <div class="mini-item-title">{{ song.name }}</div>
+              <div class="mini-item-artist">{{ song.artist }}</div>
+            </div>
+            <div class="mini-item-duration">{{ formatDuration((song.dt !== undefined ? song.dt : (song.duration !== undefined ? song.duration : 0)) || 0) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -1024,6 +1183,15 @@ export default {
   components: {
     MusicLogin
   },
+  emits: [
+    'close',
+    'notify',
+    'playback-status-changed',
+    'current-song-changed',
+    'toggleMusicPlay',
+    'playNextMusic',
+    'playPrevMusic'
+  ],
   props: {
     visible: {
       type: Boolean,
@@ -1153,7 +1321,15 @@ export default {
       // 当前搜索查询缓存
       searchQueryCache: '',
       // 歌单详情加载状态
-      isLoadingPlaylist: false
+      isLoadingPlaylist: false,
+      // 最小化播放器相关
+      isMinimized: false,
+      miniPlayerPosition: { x: window.innerWidth - 320, y: 100 },
+      displayPosition: { x: window.innerWidth - 320, y: 100 }, // 实际显示位置（用于滞后效果）
+      isDraggingMiniPlayer: false,
+      dragOffset: { x: 0, y: 0 },
+      playlistMenuDirection: 'up', // 播放列表菜单方向：up或down
+      dragAnimationId: null // 拖拽动画帧ID
     }
   },
   computed: {
@@ -2110,6 +2286,180 @@ export default {
       return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     },
     
+    // 最小化播放器
+    minimizePlayer() {
+      this.isMinimized = true;
+    },
+    
+    // 恢复播放器
+    restorePlayer() {
+      this.isMinimized = false;
+    },
+    
+    // 开始拖拽悬浮播放器
+    startDragMiniPlayer(event) {
+      if (event.target.closest('.mini-controls') || 
+          event.target.closest('.mini-player-controls') || 
+          event.target.closest('.mini-progress') ||
+          event.target.closest('.mini-playlist-menu')) {
+        return; // 如果点击的是控制按钮或播放列表菜单，不启动拖拽
+      }
+      
+      this.isDraggingMiniPlayer = true;
+      this.dragOffset.x = event.clientX - this.miniPlayerPosition.x;
+      this.dragOffset.y = event.clientY - this.miniPlayerPosition.y;
+      
+      document.addEventListener('mousemove', this.onDragMiniPlayerThrottled);
+      document.addEventListener('mouseup', this.stopDragMiniPlayer);
+      
+      event.preventDefault();
+    },
+    
+    // 更新播放列表菜单方向
+    updatePlaylistMenuDirection() {
+      const windowHeight = window.innerHeight;
+      const playerHeight = 120; // 悬浮窗高度
+      const menuHeight = 300; // 播放列表菜单高度
+      const playerTop = this.displayPosition.y; // 使用显示位置而非实际位置
+      const playerBottom = playerTop + playerHeight;
+      
+      // 检查向下展开是否会超出界面
+      const canExpandDown = playerBottom + menuHeight <= windowHeight;
+      // 检查向上展开是否会超出界面
+      const canExpandUp = playerTop - menuHeight >= 0;
+      
+      if (canExpandDown) {
+        // 向下展开不会超出界面，优先向下展开
+        this.playlistMenuDirection = 'down';
+      } else if (canExpandUp) {
+        // 向下展开会超出但向上展开不会，向上展开
+        this.playlistMenuDirection = 'up';
+      } else {
+        // 两个方向都会超出，选择超出较少的方向
+        const spaceBelow = windowHeight - playerBottom;
+        const spaceAbove = playerTop;
+        this.playlistMenuDirection = spaceBelow >= spaceAbove ? 'down' : 'up';
+      }
+    },
+    
+    // 切换播放列表菜单
+    togglePlaylistMenu() {
+      // 先关闭菜单，再重新计算位置并打开
+      if (this.showPlaylistMenu) {
+        this.showPlaylistMenu = false;
+      } else {
+        this.updatePlaylistMenuDirection();
+        this.$nextTick(() => {
+          this.showPlaylistMenu = true;
+          // 延迟执行滚动，确保菜单已经渲染
+          setTimeout(() => {
+            this.scrollToCurrentSong();
+          }, 100);
+        });
+      }
+    },
+    
+    // 滚动到当前播放歌曲
+    scrollToCurrentSong() {
+      if (!this.currentSong || !this.playlist.length) return;
+      
+      // 延迟执行，确保DOM完全渲染
+      this.$nextTick(() => {
+        setTimeout(() => {
+          // 查找当前歌曲在播放列表中的索引
+          const currentIndex = this.playlist.findIndex(song => song.id === this.currentSong.id);
+          if (currentIndex === -1) return;
+          
+          // 根据播放器状态选择不同的容器和元素
+          let playlistContainer, playlistItems;
+          
+          if (this.isMinimized) {
+            // 迷你播放器状态
+            playlistContainer = document.querySelector('.mini-playlist-content');
+            if (playlistContainer) {
+              playlistItems = playlistContainer.querySelectorAll('.mini-playlist-item');
+            }
+          } else {
+            // 正常播放器状态
+            playlistContainer = document.querySelector('.playlist-menu-content');
+            if (playlistContainer) {
+              playlistItems = playlistContainer.querySelectorAll('.playlist-menu-item');
+            }
+          }
+          
+          if (!playlistContainer || !playlistItems || playlistItems.length === 0) return;
+          
+          const currentItem = playlistItems[currentIndex];
+          if (!currentItem) return;
+          
+          // 计算滚动位置，让当前歌曲显示在容器中间
+          const containerHeight = playlistContainer.clientHeight;
+          const itemHeight = currentItem.offsetHeight;
+          const itemTop = currentItem.offsetTop;
+          const scrollTop = itemTop - (containerHeight / 2) + (itemHeight / 2);
+          
+          // 平滑滚动到目标位置
+          playlistContainer.scrollTo({
+            top: Math.max(0, scrollTop),
+            behavior: 'smooth'
+          });
+        }, 300); // 增加延迟时间确保动画完成
+      });
+    },
+    
+    // 节流处理的拖拽函数
+    onDragMiniPlayerThrottled(event) {
+      if (!this.isDraggingMiniPlayer) return;
+      
+      // 更新实际位置
+      this.miniPlayerPosition.x = event.clientX - this.dragOffset.x;
+      this.miniPlayerPosition.y = event.clientY - this.dragOffset.y;
+      
+      // 限制在窗口范围内
+      const maxX = window.innerWidth - 300; // 悬浮窗宽度约300px
+      const maxY = window.innerHeight - 120; // 悬浮窗高度约120px
+      
+      this.miniPlayerPosition.x = Math.max(0, Math.min(this.miniPlayerPosition.x, maxX));
+      this.miniPlayerPosition.y = Math.max(0, Math.min(this.miniPlayerPosition.y, maxY));
+      
+      // 使用滞后效果更新显示位置
+      this.updateDisplayPosition();
+    },
+    
+    // 更新显示位置（带滞后效果）
+    updateDisplayPosition() {
+      if (this.dragAnimationId) {
+        cancelAnimationFrame(this.dragAnimationId);
+      }
+      
+      this.dragAnimationId = requestAnimationFrame(() => {
+        // 计算滞后效果，使用插值实现平滑过渡
+        const easing = 0.2; // 滞后系数，值越小滞后效果越明显
+        this.displayPosition.x += (this.miniPlayerPosition.x - this.displayPosition.x) * easing;
+        this.displayPosition.y += (this.miniPlayerPosition.y - this.displayPosition.y) * easing;
+        
+        // 如果还在拖拽中，继续更新
+        if (this.isDraggingMiniPlayer) {
+          this.updateDisplayPosition();
+        }
+      });
+    },
+    
+    // 停止拖拽悬浮播放器
+    stopDragMiniPlayer() {
+      this.isDraggingMiniPlayer = false;
+      document.removeEventListener('mousemove', this.onDragMiniPlayerThrottled);
+      document.removeEventListener('mouseup', this.stopDragMiniPlayer);
+      
+      // 确保最终位置准确
+      if (this.dragAnimationId) {
+        cancelAnimationFrame(this.dragAnimationId);
+        this.dragAnimationId = null;
+      }
+      this.displayPosition.x = this.miniPlayerPosition.x;
+      this.displayPosition.y = this.miniPlayerPosition.y;
+    },
+    
     closePlayer() {
       this.$emit('close');
       // 不停止音频播放，只关闭界面
@@ -2985,53 +3335,7 @@ export default {
       }
     },
 
-    // 播放列表相关方法
-    togglePlaylistMenu() {
-      this.showPlaylistMenu = !this.showPlaylistMenu;
-      
-      // 当打开菜单时，滚动到当前播放歌曲位置
-      if (this.showPlaylistMenu && this.currentSong) {
-        this.$nextTick(() => {
-          this.scrollToCurrentSong();
-        });
-      }
-    },
-
-    // 滚动到当前播放歌曲位置
-    scrollToCurrentSong() {
-      if (!this.currentSong) return;
-      
-      // 查找当前歌曲在播放列表中的索引
-      const currentIndex = this.playlist.findIndex(song => song.id === this.currentSong.id);
-      if (currentIndex === -1) return;
-      
-      // 查找播放列表菜单内容容器
-      const menuContent = this.$el.querySelector('.playlist-menu-content');
-      if (!menuContent) return;
-      
-      // 查找当前歌曲元素
-      const songElements = menuContent.querySelectorAll('.playlist-menu-item');
-      if (!songElements || songElements.length <= currentIndex) return;
-      
-      const currentSongElement = songElements[currentIndex];
-      if (!currentSongElement) return;
-      
-      // 计算滚动位置，使当前歌曲位于菜单中央
-      const menuRect = menuContent.getBoundingClientRect();
-      const songRect = currentSongElement.getBoundingClientRect();
-      
-      // 计算目标滚动位置
-      const targetScrollTop = menuContent.scrollTop + (songRect.top - menuRect.top) - (menuRect.height / 2) + (songRect.height / 2);
-      
-      // 平滑滚动到目标位置
-      menuContent.scrollTo({
-        top: targetScrollTop,
-        behavior: 'smooth'
-      });
-      
-      // 添加高亮效果
-      this.highlightCurrentSong(currentSongElement);
-    },
+    
 
     // 高亮当前播放歌曲
     highlightCurrentSong(element) {
@@ -3300,10 +3604,6 @@ export default {
   justify-content: center;
   border-radius: 50%;
   transition: all 0.3s ease;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s;
 }
 
 .close-btn:hover {
@@ -7319,5 +7619,403 @@ export default {
 
 .menu-item svg {
   flex-shrink: 0;
+}
+
+/* 最小化按钮样式 */
+.minimize-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+.minimize-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+  transform: scale(1.05);
+}
+
+.minimize-btn:active {
+  transform: scale(0.95);
+}
+
+/* 悬浮播放器样式 */
+.mini-player {
+  position: fixed;
+  width: 300px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  z-index: 10000;
+  user-select: none;
+  cursor: move;
+  will-change: transform;
+  transition: box-shadow 0.2s ease;
+}
+
+.mini-player:hover {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.mini-player-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mini-song-info {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.mini-cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.mini-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mini-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.mini-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-artist {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.mini-restore-btn,
+.mini-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.mini-restore-btn:hover,
+.mini-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.mini-progress {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mini-progress-slider {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  outline: none;
+  -webkit-appearance: none;
+  margin-bottom: 6px;
+}
+
+.mini-progress-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.mini-progress-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.mini-time {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.mini-player-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.mini-control-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.mini-control-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.mini-control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mini-control-btn.active {
+  color: var(--primary-color);
+}
+
+.mini-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 4px;
+}
+
+.mini-playlist-count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: var(--primary-color);
+  color: white;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* 悬浮播放器播放列表菜单 */
+.mini-playlist-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+  max-height: 300px;
+  overflow: hidden;
+  transform-origin: bottom center;
+  animation: slideDown 0.3s ease-out;
+  z-index: 10001;
+}
+
+/* 向下展开的播放列表菜单 */
+.mini-playlist-menu.menu-down {
+  bottom: auto;
+  top: 100%;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform-origin: top center;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: scaleY(0) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: scaleY(0) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+}
+
+.mini-playlist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mini-playlist-header h4 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.mini-close-playlist-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.mini-close-playlist-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.mini-playlist-content {
+  max-height: 250px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.mini-empty-playlist {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.mini-playlist-items {
+  padding: 4px 0;
+}
+
+.mini-playlist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.mini-playlist-item:hover {
+  background: var(--bg-hover);
+}
+
+.mini-playlist-item.playing {
+  background: var(--primary-color-opacity);
+  color: var(--primary-color);
+  position: relative;
+}
+
+.mini-playlist-item.playing::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--primary-color);
+  border-radius: 0 2px 2px 0;
+}
+
+.mini-item-info {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.mini-item-index {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-right: 8px;
+  min-width: 16px;
+}
+
+.mini-item-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.mini-item-artist {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-item-duration {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: 8px;
+}
+
+/* 滚动条样式 */
+.mini-playlist-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.mini-playlist-content::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.mini-playlist-content::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 2px;
+}
+
+.mini-playlist-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
 </style>
