@@ -330,7 +330,7 @@
             <div v-else class="empty-search-state">
               <div class="empty-search-icon">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 0 0 9.5 3c-1.61 0-3.09.59-4.23 1.57l-.27.28H4.5c-.83 0-1.5.67-1.5 1.5v10c0 .83.67 1.5 1.5 1.5h10c.83 0 1.5-.67 1.5-1.5v-3.5zm-6-8C11.33 6 13 7.67 13 9.5S11.33 13 9.5 13 6 11.33 6 9.5 7.67 6 9.5 6zm0 1c1.38 0 2.5 1.12 2.5 2.5S10.88 12 9.5 12 7 10.88 7 9.5 8.12 7 9.5 7z"/>
+                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
                 </svg>
               </div>
               <p>输入关键词搜索音乐、歌单、歌手或专辑</p>
@@ -589,7 +589,7 @@
                 <path :d="getCurrentPlayModeIcon()"/>
               </svg>
             </button>
-            <div v-if="showPlayModeTooltip" class="play-mode-tooltip">
+            <div v-if="showPlayModeTooltipVisible" class="play-mode-tooltip">
               {{ getCurrentPlayModeLabel() }}
             </div>
           </div>
@@ -1129,7 +1129,7 @@ export default {
       // 顺序播放的原始索引
       originalPlaylistOrder: [],
       // 播放模式提示相关
-      showPlayModeTooltip: false,
+      showPlayModeTooltipVisible: false,
       playModeTooltipTimer: null,
       // 登录相关
       showLoginModal: false,
@@ -2841,11 +2841,11 @@ export default {
       }
       
       // 显示提示
-      this.showPlayModeTooltip = true;
+      this.showPlayModeTooltipVisible = true;
       
       // 2秒后自动隐藏
       this.playModeTooltipTimer = setTimeout(() => {
-        this.showPlayModeTooltip = false;
+        this.showPlayModeTooltipVisible = false;
       }, 2000);
     },
     
@@ -3999,84 +3999,25 @@ export default {
   color: var(--text-secondary);
   font-size: 1rem;
   margin: 0;
-  animation: fadeInOut 2s ease-in-out infinite;
 }
 
-@keyframes fadeInOut {
-  0%, 100% {
-    opacity: 0.7;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-/* 专用的加载动画样式 */
-.playlist-loading .music-loader .loader-bar {
-  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-  box-shadow: 0 0 10px rgba(var(--primary-color-rgb), 0.3);
-}
-
-.artist-loading .music-loader .loader-bar {
-  background: linear-gradient(135deg, #ff6b6b, #feca57);
-  box-shadow: 0 0 10px rgba(255, 107, 107, 0.3);
-}
-
+/* 统一的加载动画样式，使用主题颜色 */
+.playlist-loading .music-loader .loader-bar,
+.artist-loading .music-loader .loader-bar,
 .album-loading .music-loader .loader-bar {
-  background: linear-gradient(135deg, #48dbfb, #0abde3);
-  box-shadow: 0 0 10px rgba(72, 219, 251, 0.3);
-}
-
-/* 加载动画增强效果 */
-.loading-container {
-  position: relative;
-  overflow: hidden;
-}
-
-.loading-container::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(var(--primary-color-rgb), 0.05) 0%, transparent 70%);
-  animation: rotate 10s linear infinite;
-}
-
-/* 使用CSS变量来动态设置颜色 */
-.playlist-loading::before {
-  background: radial-gradient(circle, rgba(var(--primary-color-rgb), 0.05) 0%, transparent 70%);
-}
-
-.artist-loading::before {
-  background: radial-gradient(circle, var(--artist-loading-color, rgba(255, 107, 107, 0.05)) 0%, transparent 70%);
-}
-
-.album-loading::before {
-  background: radial-gradient(circle, var(--album-loading-color, rgba(72, 219, 251, 0.05)) 0%, transparent 70%);
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  background: var(--primary-color);
+  box-shadow: 0 0 10px rgba(var(--primary-color-rgb, 74, 144, 226), 0.3);
 }
 
 /* 加载进度指示器 */
 .loading-progress {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
   width: 200px;
   height: 4px;
   background: var(--bg-tertiary);
   border-radius: 2px;
   overflow: hidden;
+  margin-top: 16px;
 }
 
 .loading-progress-bar {
@@ -4273,7 +4214,7 @@ export default {
 
 .play-mode-tooltip {
   position: absolute;
-  top: -40px;
+  bottom: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
   background: var(--primary-color, #4a90e2);
@@ -4284,8 +4225,9 @@ export default {
   font-weight: 500;
   white-space: nowrap;
   z-index: 1000;
-  animation: fadeInUp 0.3s ease;
+  animation: tooltipFadeIn 0.3s ease;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
 }
 
 .play-mode-tooltip::after {
@@ -4299,6 +4241,22 @@ export default {
 }
 
 @keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* 专门为播放模式tooltip创建的动画 */
+.play-mode-tooltip {
+  animation: tooltipFadeIn 0.3s ease;
+}
+
+@keyframes tooltipFadeIn {
   from {
     opacity: 0;
     transform: translateX(-50%) translateY(10px);
