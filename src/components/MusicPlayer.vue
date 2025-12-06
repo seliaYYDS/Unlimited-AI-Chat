@@ -44,6 +44,47 @@
           </div>
         </div>
         <div class="header-right">
+          <!-- 用户头像和登录状态 -->
+          <div class="user-info-container" @click="showUserMenu">
+            <div v-if="isLoggedIn && userInfo" class="user-avatar">
+              <img :src="userInfo.avatarUrl || defaultAlbumArt" :alt="userInfo.nickname" />
+            </div>
+            <div v-else class="login-btn" @click="openLoginModal">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+              </svg>
+              <span>登录</span>
+            </div>
+          </div>
+          
+          <!-- 用户菜单 -->
+          <div v-if="showUserDropdown" class="user-dropdown" @click.stop>
+            <div v-if="isLoggedIn && userInfo" class="user-menu">
+              <div class="user-info">
+                <div class="user-avatar-large">
+                  <img :src="userInfo.avatarUrl || defaultAlbumArt" :alt="userInfo.nickname" />
+                </div>
+                <div class="user-details">
+                  <div class="user-name">{{ userInfo.nickname }}</div>
+                  <div class="user-level" v-if="userLevel">Lv.{{ userLevel.level }}</div>
+                </div>
+              </div>
+              <div class="menu-divider"></div>
+              <div class="menu-item" @click="refreshUserInfo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                </svg>
+                刷新用户信息
+              </div>
+              <div class="menu-item logout" @click="logout">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                </svg>
+                退出登录
+              </div>
+            </div>
+          </div>
+          
           <button class="close-btn" @click="closePlayer">×</button>
         </div>
       </div>
@@ -53,16 +94,13 @@
         <!-- 播放列表 -->
         <div class="playlist-section">
           <div class="playlist-header">
-            <h4>{{ showSearchResults ? '搜索结果' : '播放列表' }}</h4>
+            <h4>{{ showSearchResults ? '搜索结果' : '音乐列表' }}</h4>
             <div class="playlist-controls">
               <button @click="toggleGridView" class="grid-view-btn" v-if="showSearchResults && searchType === 'songs'" :class="{ active: isGridView }">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/>
                 </svg>
                 {{ isGridView ? '列表视图' : '网格视图' }}
-              </button>
-              <button @click="togglePlaylistView" class="view-toggle-btn" v-if="searchResults.length > 0">
-                {{ showSearchResults ? '返回播放列表' : '显示搜索结果' }}
               </button>
             </div>
           </div>
@@ -91,7 +129,7 @@
                   <div class="song-cover-container">
                     <div class="song-cover-rounded" v-if="song.picUrl">
                       <img :src="song.picUrl" :alt="song.name" />
-                      <div class="play-overlay" @click="selectSong(getSongIndex(song, currentPlaylist))">
+                      <div class="play-overlay" @click="playFromSearchResults(song)">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M8 5v14l11-7z"/>
                         </svg>
@@ -99,7 +137,7 @@
                     </div>
                     <div class="song-cover-rounded default-cover" v-else>
                       <img :src="defaultAlbumArt" :alt="song.name" />
-                      <div class="play-overlay" @click="selectSong(getSongIndex(song, currentPlaylist))">
+                      <div class="play-overlay" @click="playFromSearchResults(song)">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M8 5v14l11-7z"/>
                         </svg>
@@ -107,7 +145,7 @@
                     </div>
                   </div>
                   <div class="song-info-container">
-                    <div class="song-title" @click="selectSong(getSongIndex(song, currentPlaylist))">{{ song.name || song.title || '未知歌曲' }}</div>
+                    <div class="song-title" @click="playFromSearchResults(song)">{{ song.name || song.title || '未知歌曲' }}</div>
                     <div class="song-artist">
                       <template v-if="song.artists && Array.isArray(song.artists)">
                         <span 
@@ -160,7 +198,7 @@
                   :class="['grid-song-item', { 'playing': currentSong && currentSong.id === song.id, 'loading': isLoadingSong && currentSong && currentSong.id === song.id }]"
                   :ref="el => { if (el) gridItemRefs[index] = el }"
                   :style="getGridItemStyle(index)"
-                  @click="selectSong(getSongIndex(song, currentPlaylist))"
+                  @click="playFromSearchResults(song)"
                   @mouseenter="handleBallHover(index, true)"
                   @mouseleave="handleBallHover(index, false)"
                 >
@@ -288,38 +326,68 @@
               </div>
             </div>
             
-            <!-- 默认播放列表 -->
-            <div v-else>
-              <div 
-                v-for="(song, index) in currentPlaylist" 
-                :key="song.id || index"
-                :class="['playlist-item', { 'playing': currentSong && currentSong.id === song.id, 'loading': isLoadingSong && currentSong && currentSong.id === song.id }]"
-              >
-                <div class="song-info" @click="selectSong(getSongIndex(song, currentPlaylist))">
-                  <div class="song-title">{{ song.name || song.title || '未知歌曲' }}</div>
-                  <div class="song-artist">{{ song.artist || '未知艺术家' }}</div>
-                </div>
-                <div class="song-actions">
-                  <button v-if="!showSearchResults" class="play-song-btn" @click.stop="selectSong(getSongIndex(song, currentPlaylist))" title="播放歌曲">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M8 5v14l11-7z"/>
-                    </svg>
-                  </button>
-                  <div class="song-duration">{{ formatDuration((song.dt !== undefined ? song.dt : (song.duration !== undefined ? song.duration : 0)) || 0) }}</div>
-                </div>
+            <!-- 默认空状态 -->
+            <div v-else class="empty-search-state">
+              <div class="empty-search-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 0 0 9.5 3c-1.61 0-3.09.59-4.23 1.57l-.27.28H4.5c-.83 0-1.5.67-1.5 1.5v10c0 .83.67 1.5 1.5 1.5h10c.83 0 1.5-.67 1.5-1.5v-3.5zm-6-8C11.33 6 13 7.67 13 9.5S11.33 13 9.5 13 6 11.33 6 9.5 7.67 6 9.5 6zm0 1c1.38 0 2.5 1.12 2.5 2.5S10.88 12 9.5 12 7 10.88 7 9.5 8.12 7 9.5 7z"/>
+                </svg>
               </div>
+              <p>输入关键词搜索音乐、歌单、歌手或专辑</p>
+              <p class="empty-search-hint">点击播放列表按钮查看已添加的歌曲</p>
             </div>
             
-            <!-- 加载更多按钮 -->
-            <div v-if="showSearchResults && hasMore && !isSearching" class="load-more-container">
-              <button @click="loadMoreResults" class="load-more-btn" :disabled="isSearching">
-                <span v-if="!isSearching">加载更多</span>
-                <div v-else class="search-loader">
-                  <div class="loader-circle"></div>
-                </div>
-              </button>
-              <div class="results-info">
-                已显示 {{ getCurrentResultsCount() }} / {{ totalResults || '?' }} 个结果
+            <!-- 翻页组件 -->
+            <div v-if="showSearchResults && totalResults > 0" class="pagination-container">
+              <div class="pagination-info">
+                共 {{ totalResults }} 个结果，第 {{ currentPage }} / {{ totalPages }} 页
+              </div>
+              <div class="pagination-controls">
+                <button 
+                  @click="goToPage(1)" 
+                  :disabled="currentPage === 1 || isSearching"
+                  class="pagination-btn"
+                  title="首页"
+                >
+                  «
+                </button>
+                <button 
+                  @click="goToPage(currentPage - 1)" 
+                  :disabled="currentPage === 1 || isSearching"
+                  class="pagination-btn"
+                  title="上一页"
+                >
+                  ‹
+                </button>
+                
+                <template v-for="page in getPageNumbers()" :key="page">
+                  <button 
+                    v-if="page !== '...'"
+                    @click="goToPage(page)" 
+                    :class="['pagination-btn', 'page-number', { active: currentPage === page }]"
+                    :disabled="isSearching"
+                  >
+                    {{ page }}
+                  </button>
+                  <span v-else class="pagination-ellipsis">...</span>
+                </template>
+                
+                <button 
+                  @click="goToPage(currentPage + 1)" 
+                  :disabled="currentPage === totalPages || isSearching"
+                  class="pagination-btn"
+                  title="下一页"
+                >
+                  ›
+                </button>
+                <button 
+                  @click="goToPage(totalPages)" 
+                  :disabled="currentPage === totalPages || isSearching"
+                  class="pagination-btn"
+                  title="末页"
+                >
+                  »
+                </button>
               </div>
             </div>
           </div>
@@ -361,7 +429,7 @@
                       <span v-if="index < currentSong.artists.length - 1" class="artist-separator">, </span>
                     </span>
                   </template>
-                  <span v-else class="artist-name clickable" @click.stop="handleArtistClick(currentSong)">{{ currentSong.artist || '未知艺术家' }}</span>
+                  <span v-else-if="currentSong" class="artist-name clickable" @click.stop="handleArtistClick(currentSong)">{{ currentSong.artist || '未知艺术家' }}</span>
                 </template>
                 <template v-else>
                   选择一首歌曲开始播放
@@ -375,6 +443,106 @@
                   <span></span>
                 </div>
                 <span class="loading-message">正在加载歌曲...</span>
+              </div>
+            </div>
+            <!-- 播放列表按钮 -->
+            <div class="playlist-button-container">
+              <button 
+                class="playlist-button" 
+                @click.stop="togglePlaylistMenu"
+                :class="{ active: showPlaylistMenu }"
+                title="播放列表"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+                </svg>
+                <span class="playlist-count" v-if="playlist.length > 0">{{ playlist.length }}</span>
+              </button>
+              
+              <!-- 播放列表菜单 -->
+              <div v-if="showPlaylistMenu" class="playlist-menu">
+                <div class="playlist-menu-header">
+                  <h4>播放列表</h4>
+                  <div class="playlist-menu-controls">
+                    <button 
+                      class="clear-playlist-btn" 
+                      @click.stop="clearPlaylist"
+                      :disabled="playlist.length === 0"
+                      title="清空播放列表"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                      </svg>
+                    </button>
+                    <button 
+                      class="close-playlist-menu-btn" 
+                      @click.stop="showPlaylistMenu = false"
+                      title="关闭"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="playlist-menu-content">
+                  <div v-if="playlist.length === 0" class="empty-playlist">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" class="empty-playlist-icon">
+                      <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+                    </svg>
+                    <p>播放列表为空</p>
+                    <p class="empty-playlist-hint">点击搜索结果中的"+"按钮添加歌曲</p>
+                  </div>
+                  
+                  <div v-else class="playlist-menu-items">
+                    <div 
+                      v-for="(song, index) in playlist" 
+                      :key="song.id || index"
+                      :class="['playlist-menu-item', { 
+                        'playing': currentSong && currentSong.id === song.id, 
+                        'loading': isLoadingSong && currentSong && currentSong.id === song.id 
+                      }]"
+                      @click="selectSongFromPlaylist(index)"
+                    >
+                      <div class="playlist-item-info">
+                        <div class="playlist-item-index">{{ index + 1 }}</div>
+                        <div class="playlist-item-cover">
+                          <img :src="song.picUrl || defaultAlbumArt" :alt="song.name" />
+                        </div>
+                        <div class="playlist-item-details">
+                          <div class="playlist-item-title">{{ song.name || '未知歌曲' }}</div>
+                          <div class="playlist-item-artist">{{ song.artist || '未知艺术家' }}</div>
+                        </div>
+                      </div>
+                      
+                      <div class="playlist-item-actions">
+                        <div v-if="isLoadingSong && currentSong && currentSong.id === song.id" class="playlist-item-loader">
+                          <div class="mini-loader"></div>
+                        </div>
+                        
+                        <button 
+                          class="playlist-item-remove-btn" 
+                          @click.stop="removeFromPlaylist(index)"
+                          title="从播放列表中移除"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                          </svg>
+                        </button>
+                        
+                        <div class="playlist-item-duration">{{ formatDuration((song.dt !== undefined ? song.dt : (song.duration !== undefined ? song.duration : 0)) || 0) }}</div>
+                      </div>
+                      
+                      <!-- 拖拽手柄 -->
+                      <div class="playlist-item-drag-handle" draggable="true" @dragstart="dragStart(index, $event)" @dragover.prevent @dragenter.prevent @drop="drop(index, $event)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M3 15h18v-2H3v2zm0 4h18v-2H3v2zm0-8h18V9H3v2zm0-6v2h18V5H3z"/>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -453,7 +621,7 @@
         
         <div class="artist-detail-body">
           <!-- 歌手加载状态 -->
-          <div v-if="isLoadingArtist" class="loading-container">
+          <div v-if="isLoadingArtist" class="loading-container artist-loading">
             <div class="music-loader">
               <div class="loader-bar"></div>
               <div class="loader-bar"></div>
@@ -461,6 +629,9 @@
               <div class="loader-bar"></div>
             </div>
             <p class="loading-text">正在加载歌手信息...</p>
+            <div class="loading-progress">
+              <div class="loading-progress-bar"></div>
+            </div>
           </div>
           
           <!-- 歌手信息 -->
@@ -545,27 +716,57 @@
                 </div>
               </div>
               
-              <!-- 分页信息 -->
-            <div v-if="artistAllSongs.length > 0" class="pagination-info">
-              <div class="pagination-stats">
-                <span>显示 {{ Math.min(artistAllSongs.length, artistAllSongsTotal) }} / {{ artistAllSongsTotal }} 首歌曲</span>
-                <span v-if="artistAllSongsTotal > 100">（第 {{ artistAllSongsPage }} 页）</span>
+              <!-- 翻页组件 -->
+            <div v-if="artistAllSongsTotal > 0" class="pagination-container">
+              <div class="pagination-info">
+                共 {{ artistAllSongsTotal }} 首歌曲，第 {{ artistAllSongsPage }} / {{ artistAllSongsTotalPages }} 页
               </div>
-            </div>
-            
-            <!-- 加载更多按钮 -->
-            <div v-if="artistAllSongsHasMore" class="load-more-container">
-              <button @click="loadMoreArtistAllSongs" class="load-more-btn" :disabled="isLoadingArtistAllSongs">
-                <span v-if="!isLoadingArtistAllSongs">加载更多 (下一页)</span>
-                <div v-else class="search-loader">
-                  <div class="loader-circle"></div>
-                </div>
-              </button>
-            </div>
-            
-            <!-- 无更多歌曲提示 -->
-            <div v-else-if="artistAllSongs.length > 0 && artistAllSongsTotal > 0" class="no-more-results">
-              <span>已加载全部 {{ artistAllSongsTotal }} 首歌曲</span>
+              <div class="pagination-controls">
+                <button 
+                  @click="goToArtistAllSongsPage(1)" 
+                  :disabled="artistAllSongsPage === 1"
+                  class="pagination-btn"
+                  title="首页"
+                >
+                  «
+                </button>
+                <button 
+                  @click="goToArtistAllSongsPage(artistAllSongsPage - 1)" 
+                  :disabled="artistAllSongsPage === 1"
+                  class="pagination-btn"
+                  title="上一页"
+                >
+                  ‹
+                </button>
+                
+                <template v-for="page in getArtistAllSongsPageNumbers()" :key="page">
+                  <button 
+                    v-if="page !== '...'"
+                    @click="goToArtistAllSongsPage(page)" 
+                    :class="['pagination-btn', 'page-number', { active: artistAllSongsPage === page }]"
+                  >
+                    {{ page }}
+                  </button>
+                  <span v-else class="pagination-ellipsis">...</span>
+                </template>
+                
+                <button 
+                  @click="goToArtistAllSongsPage(artistAllSongsPage + 1)" 
+                  :disabled="artistAllSongsPage === artistAllSongsTotalPages"
+                  class="pagination-btn"
+                  title="下一页"
+                >
+                  ›
+                </button>
+                <button 
+                  @click="goToArtistAllSongsPage(artistAllSongsTotalPages)" 
+                  :disabled="artistAllSongsPage === artistAllSongsTotalPages"
+                  class="pagination-btn"
+                  title="末页"
+                >
+                  »
+                </button>
+              </div>
             </div>
             </div>
             
@@ -594,6 +795,130 @@
       </div>
     </div>
     
+    <!-- 歌单详情弹窗 -->
+    <div class="playlist-detail-modal-overlay" v-if="showPlaylistDetail" @click="closePlaylistDetail">
+      <div class="playlist-detail-modal-content" @click.stop>
+        <div class="playlist-detail-header">
+          <h3>歌单详情</h3>
+          <button class="close-btn" @click="closePlaylistDetail">×</button>
+        </div>
+        
+        <div class="playlist-detail-body">
+          <!-- 歌单加载状态 -->
+          <div v-if="isLoadingPlaylist || !playlistDetail" class="loading-container playlist-loading">
+            <div class="music-loader">
+              <div class="loader-bar"></div>
+              <div class="loader-bar"></div>
+              <div class="loader-bar"></div>
+              <div class="loader-bar"></div>
+            </div>
+            <p class="loading-text">正在加载歌单信息...</p>
+            <div class="loading-progress">
+              <div class="loading-progress-bar"></div>
+            </div>
+          </div>
+          
+          <!-- 歌单信息 -->
+          <div v-else class="playlist-info-section">
+            <div class="playlist-basic-info">
+              <div class="playlist-cover-large">
+                <img :src="playlistDetail.coverImgUrl || defaultAlbumArt" :alt="playlistDetail.name" />
+              </div>
+              <div class="playlist-details">
+                <h2 class="playlist-name">{{ playlistDetail.name }}</h2>
+                <p class="playlist-creator">创建者: {{ playlistDetail.creator }}</p>
+                <p class="playlist-description" v-if="playlistDetail.description">{{ playlistDetail.description }}</p>
+                <div class="playlist-stats">
+                  <span class="stat-item">{{ playlistDetail.trackCount }}首歌曲</span>
+                  <span class="stat-item">播放{{ formatPlayCount(playlistDetail.playCount) }}</span>
+                </div>
+                <div class="playlist-tags" v-if="playlistDetail.tags && playlistDetail.tags.length > 0">
+                  <span v-for="tag in playlistDetail.tags" :key="tag" class="tag-item">{{ tag }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 歌曲列表 -->
+            <div class="playlist-songs-section">
+              <h3>歌曲列表</h3>
+              <div class="playlist-songs-list">
+                <div 
+                  v-for="(song, index) in playlistDetailSongs" 
+                  :key="song.id"
+                  class="playlist-song-item"
+                  @click="selectPlaylistDetailSong(index)"
+                >
+                  <div class="song-index">{{ (playlistDetailPage - 1) * pageSize + index + 1 }}</div>
+                  <div class="song-cover-small">
+                    <img :src="song.picUrl || defaultAlbumArt" :alt="song.name" />
+                  </div>
+                  <div class="song-info-full">
+                    <div class="song-title">{{ song.name }}</div>
+                    <div class="song-artist">{{ song.artist }}</div>
+                  </div>
+                  <div class="song-album-name">{{ song.albumName }}</div>
+                  <div class="song-duration">{{ formatDuration(song.duration) }}</div>
+                </div>
+              </div>
+              
+              <!-- 翻页组件 -->
+              <div v-if="fullPlaylistSongs.length > 0" class="pagination-container">
+                <div class="pagination-info">
+                  共 {{ fullPlaylistSongs.length }} 首歌曲，第 {{ playlistDetailPage }} / {{ playlistDetailTotalPages }} 页
+                </div>
+                <div class="pagination-controls">
+                  <button 
+                    @click="goToPlaylistDetailPage(1)" 
+                    :disabled="playlistDetailPage === 1"
+                    class="pagination-btn"
+                    title="首页"
+                  >
+                    «
+                  </button>
+                  <button 
+                    @click="goToPlaylistDetailPage(playlistDetailPage - 1)" 
+                    :disabled="playlistDetailPage === 1"
+                    class="pagination-btn"
+                    title="上一页"
+                  >
+                    ‹
+                  </button>
+                  
+                  <template v-for="page in getPlaylistDetailPageNumbers()" :key="page">
+                    <button 
+                      v-if="page !== '...'"
+                      @click="goToPlaylistDetailPage(page)" 
+                      :class="['pagination-btn', 'page-number', { active: playlistDetailPage === page }]"
+                    >
+                      {{ page }}
+                    </button>
+                    <span v-else class="pagination-ellipsis">...</span>
+                  </template>
+                  
+                  <button 
+                    @click="goToPlaylistDetailPage(playlistDetailPage + 1)" 
+                    :disabled="playlistDetailPage === playlistDetailTotalPages"
+                    class="pagination-btn"
+                    title="下一页"
+                  >
+                    ›
+                  </button>
+                  <button 
+                    @click="goToPlaylistDetailPage(playlistDetailTotalPages)" 
+                    :disabled="playlistDetailPage === playlistDetailTotalPages"
+                    class="pagination-btn"
+                    title="末页"
+                  >
+                    »
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <!-- 专辑详情弹窗 -->
     <div class="album-detail-modal-overlay" v-if="showAlbumDetail" @click="closeAlbumDetail">
       <div class="album-detail-modal-content" @click.stop>
@@ -604,7 +929,7 @@
         
         <div class="album-detail-body">
           <!-- 专辑加载状态 -->
-          <div v-if="isLoadingAlbum" class="loading-container">
+          <div v-if="isLoadingAlbum" class="loading-container album-loading">
             <div class="music-loader">
               <div class="loader-bar"></div>
               <div class="loader-bar"></div>
@@ -612,6 +937,9 @@
               <div class="loader-bar"></div>
             </div>
             <p class="loading-text">正在加载专辑信息...</p>
+            <div class="loading-progress">
+              <div class="loading-progress-bar"></div>
+            </div>
           </div>
           
           <!-- 专辑信息 -->
@@ -676,14 +1004,26 @@
         </div>
       </div>
     </div>
+    <!-- 登录组件 -->
+    <MusicLogin 
+      :visible="showLoginModal" 
+      :api-url="apiUrl"
+      @close="hideLoginModal"
+      @login-success="handleLoginSuccess"
+      @user-info-updated="handleUserInfoUpdated"
+    />
   </div>
 </template>
 
 <script>
 import { MusicColorExtractor } from '../utils/musicColorExtractor.js'
+import MusicLogin from './MusicLogin.vue'
 
 export default {
   name: 'MusicPlayer',
+  components: {
+    MusicLogin
+  },
   props: {
     visible: {
       type: Boolean,
@@ -702,11 +1042,17 @@ export default {
       searchType: 'songs', // 搜索类型：songs, playlists, artists
       currentPlaylist: [],
       showSearchResults: false,
+      // 完整的歌单歌曲列表（用于分页显示）
+      fullPlaylistSongs: [],
+      // 歌单详情界面
+      showPlaylistDetail: false,
+      playlistDetail: null,
+      playlistDetailSongs: [],
+      playlistDetailPage: 1,
       currentSong: null,
       isPlaying: false,
       currentTime: 0,
       duration: 0,
-      progress: 0,
       volume: 70,
       audio: null,
       isSearching: false,
@@ -723,9 +1069,8 @@ export default {
       artistActiveTab: 'hot', // hot, all, albums
       isLoadingArtist: false,
       // 歌手全部歌曲分页
+      fullArtistAllSongs: [], // 完整的歌手全部歌曲列表
       artistAllSongsPage: 1,
-      artistAllSongsHasMore: false,
-      isLoadingArtistAllSongs: false,
       artistAllSongsTotal: 0,
       // 专辑详情相关
       showAlbumDetail: false,
@@ -747,23 +1092,8 @@ export default {
       albumSearchResults: [],
       // 分页相关
       currentPage: 1,
-      pageSize: 20,
+      pageSize: 50,
       totalResults: 0,
-      hasMore: false,
-      // 搜索结果缓存
-      searchCache: {
-        songs: [],
-        playlists: [],
-        artists: [],
-        albums: []
-      },
-      // 搜索历史
-      searchHistory: {
-        songs: { query: '', page: 1, hasMore: false },
-        playlists: { query: '', page: 1, hasMore: false },
-        artists: { query: '', page: 1, hasMore: false },
-        albums: { query: '', page: 1, hasMore: false }
-      },
       // 下拉菜单状态
       showSearchTypeDropdown: false,
       // 网格视图模式
@@ -800,13 +1130,48 @@ export default {
       originalPlaylistOrder: [],
       // 播放模式提示相关
       showPlayModeTooltip: false,
-      playModeTooltipTimer: null
+      playModeTooltipTimer: null,
+      // 登录相关
+      showLoginModal: false,
+      showUserDropdown: false,
+      isLoggedIn: false,
+      userInfo: null,
+      userLevel: null,
+      loginCookie: '',
+      // 播放列表菜单
+      showPlaylistMenu: false,
+      // 拖拽相关
+      draggedItemIndex: null,
+      draggedOverIndex: null,
+      // 搜索结果缓存
+      searchCache: {
+        songs: [],
+        playlists: [],
+        artists: [],
+        albums: []
+      },
+      // 当前搜索查询缓存
+      searchQueryCache: '',
+      // 歌单详情加载状态
+      isLoadingPlaylist: false
     }
   },
   computed: {
     progress() {
       if (this.duration === 0) return 0;
       return (this.currentTime / this.duration) * 100;
+    },
+    // 计算总页数
+    totalPages() {
+      return Math.ceil(this.totalResults / this.pageSize);
+    },
+    // 计算歌手全部歌曲总页数
+    artistAllSongsTotalPages() {
+      return Math.ceil(this.artistAllSongsTotal / this.pageSize);
+    },
+    // 计算歌单详情总页数
+    playlistDetailTotalPages() {
+      return Math.ceil(this.fullPlaylistSongs.length / this.pageSize);
     }
   },
   watch: {
@@ -860,6 +1225,8 @@ export default {
     this.gridItemRefs = [];
     // 初始化音乐颜色提取器
     this.musicColorExtractor = new MusicColorExtractor();
+    // 检查登录状态
+    this.checkLoginStatus();
   },
   beforeUnmount() {
     // 移除事件监听
@@ -918,15 +1285,11 @@ export default {
       this.isSearching = true;
       
       try {
-        // 如果是新的搜索或不同类型的搜索，重置分页
-        if (resetPage || this.searchHistory[this.searchType].query !== this.searchQuery) {
+        // 如果是新的搜索，重置分页并清空歌单数据
+        if (resetPage) {
           this.currentPage = 1;
-          this.searchCache[this.searchType] = [];
+          this.fullPlaylistSongs = [];
         }
-        
-        // 更新搜索历史
-        this.searchHistory[this.searchType].query = this.searchQuery;
-        this.searchHistory[this.searchType].page = this.currentPage;
         
         if (this.searchType === 'songs') {
           await this.searchSongs();
@@ -938,6 +1301,7 @@ export default {
           await this.searchAlbums();
         }
         
+        // 只有在真正进行搜索时才显示搜索结果
         this.showSearchResults = true;
       } catch (error) {
         console.error('搜索失败:', error);
@@ -947,12 +1311,63 @@ export default {
       }
     },
 
-    // 加载更多结果
-    async loadMoreResults() {
-      if (!this.hasMore || this.isSearching) return;
+    // 跳转到指定页
+    goToPage(page) {
+      if (page < 1 || page > this.totalPages || page === this.currentPage || this.isSearching) return;
+      this.currentPage = page;
       
-      this.currentPage++;
-      await this.searchMusic(false);
+      // 如果是歌单分页，直接从完整列表中切片
+      if (this.fullPlaylistSongs.length > 0) {
+        const startIndex = (page - 1) * this.pageSize;
+        const endIndex = Math.min(startIndex + this.pageSize, this.fullPlaylistSongs.length);
+        this.searchResults = this.fullPlaylistSongs.slice(startIndex, endIndex);
+        this.currentPlaylist = this.searchResults;
+      } else {
+        // 否则调用搜索接口
+        this.searchMusic(false);
+      }
+    },
+
+    // 获取页码数组（用于显示页码按钮）
+    getPageNumbers() {
+      const pages = [];
+      const total = this.totalPages;
+      const current = this.currentPage;
+      
+      if (total <= 7) {
+        // 总页数小于等于7，显示所有页码
+        for (let i = 1; i <= total; i++) {
+          pages.push(i);
+        }
+      } else {
+        // 总页数大于7，显示部分页码
+        if (current <= 3) {
+          // 当前页在前3页
+          for (let i = 1; i <= 5; i++) {
+            pages.push(i);
+          }
+          pages.push('...');
+          pages.push(total);
+        } else if (current >= total - 2) {
+          // 当前页在后3页
+          pages.push(1);
+          pages.push('...');
+          for (let i = total - 4; i <= total; i++) {
+            pages.push(i);
+          }
+        } else {
+          // 当前页在中间
+          pages.push(1);
+          pages.push('...');
+          for (let i = current - 1; i <= current + 1; i++) {
+            pages.push(i);
+          }
+          pages.push('...');
+          pages.push(total);
+        }
+      }
+      
+      return pages;
     },
 
     // 搜索歌曲
@@ -974,36 +1389,24 @@ export default {
             url: `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`
           }));
           
-          // 合并结果
-          if (this.currentPage === 1) {
-            this.searchResults = newResults;
-            this.searchCache.songs = newResults;
-          } else {
-            this.searchResults = [...this.searchCache.songs, ...newResults];
-            this.searchCache.songs = this.searchResults;
-          }
+          // 缓存搜索结果
+          this.searchCache.songs = newResults;
           
+          // 只显示当前页的结果
+          this.searchResults = newResults;
           this.currentPlaylist = this.searchResults;
-          this.hasMore = data.result.hasMore || data.result.songs.length === this.pageSize;
-          this.totalResults = data.result.songCount || this.searchResults.length;
-          this.searchHistory.songs.hasMore = this.hasMore;
+          this.totalResults = data.result.songCount || 0;
         } else {
-          if (this.currentPage === 1) {
-            this.searchResults = [];
-            this.searchCache.songs = [];
-            this.currentPlaylist = [];
-          }
-          this.hasMore = false;
-          this.searchHistory.songs.hasMore = false;
+          this.searchCache.songs = [];
+          this.searchResults = [];
+          this.currentPlaylist = [];
+          this.totalResults = 0;
         }
       } else {
-        if (this.currentPage === 1) {
-          this.searchResults = [];
-          this.searchCache.songs = [];
-          this.currentPlaylist = [];
-        }
-        this.hasMore = false;
-        this.searchHistory.songs.hasMore = false;
+        this.searchCache.songs = [];
+        this.searchResults = [];
+        this.currentPlaylist = [];
+        this.totalResults = 0;
       }
     },
 
@@ -1025,35 +1428,24 @@ export default {
             creatorId: playlist.creator ? playlist.creator.userId : null
           }));
           
-          if (this.currentPage === 1) {
-            this.playlistResults = newResults;
-            this.searchCache.playlists = newResults;
-          } else {
-            this.playlistResults = [...this.searchCache.playlists, ...newResults];
-            this.searchCache.playlists = this.playlistResults;
-          }
+          // 缓存搜索结果
+          this.searchCache.playlists = newResults;
           
+          // 只显示当前页的结果
+          this.playlistResults = newResults;
           this.currentPlaylist = [];
-          this.hasMore = data.result.hasMore || data.result.playlists.length === this.pageSize;
-          this.totalResults = data.result.playlistCount || this.playlistResults.length;
-          this.searchHistory.playlists.hasMore = this.hasMore;
+          this.totalResults = data.result.playlistCount || 0;
         } else {
-          if (this.currentPage === 1) {
-            this.playlistResults = [];
-            this.searchCache.playlists = [];
-            this.currentPlaylist = [];
-          }
-          this.hasMore = false;
-          this.searchHistory.playlists.hasMore = false;
+          this.searchCache.playlists = [];
+          this.playlistResults = [];
+          this.currentPlaylist = [];
+          this.totalResults = 0;
         }
       } else {
-        if (this.currentPage === 1) {
-          this.playlistResults = [];
-          this.searchCache.playlists = [];
-          this.currentPlaylist = [];
-        }
-        this.hasMore = false;
-        this.searchHistory.playlists.hasMore = false;
+        this.searchCache.playlists = [];
+        this.playlistResults = [];
+        this.currentPlaylist = [];
+        this.totalResults = 0;
       }
     },
 
@@ -1073,35 +1465,24 @@ export default {
             mvSize: artist.mvSize || 0
           }));
           
-          if (this.currentPage === 1) {
-            this.artistSearchResults = newResults;
-            this.searchCache.artists = newResults;
-          } else {
-            this.artistSearchResults = [...this.searchCache.artists, ...newResults];
-            this.searchCache.artists = this.artistSearchResults;
-          }
+          // 缓存搜索结果
+          this.searchCache.artists = newResults;
           
+          // 只显示当前页的结果
+          this.artistSearchResults = newResults;
           this.currentPlaylist = [];
-          this.hasMore = data.result.hasMore || data.result.artists.length === this.pageSize;
-          this.totalResults = data.result.artistCount || this.artistSearchResults.length;
-          this.searchHistory.artists.hasMore = this.hasMore;
+          this.totalResults = data.result.artistCount || 0;
         } else {
-          if (this.currentPage === 1) {
-            this.artistSearchResults = [];
-            this.searchCache.artists = [];
-            this.currentPlaylist = [];
-          }
-          this.hasMore = false;
-          this.searchHistory.artists.hasMore = false;
+          this.searchCache.artists = [];
+          this.artistSearchResults = [];
+          this.currentPlaylist = [];
+          this.totalResults = 0;
         }
       } else {
-        if (this.currentPage === 1) {
-          this.artistSearchResults = [];
-          this.searchCache.artists = [];
-          this.currentPlaylist = [];
-        }
-        this.hasMore = false;
-        this.searchHistory.artists.hasMore = false;
+        this.searchCache.artists = [];
+        this.artistSearchResults = [];
+        this.currentPlaylist = [];
+        this.totalResults = 0;
       }
     },
 
@@ -1109,24 +1490,35 @@ export default {
     changeSearchType(type) {
       this.searchType = type;
       this.currentPage = 1;
-      this.hasMore = false;
+      this.totalResults = 0;
+      this.fullPlaylistSongs = [];
       
-      // 如果有缓存结果，直接显示
-      if (this.searchCache[type] && this.searchCache[type].length > 0 && this.searchHistory[type].query === this.searchQuery) {
+      // 从缓存中获取对应类型的搜索结果
+      const cachedResults = this.searchCache[this.getSearchTypeKey(type)];
+      
+      if (cachedResults.length > 0) {
+        // 使用缓存数据
+        this.searchResults = cachedResults;
+        this.currentPlaylist = this.searchResults;
+        this.totalResults = cachedResults.length;
         this.showSearchResults = true;
-        this.currentPage = this.searchHistory[type].page;
-        this.hasMore = this.searchHistory[type].hasMore;
-        
-        // 根据类型设置当前播放列表
-        if (type === 'songs') {
-          this.currentPlaylist = this.searchCache.songs;
-        } else {
-          this.currentPlaylist = [];
-        }
       } else {
+        // 清空搜索结果，不显示搜索界面
+        this.searchResults = [];
+        this.currentPlaylist = [];
         this.showSearchResults = false;
-        this.currentPlaylist = this.playlist;
       }
+    },
+
+    // 获取搜索类型对应的缓存键
+    getSearchTypeKey(type) {
+      const typeMap = {
+        'songs': 'songs',
+        'playlists': 'playlists',
+        'artists': 'artists',
+        'albums': 'albums'
+      };
+      return typeMap[type] || 'songs';
     },
 
     // 获取搜索占位符
@@ -1148,8 +1540,9 @@ export default {
     // 获取歌单详情
     async getPlaylistDetail(playlistId) {
       try {
-        // 显示加载状态
-        this.isSearching = true;
+        // 立即显示加载动画
+        this.isLoadingPlaylist = true;
+        this.showPlaylistDetail = true;
         
         const response = await fetch(`${this.apiUrl}/playlist/detail?id=${playlistId}`);
         if (response.ok) {
@@ -1167,20 +1560,39 @@ export default {
               url: `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`
             }));
             
-            // 将歌单歌曲添加到搜索结果并切换到歌曲视图
-            this.searchResults = songs;
-            this.currentPlaylist = songs;
-            this.searchType = 'songs';
-            this.showSearchResults = true;
+            // 保存歌单详情信息
+            this.playlistDetail = {
+              id: data.playlist.id,
+              name: data.playlist.name,
+              description: data.playlist.description || '',
+              coverImgUrl: data.playlist.coverImgUrl,
+              creator: data.playlist.creator ? data.playlist.creator.nickname : '未知',
+              playCount: data.playlist.playCount,
+              trackCount: data.playlist.trackCount,
+              tags: data.playlist.tags || []
+            };
             
-            this.$emit('notify', `已加载歌单: ${data.playlist.name}`, 'success');
+            // 保存完整的歌单歌曲列表
+            this.fullPlaylistSongs = songs;
+            
+            // 重置分页并显示第一页
+            this.playlistDetailPage = 1;
+            const startIndex = 0;
+            const endIndex = Math.min(this.pageSize, songs.length);
+            this.playlistDetailSongs = songs.slice(startIndex, endIndex);
+            
+            // 显示歌单详情界面
+            this.showPlaylistDetail = true;
+            
+            this.$emit('notify', `已加载歌单: ${data.playlist.name} (共${songs.length}首歌曲)`, 'success');
           }
         }
       } catch (error) {
         console.error('获取歌单详情失败:', error);
         this.$emit('notify', `获取歌单详情失败: ${error.message}`, 'danger');
       } finally {
-        this.isSearching = false;
+        // 重置歌单加载状态
+        this.isLoadingPlaylist = false;
       }
     },
 
@@ -1202,35 +1614,24 @@ export default {
             description: album.description || ''
           }));
           
-          if (this.currentPage === 1) {
-            this.albumSearchResults = newResults;
-            this.searchCache.albums = newResults;
-          } else {
-            this.albumSearchResults = [...this.searchCache.albums, ...newResults];
-            this.searchCache.albums = this.albumSearchResults;
-          }
+          // 缓存搜索结果
+          this.searchCache.albums = newResults;
           
+          // 只显示当前页的结果
+          this.albumSearchResults = newResults;
           this.currentPlaylist = [];
-          this.hasMore = data.result.hasMore || data.result.albums.length === this.pageSize;
-          this.totalResults = data.result.albumCount || this.albumSearchResults.length;
-          this.searchHistory.albums.hasMore = this.hasMore;
+          this.totalResults = data.result.albumCount || 0;
         } else {
-          if (this.currentPage === 1) {
-            this.albumSearchResults = [];
-            this.searchCache.albums = [];
-            this.currentPlaylist = [];
-          }
-          this.hasMore = false;
-          this.searchHistory.albums.hasMore = false;
+          this.searchCache.albums = [];
+          this.albumSearchResults = [];
+          this.currentPlaylist = [];
+          this.totalResults = 0;
         }
       } else {
-        if (this.currentPage === 1) {
-          this.albumSearchResults = [];
-          this.searchCache.albums = [];
-          this.currentPlaylist = [];
-        }
-        this.hasMore = false;
-        this.searchHistory.albums.hasMore = false;
+        this.searchCache.albums = [];
+        this.albumSearchResults = [];
+        this.currentPlaylist = [];
+        this.totalResults = 0;
       }
     },
 
@@ -1238,7 +1639,9 @@ export default {
     async getAlbumDetail(albumId) {
       if (!albumId) return;
       
+      // 立即显示加载动画
       this.isLoadingAlbum = true;
+      this.showAlbumDetail = true;
       
       try {
         const response = await fetch(`${this.apiUrl}/album?id=${albumId}`);
@@ -1284,14 +1687,14 @@ export default {
       this.showAlbumDetail = false;
       this.albumDetail = null;
       this.albumSongs = [];
+      this.isLoadingAlbum = false;
     },
 
     // 从专辑歌曲中选择歌曲播放
     selectAlbumSong(index) {
       const song = this.albumSongs[index];
-      // 切换到歌曲搜索结果视图
-      this.currentPlaylist = this.albumSongs;
-      this.showSearchResults = true;
+      // 同步专辑歌曲到播放列表
+      this.syncPlaylistToMain(this.albumSongs);
       this.selectSong(index);
       this.closeAlbumDetail();
     },
@@ -1330,53 +1733,143 @@ export default {
     },
 
     // 加载更多歌手全部歌曲
-    async loadMoreArtistAllSongs() {
-      if (!this.artistDetail || !this.artistAllSongsHasMore || this.isLoadingArtistAllSongs) return;
+    // 跳转到歌手全部歌曲的指定页
+    goToArtistAllSongsPage(page) {
+      if (page < 1 || page > this.artistAllSongsTotalPages || page === this.artistAllSongsPage) return;
       
-      this.isLoadingArtistAllSongs = true;
-      this.artistAllSongsPage++;
+      this.artistAllSongsPage = page;
+      const startIndex = (page - 1) * this.pageSize;
+      const endIndex = Math.min(startIndex + this.pageSize, this.fullArtistAllSongs.length);
+      this.artistAllSongs = this.fullArtistAllSongs.slice(startIndex, endIndex);
+    },
+
+    // 获取歌手全部歌曲页码数组
+    getArtistAllSongsPageNumbers() {
+      const pages = [];
+      const total = this.artistAllSongsTotalPages;
+      const current = this.artistAllSongsPage;
       
-      try {
-        const offset = (this.artistAllSongsPage - 1) * 100;
-        const response = await fetch(`${this.apiUrl}/artist/songs?id=${this.artistDetail.id}&limit=100&offset=${offset}&order=hot`);
-        const data = await response.json();
-        
-        if (data.code === 200 && data.songs) {
-          const newSongs = data.songs.map(song => ({
-            id: song.id,
-            name: song.name,
-            artists: song.ar || song.artists || [],
-            artist: song.artists ? song.artists.map(a => a.name).join(', ') : (song.ar ? song.ar.map(a => a.name).join(', ') : '未知艺术家'),
-            duration: song.duration || (song.dt ? song.dt : 0),
-            album: song.al || song.album || {},
-            albumName: song.al ? song.al.name : (song.album ? song.album.name : '未知专辑'),
-            picUrl: this.getSongCoverUrl(song),
-            url: `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`
-          }));
-          
-          this.artistAllSongs = [...this.artistAllSongs, ...newSongs];
-          this.artistAllSongsHasMore = data.songs.length === 100;
+      if (total <= 7) {
+        for (let i = 1; i <= total; i++) {
+          pages.push(i);
         }
-      } catch (error) {
-        console.error('加载更多歌手歌曲失败:', error);
-        this.$emit('notify', '加载更多歌手歌曲失败', 'danger');
-      } finally {
-        this.isLoadingArtistAllSongs = false;
+      } else {
+        if (current <= 3) {
+          for (let i = 1; i <= 5; i++) {
+            pages.push(i);
+          }
+          pages.push('...');
+          pages.push(total);
+        } else if (current >= total - 2) {
+          pages.push(1);
+          pages.push('...');
+          for (let i = total - 4; i <= total; i++) {
+            pages.push(i);
+          }
+        } else {
+          pages.push(1);
+          pages.push('...');
+          for (let i = current - 1; i <= current + 1; i++) {
+            pages.push(i);
+          }
+          pages.push('...');
+          pages.push(total);
+        }
       }
+      
+      return pages;
+    },
+
+    // 跳转到歌单详情的指定页
+    goToPlaylistDetailPage(page) {
+      if (page < 1 || page > this.playlistDetailTotalPages || page === this.playlistDetailPage) return;
+      
+      this.playlistDetailPage = page;
+      const startIndex = (page - 1) * this.pageSize;
+      const endIndex = Math.min(startIndex + this.pageSize, this.fullPlaylistSongs.length);
+      this.playlistDetailSongs = this.fullPlaylistSongs.slice(startIndex, endIndex);
+    },
+
+    // 获取歌单详情页码数组
+    getPlaylistDetailPageNumbers() {
+      const pages = [];
+      const total = this.playlistDetailTotalPages;
+      const current = this.playlistDetailPage;
+      
+      if (total <= 7) {
+        for (let i = 1; i <= total; i++) {
+          pages.push(i);
+        }
+      } else {
+        if (current <= 3) {
+          for (let i = 1; i <= 5; i++) {
+            pages.push(i);
+          }
+          pages.push('...');
+          pages.push(total);
+        } else if (current >= total - 2) {
+          pages.push(1);
+          pages.push('...');
+          for (let i = total - 4; i <= total; i++) {
+            pages.push(i);
+          }
+        } else {
+          pages.push(1);
+          pages.push('...');
+          for (let i = current - 1; i <= current + 1; i++) {
+            pages.push(i);
+          }
+          pages.push('...');
+          pages.push(total);
+        }
+      }
+      
+      return pages;
+    },
+
+    // 关闭歌单详情界面
+    closePlaylistDetail() {
+      this.showPlaylistDetail = false;
+      this.playlistDetail = null;
+      this.playlistDetailSongs = [];
+      this.playlistDetailPage = 1;
+      this.fullPlaylistSongs = [];
+      this.isLoadingPlaylist = false;
+    },
+
+    // 从歌单详情中选择歌曲
+    selectPlaylistDetailSong(index) {
+      const song = this.playlistDetailSongs[index];
+      if (!song) return;
+      
+      // 同步歌单歌曲到播放列表
+      this.syncPlaylistToMain(this.fullPlaylistSongs);
+      
+      // 计算在完整列表中的实际索引
+      const actualIndex = (this.playlistDetailPage - 1) * this.pageSize + index;
+      
+      // 播放歌曲
+      this.selectSong(actualIndex);
     },
 
     // 切换歌手标签页
     switchArtistTab(tab) {
       this.artistActiveTab = tab;
-      // 如果切换到全部歌曲且还没有加载过，初始化加载
-      if (tab === 'all' && this.artistAllSongs.length === 0 && this.artistDetail) {
-        this.artistAllSongsPage = 1;
-        this.loadMoreArtistAllSongs();
-      }
     },
     
     selectSong(index) {
+      // 验证索引
+      if (typeof index !== 'number' || index < 0 || index >= this.currentPlaylist.length) {
+        console.error('无效的歌曲索引:', index);
+        return;
+      }
+      
       const song = this.currentPlaylist[index];
+      if (!song || !song.id) {
+        console.error('无效的歌曲数据:', song);
+        return;
+      }
+      
       this.currentSong = song;
       this.loadSong(song);
       this.isPlaying = true;
@@ -1483,57 +1976,59 @@ export default {
     },
     
     skipNext() {
-      if (!this.currentSong || this.currentPlaylist.length === 0) return;
+      if (!this.currentSong || this.playlist.length === 0) return;
       
       if (this.playMode === 'random') {
         // 随机播放模式下，手动下一首应该随机选择一首歌
         this.playRandomNext();
       } else {
-        const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
-        const nextIndex = (currentIndex + 1) % this.currentPlaylist.length;
-        this.selectSong(nextIndex);
+        // 始终使用播放列表来播放下一首
+        const currentIndex = this.playlist.findIndex(song => song.id === this.currentSong.id);
+        const nextIndex = (currentIndex + 1) % this.playlist.length;
+        this.selectSongFromPlaylist(nextIndex);
       }
     },
     
     skipPrevious() {
-      if (!this.currentSong || this.currentPlaylist.length === 0) return;
+      if (!this.currentSong || this.playlist.length === 0) return;
       
       if (this.playMode === 'random') {
         // 随机播放模式下，手动上一首应该随机选择一首歌
         this.playRandomNext();
       } else {
-        const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
-        const prevIndex = currentIndex === 0 ? this.currentPlaylist.length - 1 : currentIndex - 1;
-        this.selectSong(prevIndex);
+        // 始终使用播放列表来播放上一首
+        const currentIndex = this.playlist.findIndex(song => song.id === this.currentSong.id);
+        const prevIndex = currentIndex === 0 ? this.playlist.length - 1 : currentIndex - 1;
+        this.selectSongFromPlaylist(prevIndex);
       }
     },
     
     playNext() {
-      if (this.currentPlaylist.length === 0) return;
+      if (this.playlist.length === 0) return;
       
       switch (this.playMode) {
         case 'single':
           // 单曲循环：重新播放当前歌曲
           if (this.currentSong) {
-            this.selectSong(this.currentPlaylist.findIndex(song => song.id === this.currentSong.id));
+            this.selectSongFromPlaylist(this.playlist.findIndex(song => song.id === this.currentSong.id));
           }
           break;
           
         case 'list':
           // 列表循环：播放下一首，到末尾后从头开始
-          const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
-          if (currentIndex !== -1 && currentIndex < this.currentPlaylist.length - 1) {
-            this.selectSong(currentIndex + 1);
+          const currentIndex = this.playlist.findIndex(song => song.id === this.currentSong.id);
+          if (currentIndex !== -1 && currentIndex < this.playlist.length - 1) {
+            this.selectSongFromPlaylist(currentIndex + 1);
           } else {
-            this.selectSong(0);
+            this.selectSongFromPlaylist(0);
           }
           break;
           
         case 'order':
           // 顺序播放：播放下一首，到末尾后停止
-          const orderIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
-          if (orderIndex !== -1 && orderIndex < this.currentPlaylist.length - 1) {
-            this.selectSong(orderIndex + 1);
+          const orderIndex = this.playlist.findIndex(song => song.id === this.currentSong.id);
+          if (orderIndex !== -1 && orderIndex < this.playlist.length - 1) {
+            this.selectSongFromPlaylist(orderIndex + 1);
           } else {
             // 播放结束，停止播放
             this.isPlaying = false;
@@ -1548,11 +2043,11 @@ export default {
           
         default:
           // 默认为列表循环
-          const defaultIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
-          if (defaultIndex !== -1 && defaultIndex < this.currentPlaylist.length - 1) {
-            this.selectSong(defaultIndex + 1);
+          const defaultIndex = this.playlist.findIndex(song => song.id === this.currentSong.id);
+          if (defaultIndex !== -1 && defaultIndex < this.playlist.length - 1) {
+            this.selectSongFromPlaylist(defaultIndex + 1);
           } else {
-            this.selectSong(0);
+            this.selectSongFromPlaylist(0);
           }
       }
     },
@@ -1594,8 +2089,8 @@ export default {
     },
     
     togglePlaylistView() {
-      this.showSearchResults = !this.showSearchResults;
-      this.currentPlaylist = this.showSearchResults ? this.searchResults : this.playlist;
+      // 不再切换界面，直接打开播放列表菜单
+      this.showPlaylistMenu = true;
     },
     
     formatTime(seconds) {
@@ -1649,14 +2144,17 @@ export default {
 
     // 获取歌曲在当前播放列表中的索引
     getSongIndex(song, playlist) {
-      return playlist.findIndex(s => s.id === song.id);
+      if (!song || !song.id || !playlist || !Array.isArray(playlist)) return -1;
+      return playlist.findIndex(s => s && s.id === song.id);
     },
 
     // 获取歌手详情
     async getArtistDetail(artistId) {
       if (!artistId) return;
       
+      // 立即显示加载动画
       this.isLoadingArtist = true;
+      this.showArtistDetail = true;
       
       try {
         // 获取歌手基本信息
@@ -1760,9 +2258,9 @@ export default {
           }));
         }
         
-        // 处理全部歌曲
+        // 处理全部歌曲 - 一次性获取所有歌曲
         if (allSongsData.code === 200 && allSongsData.songs) {
-          this.artistAllSongs = allSongsData.songs.map(song => ({
+          const allSongs = allSongsData.songs.map(song => ({
             id: song.id,
             name: song.name,
             artists: song.ar || song.artists || [],
@@ -1774,10 +2272,15 @@ export default {
             url: `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`
           }));
           
-          // 检查是否有更多歌曲
-          this.artistAllSongsHasMore = allSongsData.songs.length === 100;
+          // 保存完整列表
+          this.fullArtistAllSongs = allSongs;
+          this.artistAllSongsTotal = allSongsData.total || allSongs.length;
+          
+          // 重置分页并显示第一页
           this.artistAllSongsPage = 1;
-          this.artistAllSongsTotal = allSongsData.total || allSongsData.songs.length;
+          const startIndex = 0;
+          const endIndex = Math.min(this.pageSize, allSongs.length);
+          this.artistAllSongs = allSongs.slice(startIndex, endIndex);
         }
         
         // 处理专辑
@@ -1803,15 +2306,15 @@ export default {
       this.artistDetail = null;
       this.artistSongs = [];
       this.artistAlbums = [];
+      this.isLoadingArtist = false;
     },
 
     // 从歌手歌曲中选择歌曲播放
     selectArtistSong(index, type = 'hot') {
       const songs = type === 'all' ? this.artistAllSongs : this.artistSongs;
       const song = songs[index];
-      // 切换到歌曲搜索结果视图
-      this.currentPlaylist = songs;
-      this.showSearchResults = true;
+      // 同步歌手歌曲到播放列表
+      this.syncPlaylistToMain(songs);
       this.selectSong(index);
       this.closeArtistDetail();
     },
@@ -1826,21 +2329,6 @@ export default {
     },
 
     // 获取当前结果数量
-    getCurrentResultsCount() {
-      switch (this.searchType) {
-        case 'songs':
-          return this.searchResults.length;
-        case 'playlists':
-          return this.playlistResults.length;
-        case 'artists':
-          return this.artistSearchResults.length;
-        case 'albums':
-          return this.albumSearchResults.length;
-        default:
-          return 0;
-      }
-    },
-
     // 获取当前搜索类型标签
     getCurrentSearchTypeLabel() {
       const currentType = this.searchTypes.find(type => type.value === this.searchType);
@@ -1862,6 +2350,12 @@ export default {
     handleClickOutside(event) {
       if (!event.target.closest('.search-type-dropdown')) {
         this.showSearchTypeDropdown = false;
+      }
+      if (!event.target.closest('.user-info-container') && !event.target.closest('.user-dropdown')) {
+        this.showUserDropdown = false;
+      }
+      if (!event.target.closest('.playlist-button-container')) {
+        this.showPlaylistMenu = false;
       }
     },
 
@@ -2251,11 +2745,11 @@ export default {
     
     // 随机播放下一首
     playRandomNext() {
-      if (this.currentPlaylist.length === 0) return;
+      if (this.playlist.length === 0) return;
       
       // 获取未播放过的歌曲索引
       const unplayedIndices = [];
-      for (let i = 0; i < this.currentPlaylist.length; i++) {
+      for (let i = 0; i < this.playlist.length; i++) {
         if (!this.randomPlayHistory.includes(i)) {
           unplayedIndices.push(i);
         }
@@ -2265,7 +2759,7 @@ export default {
         // 所有歌曲都已播放过，重置历史记录
         this.randomPlayHistory = [];
         // 重新获取未播放的歌曲索引
-        for (let i = 0; i < this.currentPlaylist.length; i++) {
+        for (let i = 0; i < this.playlist.length; i++) {
           unplayedIndices.push(i);
         }
       }
@@ -2278,7 +2772,7 @@ export default {
       this.randomPlayHistory.push(nextSongIndex);
       
       // 播放选中的歌曲
-      this.selectSong(nextSongIndex);
+      this.selectSongFromPlaylist(nextSongIndex);
     },
     
     // 切换播放模式
@@ -2292,7 +2786,7 @@ export default {
         this.randomPlayHistory = [];
         // 如果当前有歌曲在播放，将其加入历史记录
         if (this.currentSong) {
-          const currentIndex = this.currentPlaylist.findIndex(song => song.id === this.currentSong.id);
+          const currentIndex = this.playlist.findIndex(song => song.id === this.currentSong.id);
           if (currentIndex !== -1) {
             this.randomPlayHistory.push(currentIndex);
           }
@@ -2353,6 +2847,324 @@ export default {
       this.playModeTooltipTimer = setTimeout(() => {
         this.showPlayModeTooltip = false;
       }, 2000);
+    },
+    
+    // 登录相关方法
+    openLoginModal() {
+      this.showLoginModal = true;
+      this.showUserDropdown = false;
+    },
+    
+    hideLoginModal() {
+      this.showLoginModal = false;
+    },
+    
+    showUserMenu() {
+      if (this.isLoggedIn) {
+        this.showUserDropdown = !this.showUserDropdown;
+      } else {
+        this.openLoginModal();
+      }
+    },
+    
+    // 处理登录成功
+    handleLoginSuccess(data) {
+      this.loginCookie = data.cookie;
+      this.isLoggedIn = true;
+      this.$emit('notify', '登录成功！', 'success');
+    },
+    
+    // 处理用户信息更新
+    handleUserInfoUpdated(userInfo) {
+      this.userInfo = userInfo;
+      // 获取用户等级信息
+      this.getUserLevel();
+    },
+    
+    // 获取用户等级信息
+    async getUserLevel() {
+      if (!this.loginCookie) return;
+      
+      try {
+        const response = await fetch(`${this.apiUrl}/user/level?timestamp=${Date.now()}`, {
+          headers: {
+            'Cookie': this.loginCookie
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200) {
+            this.userLevel = data.data;
+          }
+        }
+      } catch (error) {
+        console.error('获取用户等级失败:', error);
+      }
+    },
+    
+    // 刷新用户信息
+    async refreshUserInfo() {
+      if (!this.loginCookie) return;
+      
+      try {
+        const response = await fetch(`${this.apiUrl}/user/account?timestamp=${Date.now()}`, {
+          headers: {
+            'Cookie': this.loginCookie
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200 && data.profile) {
+            this.userInfo = data.profile;
+            // 保存用户信息
+            try {
+              localStorage.setItem('musicUserInfo', JSON.stringify(data.profile));
+            } catch (error) {
+              console.error('保存用户信息失败:', error);
+            }
+            this.$emit('notify', '用户信息已刷新', 'success');
+          }
+        }
+      } catch (error) {
+        console.error('刷新用户信息失败:', error);
+        this.$emit('notify', '刷新用户信息失败', 'danger');
+      }
+      
+      this.showUserDropdown = false;
+    },
+    
+    // 退出登录
+    logout() {
+      // 清除本地存储
+      try {
+        localStorage.removeItem('musicLoginCookie');
+        localStorage.removeItem('musicLoginTime');
+        localStorage.removeItem('musicUserInfo');
+      } catch (error) {
+        console.error('清除登录信息失败:', error);
+      }
+      
+      // 重置状态
+      this.isLoggedIn = false;
+      this.userInfo = null;
+      this.userLevel = null;
+      this.loginCookie = '';
+      this.showUserDropdown = false;
+      
+      this.$emit('notify', '已退出登录', 'info');
+    },
+    
+    // 检查登录状态
+    checkLoginStatus() {
+      try {
+        const cookie = localStorage.getItem('musicLoginCookie');
+        const loginTime = localStorage.getItem('musicLoginTime');
+        const userInfo = localStorage.getItem('musicUserInfo');
+        
+        if (cookie && loginTime && userInfo) {
+          // 检查登录是否过期（30天）
+          const currentTime = Date.now();
+          const loginTimestamp = parseInt(loginTime, 10);
+          const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
+          
+          if (currentTime - loginTimestamp < thirtyDaysInMs) {
+            this.loginCookie = cookie;
+            this.userInfo = JSON.parse(userInfo);
+            this.isLoggedIn = true;
+            // 获取用户等级
+            this.getUserLevel();
+          } else {
+            // 登录已过期，清除信息
+            this.logout();
+          }
+        }
+      } catch (error) {
+        console.error('检查登录状态失败:', error);
+      }
+    },
+
+    // 播放列表相关方法
+    togglePlaylistMenu() {
+      this.showPlaylistMenu = !this.showPlaylistMenu;
+      
+      // 当打开菜单时，滚动到当前播放歌曲位置
+      if (this.showPlaylistMenu && this.currentSong) {
+        this.$nextTick(() => {
+          this.scrollToCurrentSong();
+        });
+      }
+    },
+
+    // 滚动到当前播放歌曲位置
+    scrollToCurrentSong() {
+      if (!this.currentSong) return;
+      
+      // 查找当前歌曲在播放列表中的索引
+      const currentIndex = this.playlist.findIndex(song => song.id === this.currentSong.id);
+      if (currentIndex === -1) return;
+      
+      // 查找播放列表菜单内容容器
+      const menuContent = this.$el.querySelector('.playlist-menu-content');
+      if (!menuContent) return;
+      
+      // 查找当前歌曲元素
+      const songElements = menuContent.querySelectorAll('.playlist-menu-item');
+      if (!songElements || songElements.length <= currentIndex) return;
+      
+      const currentSongElement = songElements[currentIndex];
+      if (!currentSongElement) return;
+      
+      // 计算滚动位置，使当前歌曲位于菜单中央
+      const menuRect = menuContent.getBoundingClientRect();
+      const songRect = currentSongElement.getBoundingClientRect();
+      
+      // 计算目标滚动位置
+      const targetScrollTop = menuContent.scrollTop + (songRect.top - menuRect.top) - (menuRect.height / 2) + (songRect.height / 2);
+      
+      // 平滑滚动到目标位置
+      menuContent.scrollTo({
+        top: targetScrollTop,
+        behavior: 'smooth'
+      });
+      
+      // 添加高亮效果
+      this.highlightCurrentSong(currentSongElement);
+    },
+
+    // 高亮当前播放歌曲
+    highlightCurrentSong(element) {
+      // 添加临时高亮类
+      element.classList.add('current-song-highlight');
+      
+      // 2秒后移除高亮
+      setTimeout(() => {
+        element.classList.remove('current-song-highlight');
+      }, 2000);
+    },
+
+    // 从播放列表中选择歌曲播放
+    selectSongFromPlaylist(index) {
+      // 确保当前播放列表始终是播放列表
+      this.currentPlaylist = [...this.playlist];
+      // 不切换界面，保持当前视图状态
+      this.selectSong(index);
+      this.showPlaylistMenu = false;
+    },
+
+    // 从播放列表中移除歌曲
+    removeFromPlaylist(index) {
+      if (index >= 0 && index < this.playlist.length) {
+        const removedSong = this.playlist[index];
+        this.playlist.splice(index, 1);
+        
+        // 如果当前播放的歌曲被移除，更新当前播放列表
+        if (this.currentSong && this.currentSong.id === removedSong.id) {
+          this.currentPlaylist = [...this.playlist];
+        }
+        
+        // 如果当前显示的是播放列表，更新当前播放列表
+        if (!this.showSearchResults) {
+          this.currentPlaylist = [...this.playlist];
+        }
+        
+        this.$emit('notify', '已从播放列表中移除', 'info');
+      }
+    },
+
+    // 清空播放列表
+    clearPlaylist() {
+      if (this.playlist.length === 0) return;
+      
+      this.playlist = [];
+      
+      // 如果当前显示的是播放列表，更新当前播放列表
+      if (!this.showSearchResults) {
+        this.currentPlaylist = [];
+      }
+      
+      // 如果当前播放的歌曲在播放列表中，停止播放
+      if (this.currentSong) {
+        const isInPlaylist = this.playlist.some(song => song.id === this.currentSong.id);
+        if (!isInPlaylist) {
+          this.isPlaying = false;
+          this.currentSong = null;
+          this.currentTime = 0;
+        }
+      }
+      
+      this.$emit('notify', '播放列表已清空', 'info');
+    },
+
+    // 拖拽开始
+    dragStart(index, event) {
+      this.draggedItemIndex = index;
+      // 设置拖拽数据
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/html', index.toString());
+    },
+
+    // 拖拽进入
+    dragEnter(index) {
+      this.draggedOverIndex = index;
+    },
+
+    // 拖拽放置
+    drop(index, event) {
+      event.preventDefault();
+      
+      if (this.draggedItemIndex !== null && this.draggedItemIndex !== index) {
+        // 移动歌曲
+        const draggedSong = this.playlist[this.draggedItemIndex];
+        this.playlist.splice(this.draggedItemIndex, 1);
+        this.playlist.splice(index, 0, draggedSong);
+        
+        // 更新当前播放列表
+        if (!this.showSearchResults) {
+          this.currentPlaylist = [...this.playlist];
+        }
+        
+        // 如果当前播放的歌曲被移动，更新播放索引
+        if (this.currentSong && this.currentSong.id === draggedSong.id) {
+          // 不需要做任何操作，因为歌曲对象已经移动到新位置
+        }
+      }
+      
+      this.draggedItemIndex = null;
+      this.draggedOverIndex = null;
+    },
+
+    // 同步歌单到播放列表
+    syncPlaylistToMain(songs) {
+      if (!songs || !Array.isArray(songs)) return;
+      
+      // 深拷贝歌曲列表
+      this.playlist = songs.map(song => ({ ...song }));
+      this.currentPlaylist = [...this.playlist];
+      this.showSearchResults = false;
+      
+      this.$emit('notify', `已同步 ${songs.length} 首歌曲到播放列表`, 'success');
+    },
+
+    // 临时播放（不更新播放列表）
+    playTemporarily(songs, index = 0) {
+      if (!songs || !Array.isArray(songs) || index < 0 || index >= songs.length) return;
+      
+      // 设置当前播放列表为临时列表
+      this.currentPlaylist = [...songs];
+      this.showSearchResults = true;
+      
+      // 播放指定歌曲
+      this.selectSong(index);
+    },
+
+    // 从搜索结果中临时播放
+    playFromSearchResults(song) {
+      const index = this.getSongIndex(song, this.currentPlaylist);
+      if (index !== -1) {
+        this.playTemporarily(this.currentPlaylist, index);
+      }
     }
   }
 }
@@ -2462,6 +3274,7 @@ export default {
   align-items: center;
   min-width: 50px;
   justify-content: flex-end;
+  gap: 0.75rem;
 }
 
 .theme-dark .music-player-header {
@@ -2747,6 +3560,565 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 播放列表按钮样式 */
+.playlist-button-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.playlist-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.playlist-button:hover {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-color-dark));
+  color: white;
+  border-color: var(--primary-color);
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(var(--primary-color-rgb), 0.4);
+}
+
+.playlist-button.active {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-color-dark));
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.playlist-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: var(--primary-color);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 2px 5px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 播放列表菜单样式 */
+.playlist-menu {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  width: 400px;
+  max-height: 60vh;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  z-index: 10000;
+  overflow: hidden;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.playlist-menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.playlist-menu-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.playlist-menu-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.clear-playlist-btn,
+.close-playlist-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.clear-playlist-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(220, 53, 69, 0.1);
+  transform: scale(0);
+  transition: transform 0.2s ease;
+}
+
+.clear-playlist-btn:hover:not(:disabled) {
+  color: #dc3545;
+}
+
+.clear-playlist-btn:hover:not(:disabled)::after {
+  transform: scale(1);
+}
+
+.clear-playlist-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.close-playlist-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+}
+
+.playlist-menu-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* 空播放列表样式 */
+.empty-playlist {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.empty-playlist-icon {
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.empty-playlist p {
+  margin: 0 0 8px 0;
+  color: var(--text-secondary);
+}
+
+.empty-playlist-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* 播放列表项样式 */
+.playlist-menu-items {
+  padding: 8px 0;
+}
+
+.playlist-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.playlist-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.playlist-menu-item.playing {
+  background: rgba(var(--primary-color-rgb), 0.1);
+  color: var(--primary-color);
+}
+
+.playlist-menu-item.loading {
+  opacity: 0.7;
+}
+
+.playlist-menu-item.current-song-highlight {
+  background: rgba(var(--primary-color-rgb), 0.2);
+  border-left: 3px solid var(--primary-color);
+  animation: highlightPulse 2s ease-out;
+}
+
+@keyframes highlightPulse {
+  0% {
+    background: rgba(var(--primary-color-rgb), 0.4);
+    transform: translateX(5px);
+  }
+  100% {
+    background: rgba(var(--primary-color-rgb), 0.2);
+    transform: translateX(0);
+  }
+}
+
+.playlist-item-info {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow: hidden;
+}
+
+.playlist-item-index {
+  width: 24px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.playlist-item-cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.playlist-item-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.playlist-item-details {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.playlist-item-title {
+  font-weight: 500;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.playlist-item-artist {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.playlist-item-loader {
+  width: 16px;
+  height: 16px;
+}
+
+.playlist-item-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.playlist-menu-item:hover .playlist-item-remove-btn {
+  opacity: 1;
+}
+
+.playlist-item-remove-btn:hover {
+  background: rgba(220, 53, 69, 0.1);
+  color: #dc3545;
+}
+
+.playlist-item-duration {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-width: 40px;
+  text-align: right;
+}
+
+.playlist-item-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-muted);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  margin-left: 4px;
+}
+
+.playlist-menu-item:hover .playlist-item-drag-handle {
+  opacity: 1;
+}
+
+.playlist-item-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* 滚动条样式 */
+.playlist-menu-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.playlist-menu-content::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.playlist-menu-content::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.playlist-menu-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* 空搜索状态样式 */
+.empty-search-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  height: 100%;
+}
+
+.empty-search-icon {
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  opacity: 0.6;
+}
+
+.empty-search-state p {
+  margin: 0 0 8px 0;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.empty-search-hint {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* 加载动画优化 */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  height: 100%;
+}
+
+.music-loader {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.loader-bar {
+  width: 4px;
+  height: 32px;
+  background: var(--primary-color);
+  border-radius: 2px;
+  animation: loadingWave 1.4s ease-in-out infinite;
+}
+
+.loader-bar:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.loader-bar:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loader-bar:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.loader-bar:nth-child(4) {
+  animation-delay: 0.6s;
+}
+
+@keyframes loadingWave {
+  0%, 80%, 100% {
+    transform: scaleY(0.4);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.loading-text {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin: 0;
+  animation: fadeInOut 2s ease-in-out infinite;
+}
+
+@keyframes fadeInOut {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* 专用的加载动画样式 */
+.playlist-loading .music-loader .loader-bar {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  box-shadow: 0 0 10px rgba(var(--primary-color-rgb), 0.3);
+}
+
+.artist-loading .music-loader .loader-bar {
+  background: linear-gradient(135deg, #ff6b6b, #feca57);
+  box-shadow: 0 0 10px rgba(255, 107, 107, 0.3);
+}
+
+.album-loading .music-loader .loader-bar {
+  background: linear-gradient(135deg, #48dbfb, #0abde3);
+  box-shadow: 0 0 10px rgba(72, 219, 251, 0.3);
+}
+
+/* 加载动画增强效果 */
+.loading-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(var(--primary-color-rgb), 0.05) 0%, transparent 70%);
+  animation: rotate 10s linear infinite;
+}
+
+/* 使用CSS变量来动态设置颜色 */
+.playlist-loading::before {
+  background: radial-gradient(circle, rgba(var(--primary-color-rgb), 0.05) 0%, transparent 70%);
+}
+
+.artist-loading::before {
+  background: radial-gradient(circle, var(--artist-loading-color, rgba(255, 107, 107, 0.05)) 0%, transparent 70%);
+}
+
+.album-loading::before {
+  background: radial-gradient(circle, var(--album-loading-color, rgba(72, 219, 251, 0.05)) 0%, transparent 70%);
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 加载进度指示器 */
+.loading-progress {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loading-progress-bar {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 2px;
+  animation: progressAnimation 2s ease-in-out infinite;
+}
+
+@keyframes progressAnimation {
+  0% {
+    width: 0%;
+    opacity: 0.8;
+  }
+  50% {
+    width: 70%;
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 0.8;
+  }
+}
+
+/* 播放列表菜单响应式设计 */
+@media (max-width: 768px) {
+  .playlist-menu {
+    width: calc(100vw - 40px);
+    max-width: 400px;
+    right: 20px;
+    bottom: 70px;
+    max-height: 50vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .playlist-menu {
+    width: calc(100vw - 20px);
+    right: 10px;
+    bottom: 60px;
+    max-height: 45vh;
+  }
 }
 
 .progress-container {
@@ -3999,7 +5371,7 @@ export default {
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 1rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.2);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 2rem;
@@ -4011,13 +5383,8 @@ export default {
 }
 
 .dropdown-trigger:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.3);
   border-color: rgba(255, 255, 255, 0.5);
-}
-
-.dropdown-trigger:hover {
-  background: var(--bg-hover);
-  border-color: var(--primary-color);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
@@ -4035,10 +5402,10 @@ export default {
   top: calc(100% + 0.5rem);
   left: 0;
   right: 0;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--primary-color);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 1rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   z-index: 1000;
   overflow: hidden;
   backdrop-filter: blur(8px);
@@ -4063,15 +5430,16 @@ export default {
   transition: all 0.2s ease;
   font-size: 0.9rem;
   position: relative;
+  color: white;
 }
 
 .dropdown-item:hover {
-  background: var(--bg-hover);
+  background: rgba(255, 255, 255, 0.15);
   padding-left: 1.5rem;
 }
 
 .dropdown-item.active {
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-color-dark));
+  background: rgba(255, 255, 255, 0.25);
   color: white;
   font-weight: 600;
 }
@@ -4649,6 +6017,277 @@ export default {
 }
 
 /* 专辑详情弹窗样式 */
+/* 歌单详情弹窗样式 */
+.playlist-detail-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10002;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: fadeIn 0.3s ease;
+}
+
+.playlist-detail-modal-content {
+  width: 90%;
+  max-width: 900px;
+  max-height: 85vh;
+  background: var(--bg-primary);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: slideUpScale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid var(--border-color);
+}
+
+.playlist-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 20px 20px 0 0;
+}
+
+.playlist-detail-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.playlist-detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color) var(--bg-hover);
+}
+
+.playlist-detail-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.playlist-detail-body::-webkit-scrollbar-track {
+  background: var(--bg-hover);
+  border-radius: 10px;
+}
+
+.playlist-detail-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  border-radius: 10px;
+}
+
+.playlist-info-section {
+  margin-bottom: 2rem;
+}
+
+.playlist-basic-info {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 2rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+}
+
+.playlist-cover-large {
+  flex-shrink: 0;
+  width: 180px;
+  height: 180px;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+  border: 3px solid var(--bg-primary);
+}
+
+.playlist-cover-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: all 0.3s ease;
+}
+
+.playlist-cover-large:hover img {
+  transform: scale(1.1);
+}
+
+.playlist-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.playlist-details .playlist-name {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 0.75rem 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  line-height: 1.2;
+}
+
+.playlist-details .playlist-creator {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 0 0 0.5rem 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.playlist-details .playlist-description {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0 0 1rem 0;
+  line-height: 1.6;
+  max-height: 4.8em;
+  overflow-y: auto;
+  padding-right: 0.5em;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.playlist-stats {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.playlist-stats .stat-item {
+  padding: 0.5rem 1rem;
+  background: var(--bg-primary);
+  border-radius: 12px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.playlist-tags {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.playlist-tags .tag-item {
+  padding: 0.4rem 0.8rem;
+  background: var(--primary-color);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.85rem;
+}
+
+.playlist-songs-section h3 {
+  margin: 0 0 1rem 0;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.playlist-songs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.playlist-song-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.playlist-song-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+  transform: translateX(5px);
+}
+
+.playlist-song-item .song-index {
+  width: 30px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.playlist-song-item .song-cover-small {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.playlist-song-item .song-cover-small img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.playlist-song-item .song-info-full {
+  flex: 1;
+  min-width: 0;
+}
+
+.playlist-song-item .song-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-song-item .song-artist {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-song-item .song-album-name {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-song-item .song-duration {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .album-detail-modal-overlay {
   position: fixed;
   top: 0;
@@ -5165,72 +6804,74 @@ export default {
 }
 
 /* 加载更多按钮样式 */
-.load-more-container {
+/* 翻页组件样式 */
+.pagination-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
+  gap: 1rem;
+  padding: 1.5rem 1rem;
   border-top: 1px solid var(--border-color);
   margin-top: 1rem;
 }
 
 .pagination-info {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--bg-secondary);
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  margin-top: 1rem;
-}
-
-.pagination-stats {
   font-size: 0.9rem;
   color: var(--text-secondary);
+  text-align: center;
+}
+
+.pagination-controls {
   display: flex;
-  gap: 0.5rem;
   align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
-.pagination-stats span {
-  padding: 0.25rem 0.75rem;
-  background: var(--bg-primary);
-  border-radius: 6px;
+.pagination-btn {
+  min-width: 36px;
+  height: 36px;
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   border: 1px solid var(--border-color);
-}
-
-.load-more-btn {
-  padding: 0.75rem 2rem;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
 }
 
-.load-more-btn:hover:not(:disabled) {
-  background: var(--primary-color-dark);
+.pagination-btn:hover:not(:disabled) {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(var(--primary-color-rgb), 0.3);
 }
 
-.load-more-btn:disabled {
-  opacity: 0.7;
+.pagination-btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
   transform: none;
 }
 
-.results-info {
-  font-size: 0.85rem;
+.pagination-btn.page-number {
+  min-width: 36px;
+}
+
+.pagination-btn.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.pagination-ellipsis {
+  padding: 0.5rem;
   color: var(--text-secondary);
+  user-select: none;
 }
 
 .no-more-results {
@@ -5573,5 +7214,152 @@ export default {
     transform: scale(1.05);
     opacity: 0.8;
   }
+}
+
+/* 用户相关样式 */
+.user-info-container {
+  position: relative;
+  cursor: pointer;
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.user-avatar:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.login-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 2rem;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.login-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: 280px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: dropdownSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.user-menu {
+  padding: 1rem;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 1rem;
+}
+
+.user-avatar-large {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--border-color);
+}
+
+.user-avatar-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.user-level {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: white;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 0.75rem 0;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.menu-item.logout {
+  color: var(--danger-color, #F44336);
+}
+
+.menu-item.logout:hover {
+  background: rgba(244, 67, 54, 0.1);
+}
+
+.menu-item svg {
+  flex-shrink: 0;
 }
 </style>

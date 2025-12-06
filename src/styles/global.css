@@ -2326,7 +2326,7 @@ body {
 
 .action-btn.generate-img-btn:hover {
   opacity: 1;
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-hover);
 }
 
 .action-btn.regenerate-img-btn {
@@ -2335,7 +2335,7 @@ body {
 
 .action-btn.regenerate-img-btn:hover {
   opacity: 1;
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-hover);
 }
 
 .action-btn.hide-img-btn {
@@ -2344,7 +2344,7 @@ body {
 
 .action-btn.hide-img-btn:hover {
   opacity: 1;
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-hover);
 }
 
 .action-btn.expand-img-btn {
@@ -2353,7 +2353,15 @@ body {
 
 .action-btn.expand-img-btn:hover {
   opacity: 1;
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-hover);
+}
+
+/* 暗色主题下的图片按钮适配 */
+.theme-dark .action-btn.generate-img-btn:hover,
+.theme-dark .action-btn.regenerate-img-btn:hover,
+.theme-dark .action-btn.hide-img-btn:hover,
+.theme-dark .action-btn.expand-img-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* 流光动画类 */

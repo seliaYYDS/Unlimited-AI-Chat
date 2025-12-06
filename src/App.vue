@@ -5312,33 +5312,28 @@ export default {
 
 
 .action-btn {
-
   background: transparent;
-
   border: none;
-
   cursor: pointer;
-
   padding: 4px;
-
   border-radius: 4px;
-
   opacity: 0.7;
-
   transition: all 0.2s ease;
-
-  color: var(--text-secondary);
-
+  color: #666;
 }
 
-
-
 .action-btn:hover {
-
   opacity: 1;
+  background-color: rgba(0, 0, 0, 0.05);
+}
 
-  background-color: var(--bg-hover);
+/* 暗色主题下的操作按钮适配 */
+.theme-dark .action-btn {
+  color: rgba(255, 255, 255, 0.7);
+}
 
+.theme-dark .action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* 移动端特定样式 */
@@ -8328,7 +8323,7 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   opacity: 1;
 }
 
-.action-btn {
+.image-actions .action-btn {
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -8342,23 +8337,23 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   transition: all 0.2s ease;
 }
 
-.action-btn:hover {
+.image-actions .action-btn:hover {
   transform: scale(1.1);
 }
 
-.action-btn.download:hover {
+.image-actions .action-btn.download:hover {
   transform: scale(1.1) rotate(5deg);
 }
 
-.action-btn.save:hover {
+.image-actions .action-btn.save:hover {
   transform: scale(1.1) rotate(-5deg);
 }
 
-.action-btn.copy:hover {
+.image-actions .action-btn.copy:hover {
   transform: scale(1.1) rotate(5deg);
 }
 
-.action-btn.download.download-success {
+.image-actions .action-btn.download.download-success {
   animation: downloadSuccess 0.8s ease-out;
 }
 
