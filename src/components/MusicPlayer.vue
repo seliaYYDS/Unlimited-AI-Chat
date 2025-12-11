@@ -3,7 +3,7 @@
     <div class="music-player-modal-content" @click.stop>
       <div class="music-player-header">
         <div class="header-left">
-          <h3>音乐播放器</h3>
+          <h3 @click="goToHomePage" class="header-title">音乐播放器</h3>
         </div>
         <div class="header-center">
           <!-- 搜索类型下拉菜单 -->
@@ -45,15 +45,17 @@
         </div>
         <div class="header-right">
           <!-- 用户头像和登录状态 -->
-          <div class="user-info-container" @click="showUserMenu">
-            <div v-if="isLoggedIn && userInfo" class="user-avatar">
-              <img :src="userInfo.avatarUrl || defaultAlbumArt" :alt="userInfo.nickname" />
+          <div class="user-info-container" @click="handleUserContainerClick">
+            <div class="user-avatar" @click.stop="handleUserContainerClick">
+              <img v-if="isLoggedIn && userInfo" :src="userInfo.avatarUrl || defaultAlbumArt" :alt="userInfo.nickname" />
+              <div v-else class="default-avatar">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                </svg>
+              </div>
             </div>
-            <div v-else class="login-btn" @click="openLoginModal">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
-              </svg>
-              <span>登录</span>
+            <div class="user-name" @click.stop="handleUserContainerClick">
+              {{ isLoggedIn && userInfo ? userInfo.nickname : '未登录' }}
             </div>
           </div>
           
@@ -96,8 +98,162 @@
       
       <div class="music-player-body">
         
+        <!-- 主页内容 -->
+        <div v-if="!showSearchResults" class="home-page">
+          <!-- 左侧边栏 -->
+          <div class="sidebar">
+            <div class="sidebar-section">
+              <h4 class="sidebar-title">我的歌单</h4>
+              <div class="user-playlists">
+                <div v-if="isLoadingUserPlaylists" class="loading-placeholder">加载中...</div>
+                <div v-else-if="userPlaylists.length === 0" class="empty-placeholder">暂无创建的歌单</div>
+                <div v-else class="user-playlists-list">
+                  <div v-for="playlist in userPlaylists.slice(0, 10)" :key="playlist.id" class="playlist-item" @click="openPlaylist(playlist)">
+                    <img :src="playlist.coverImgUrl || defaultAlbumArt" :alt="playlist.name" class="playlist-cover">
+                    <div class="playlist-info">
+                      <div class="playlist-name">{{ playlist.name }}</div>
+                      <div class="playlist-count">{{ playlist.trackCount }} 首</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 主内容区 -->
+          <div class="main-content">
+            <!-- 推荐歌单 -->
+            <div class="recommend-section">
+              <h3 class="section-title">推荐歌单</h3>
+              <div v-if="isLoadingRecommendPlaylists" class="loading-placeholder">加载中...</div>
+              <div v-else class="recommend-playlists">
+                <div v-for="playlist in recommendPlaylists" :key="playlist.id" class="recommend-playlist-item" @click="openPlaylist(playlist)">
+                  <img :src="playlist.picUrl || defaultAlbumArt" :alt="playlist.name" class="recommend-playlist-cover">
+                  <div class="recommend-playlist-info">
+                    <div class="recommend-playlist-name">{{ playlist.name }}</div>
+                    <div class="recommend-playlist-count">{{ playlist.playCount }} 次播放</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 推荐歌曲 -->
+            <div class="recommend-section">
+              <h3 class="section-title">推荐歌曲</h3>
+              <div v-if="isLoadingRecommendSongs" class="loading-placeholder">加载中...</div>
+              <div v-else class="recommend-songs">
+                <div v-for="song in recommendSongs" :key="song.id" class="recommend-song-item">
+                  <img :src="song.picUrl || (song.al && song.al.picUrl) || defaultAlbumArt" :alt="song.name" class="recommend-song-cover" @click="playRecommendSong(song)">
+                  <div class="recommend-song-info" @click="playRecommendSong(song)">
+                    <div class="recommend-song-name">{{ song.name }}</div>
+                    <div class="recommend-song-artist">{{ song.artist }}</div>
+                  </div>
+                  <button v-if="!isSongInPlaylist(song)" class="recommend-add-btn" @click.stop="addToPlaylist(song)" title="添加到播放列表">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 底部播放控件面板 -->
+          <div v-if="!showPlaylistDetail" class="bottom-player">
+            <div class="bottom-player-content">
+              <!-- 歌曲信息 -->
+              <div class="bottom-song-info">
+                <div class="bottom-song-cover">
+                  <img v-if="currentSong" :src="(currentSong.al && currentSong.al.picUrl) || currentSong.picUrl || (currentSong.album && currentSong.album.picUrl) || defaultAlbumArt" :alt="currentSong.name" />
+                  <div v-else class="empty-song-cover">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                    </svg>
+                  </div>
+                </div>
+                <div class="bottom-song-details">
+                  <div class="bottom-song-name" v-if="currentSong">{{ currentSong.name }}</div>
+                  <div class="bottom-song-name" v-else>未播放歌曲</div>
+                  <div class="bottom-song-artist" v-if="currentSong">
+                    <template v-if="currentSong.ar && Array.isArray(currentSong.ar)">
+                      <span 
+                        v-for="(artist, index) in currentSong.ar" 
+                        :key="artist.id"
+                        class="artist-name clickable"
+                        @click.stop="getArtistDetail(artist.id)"
+                      >
+                        {{ artist.name }}
+                        <span v-if="index < currentSong.ar.length - 1" class="artist-separator">, </span>
+                      </span>
+                    </template>
+                    <template v-else-if="currentSong.artists && Array.isArray(currentSong.artists)">
+                      <span 
+                        v-for="(artist, index) in currentSong.artists" 
+                        :key="artist.id"
+                        class="artist-name clickable"
+                        @click.stop="getArtistDetail(artist.id)"
+                      >
+                        {{ artist.name }}
+                        <span v-if="index < currentSong.artists.length - 1" class="artist-separator">, </span>
+                      </span>
+                    </template>
+                    <span v-else class="artist-name clickable" @click.stop="handleArtistClick(currentSong)">{{ currentSong.artist || '未知艺术家' }}</span>
+                  </div>
+                  <div class="bottom-song-artist" v-else>选择一首歌曲开始播放</div>
+                </div>
+              </div>
+              
+              <!-- 播放控制 -->
+              <div class="bottom-controls">
+                <button @click="previousSong" class="bottom-control-btn" title="上一首" :disabled="!currentSong">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                  </svg>
+                </button>
+                <button @click="togglePlay" class="bottom-play-btn" :title="isPlaying ? '暂停' : '播放'" :disabled="!currentSong">
+                  <svg v-if="!isPlaying" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                  <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                  </svg>
+                </button>
+                <button @click="nextSong" class="bottom-control-btn" title="下一首" :disabled="!currentSong">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                  </svg>
+                </button>
+              </div>
+              
+              <!-- 进度条 -->
+              <div class="bottom-progress">
+                <span class="bottom-time">{{ formatTime(currentTime) }}</span>
+                <div class="bottom-progress-bar" @click="seekTo">
+                  <div class="bottom-progress-fill" :style="{ width: progress + '%' }"></div>
+                </div>
+                <span class="bottom-time">{{ formatTime(duration) }}</span>
+              </div>
+              
+              <!-- 播放列表按钮 -->
+              <div class="bottom-right-controls">
+                <button 
+                  class="bottom-playlist-btn" 
+                  @click="togglePlaylistMenu"
+                  :class="{ active: showPlaylistMenu }"
+                  title="播放列表"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+                  </svg>
+                  <span class="bottom-playlist-count" v-if="playlist.length > 0">{{ playlist.length }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <!-- 播放列表 -->
-        <div class="playlist-section">
+        <div v-else class="playlist-section">
           <div class="playlist-header">
             <h4>{{ showSearchResults ? '搜索结果' : '音乐列表' }}</h4>
             <div class="playlist-controls">
@@ -1017,6 +1173,60 @@
       @login-success="handleLoginSuccess"
       @user-info-updated="handleUserInfoUpdated"
     />
+    
+    <!-- 登出确认弹窗 -->
+    <div class="logout-confirm-modal-overlay" v-if="showLogoutConfirmModal" @click="closeLogoutConfirm">
+      <div class="logout-confirm-modal-content" @click.stop>
+        <div class="logout-confirm-header">
+          <h3>确认退出</h3>
+          <button class="close-btn" @click="closeLogoutConfirm">×</button>
+        </div>
+        
+        <div class="logout-confirm-body">
+          <div class="logout-confirm-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+            </svg>
+          </div>
+          <p class="logout-confirm-text">确定要退出登录吗？</p>
+          <p class="logout-confirm-user" v-if="userInfo">{{ userInfo.nickname }}</p>
+        </div>
+        
+        <div class="logout-confirm-footer">
+          <button class="cancel-btn" @click="closeLogoutConfirm">取消</button>
+          <button class="confirm-btn" @click="confirmLogout">确认退出</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 音乐播放器专属通知 -->
+  <div 
+    v-if="notification.show" 
+    class="music-notification"
+    :class="notification.type"
+    :style="{ 
+      left: notificationPosition.x + 'px', 
+      top: notificationPosition.y + 'px' 
+    }"
+  >
+    <div class="notification-content">
+      <div class="notification-icon">
+        <svg v-if="notification.type === 'success'" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+        <svg v-else-if="notification.type === 'warning'" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+        </svg>
+        <svg v-else-if="notification.type === 'danger'" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+        </svg>
+        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+        </svg>
+      </div>
+      <div class="notification-message">{{ notification.message }}</div>
+    </div>
   </div>
   
   <!-- 最小化悬浮播放器 -->
@@ -1025,6 +1235,7 @@
     class="mini-player"
     :style="{ left: displayPosition.x + 'px', top: displayPosition.y + 'px' }"
     @mousedown="startDragMiniPlayer"
+    @touchstart="startDragMiniPlayer"
   >
     <div class="mini-player-header">
       <div class="mini-song-info">
@@ -1190,7 +1401,8 @@ export default {
     'current-song-changed',
     'toggleMusicPlay',
     'playNextMusic',
-    'playPrevMusic'
+    'playPrevMusic',
+    'user-info-updated'
   ],
   props: {
     visible: {
@@ -1200,6 +1412,10 @@ export default {
     apiUrl: {
       type: String,
       default: 'https://zm.i9mr.com'
+    },
+    settings: {
+      type: Object,
+      default: () => ({})
     }
   },
   data() {
@@ -1301,11 +1517,19 @@ export default {
       playModeTooltipTimer: null,
       // 登录相关
       showLoginModal: false,
+      showLogoutConfirmModal: false,
       showUserDropdown: false,
       isLoggedIn: false,
       userInfo: null,
       userLevel: null,
       loginCookie: '',
+      // 主页相关数据
+      userPlaylists: [],
+      recommendPlaylists: [],
+      recommendSongs: [],
+      isLoadingUserPlaylists: false,
+      isLoadingRecommendPlaylists: false,
+      isLoadingRecommendSongs: false,
       // 播放列表菜单
       showPlaylistMenu: false,
       // 拖拽相关
@@ -1313,15 +1537,34 @@ export default {
       draggedOverIndex: null,
       // 搜索结果缓存
       searchCache: {
-        songs: [],
-        playlists: [],
-        artists: [],
-        albums: []
+      },
+      // 音乐播放器专属通知
+      notification: {
+        show: false,
+        message: '',
+        type: 'info', // success, warning, danger, info
+        timer: null
+      },
+      notificationPosition: {
+        x: 20,
+        y: 20
       },
       // 当前搜索查询缓存
       searchQueryCache: '',
       // 歌单详情加载状态
       isLoadingPlaylist: false,
+      // 重试机制相关
+      retryCount: {
+        playlist: 0,
+        artist: 0,
+        album: 0
+      },
+      maxRetries: 1,
+      lastFailedRequest: {
+        playlist: null,
+        artist: null,
+        album: null
+      },
       // 最小化播放器相关
       isMinimized: false,
       miniPlayerPosition: { x: window.innerWidth - 320, y: 100 },
@@ -1334,6 +1577,11 @@ export default {
   },
   computed: {
     progress() {
+      if (this.duration === 0) return 0;
+      return (this.currentTime / this.duration) * 100;
+    },
+    // 进度百分比（用于底部播放控件）
+    progressPercentage() {
       if (this.duration === 0) return 0;
       return (this.currentTime / this.duration) * 100;
     },
@@ -1403,6 +1651,7 @@ export default {
     this.musicColorExtractor = new MusicColorExtractor();
     // 检查登录状态
     this.checkLoginStatus();
+    console.log('MusicPlayer: 组件已挂载，已检查登录状态');
   },
   beforeUnmount() {
     // 移除事件监听
@@ -1481,7 +1730,7 @@ export default {
         this.showSearchResults = true;
       } catch (error) {
         console.error('搜索失败:', error);
-        this.$emit('notify', `搜索失败: ${error.message}`, 'danger');
+        this.showNotification(`搜索失败: ${error.message}`, 'danger');
       } finally {
         this.isSearching = false;
       }
@@ -1549,7 +1798,8 @@ export default {
     // 搜索歌曲
     async searchSongs() {
       const offset = (this.currentPage - 1) * this.pageSize;
-      const response = await fetch(`${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=1&limit=${this.pageSize}&offset=${offset}`);
+      const url = `${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=1&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         if (data.code === 200 && data.result && data.result.songs) {
@@ -1589,7 +1839,8 @@ export default {
     // 搜索歌单
     async searchPlaylists() {
       const offset = (this.currentPage - 1) * this.pageSize;
-      const response = await fetch(`${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=1000&limit=${this.pageSize}&offset=${offset}`);
+      const url = `${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=1000&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         if (data.code === 200 && data.result && data.result.playlists) {
@@ -1628,7 +1879,8 @@ export default {
     // 搜索歌手
     async searchArtists() {
       const offset = (this.currentPage - 1) * this.pageSize;
-      const response = await fetch(`${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=100&limit=${this.pageSize}&offset=${offset}`);
+      const url = `${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=100&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         if (data.code === 200 && data.result && data.result.artists) {
@@ -1672,7 +1924,7 @@ export default {
       // 从缓存中获取对应类型的搜索结果
       const cachedResults = this.searchCache[this.getSearchTypeKey(type)];
       
-      if (cachedResults.length > 0) {
+      if (cachedResults && cachedResults.length > 0) {
         // 使用缓存数据
         this.searchResults = cachedResults;
         this.currentPlaylist = this.searchResults;
@@ -1714,13 +1966,14 @@ export default {
     },
 
     // 获取歌单详情
-    async getPlaylistDetail(playlistId) {
+    async getPlaylistDetail(playlistId, isRetry = false) {
       try {
         // 立即显示加载动画
         this.isLoadingPlaylist = true;
         this.showPlaylistDetail = true;
         
-        const response = await fetch(`${this.apiUrl}/playlist/detail?id=${playlistId}`);
+        const url = `${this.apiUrl}/playlist/detail?id=${playlistId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           if (data.code === 200 && data.playlist && data.playlist.tracks) {
@@ -1760,12 +2013,32 @@ export default {
             // 显示歌单详情界面
             this.showPlaylistDetail = true;
             
-            this.$emit('notify', `已加载歌单: ${data.playlist.name} (共${songs.length}首歌曲)`, 'success');
+            // 重置重试计数
+            this.retryCount.playlist = 0;
+            this.lastFailedRequest.playlist = null;
+            
+            this.showNotification(`已加载歌单: ${data.playlist.name} (共${songs.length}首歌曲)`, 'success');
           }
         }
       } catch (error) {
         console.error('获取歌单详情失败:', error);
-        this.$emit('notify', `获取歌单详情失败: ${error.message}`, 'danger');
+        
+        // 重试逻辑
+        if (!isRetry && this.retryCount.playlist < this.maxRetries) {
+          this.retryCount.playlist++;
+          this.lastFailedRequest.playlist = playlistId;
+          this.showNotification(`加载失败，正在重试 (${this.retryCount.playlist}/${this.maxRetries})...`, 'warning');
+          
+          // 延迟1秒后重试
+          setTimeout(() => {
+            this.getPlaylistDetail(playlistId, true);
+          }, 1000);
+        } else {
+          // 重试次数用完或已经是重试请求
+          this.showNotification(`获取歌单详情失败: ${error.message}`, 'danger');
+          this.retryCount.playlist = 0;
+          this.lastFailedRequest.playlist = null;
+        }
       } finally {
         // 重置歌单加载状态
         this.isLoadingPlaylist = false;
@@ -1775,7 +2048,8 @@ export default {
     // 搜索专辑
     async searchAlbums() {
       const offset = (this.currentPage - 1) * this.pageSize;
-      const response = await fetch(`${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=10&limit=${this.pageSize}&offset=${offset}`);
+      const url = `${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=10&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         if (data.code === 200 && data.result && data.result.albums) {
@@ -1812,7 +2086,7 @@ export default {
     },
 
     // 获取专辑详情
-    async getAlbumDetail(albumId) {
+    async getAlbumDetail(albumId, isRetry = false) {
       if (!albumId) return;
       
       // 立即显示加载动画
@@ -1820,7 +2094,8 @@ export default {
       this.showAlbumDetail = true;
       
       try {
-        const response = await fetch(`${this.apiUrl}/album?id=${albumId}`);
+        const url = `${this.apiUrl}/album?id=${albumId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const response = await fetch(url);
         const data = await response.json();
         
         
@@ -1849,10 +2124,30 @@ export default {
           }
           
           this.showAlbumDetail = true;
+          
+          // 重置重试计数
+          this.retryCount.album = 0;
+          this.lastFailedRequest.album = null;
         }
       } catch (error) {
         console.error('获取专辑详情失败:', error);
-        this.$emit('notify', `获取专辑详情失败: ${error.message}`, 'danger');
+        
+        // 重试逻辑
+        if (!isRetry && this.retryCount.album < this.maxRetries) {
+          this.retryCount.album++;
+          this.lastFailedRequest.album = albumId;
+          this.showNotification(`加载失败，正在重试 (${this.retryCount.album}/${this.maxRetries})...`, 'warning');
+          
+          // 延迟1秒后重试
+          setTimeout(() => {
+            this.getAlbumDetail(albumId, true);
+          }, 1000);
+        } else {
+          // 重试次数用完或已经是重试请求
+          this.showNotification(`获取专辑详情失败: ${error.message}`, 'danger');
+          this.retryCount.album = 0;
+          this.lastFailedRequest.album = null;
+        }
       } finally {
         this.isLoadingAlbum = false;
       }
@@ -2061,8 +2356,13 @@ export default {
       this.isLoadingSong = true;
       
       try {
+        // 重置时长
+        this.duration = 0;
+        this.currentTime = 0;
+        
         // 调用API获取真实歌曲URL
-        const response = await fetch(`${this.apiUrl}/song/url?id=${song.id}`);
+        const url = `${this.apiUrl}/song/url?id=${song.id}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           if (data.code === 200 && data.data && data.data[0] && data.data[0].url) {
@@ -2081,7 +2381,15 @@ export default {
         } else {
           this.audio.src = song.url || `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`;
         }
+        
+        // 设置音频加载完成后的回调
+        this.audio.onloadedmetadata = () => {
+          this.duration = this.audio.duration || 0;
+          console.log('音频元数据加载完成，时长:', this.duration);
+        };
+        
         this.audio.load();
+        
         // 加载完成后自动播放
         this.audio.oncanplay = () => {
           if (this.isPlaying) {
@@ -2098,7 +2406,7 @@ export default {
             this.audio.play().catch(e => console.error('自动播放失败:', e));
           }
         };
-        this.$emit('notify', `加载歌曲失败: ${error.message}`, 'danger');
+        this.showNotification(`加载歌曲失败: ${error.message}`, 'danger');
       } finally {
         this.isLoadingSong = false;
       }
@@ -2107,7 +2415,8 @@ export default {
     async loadSongDetail(songId) {
       try {
         // 获取歌曲详细信息以更新当前歌曲数据
-        const response = await fetch(`${this.apiUrl}/song/detail?ids=${songId}`);
+        const url = `${this.apiUrl}/song/detail?ids=${songId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           if (data.code === 200 && data.songs && data.songs[0]) {
@@ -2289,28 +2598,47 @@ export default {
     // 最小化播放器
     minimizePlayer() {
       this.isMinimized = true;
+      // 更新通知位置
+      this.updateNotificationPosition();
     },
     
     // 恢复播放器
     restorePlayer() {
       this.isMinimized = false;
+      // 更新通知位置
+      this.updateNotificationPosition();
     },
     
     // 开始拖拽悬浮播放器
     startDragMiniPlayer(event) {
-      if (event.target.closest('.mini-controls') || 
-          event.target.closest('.mini-player-controls') || 
-          event.target.closest('.mini-progress') ||
-          event.target.closest('.mini-playlist-menu')) {
+      // 检查是否点击了控制按钮或播放列表菜单
+      const target = event.target;
+      if (target.closest('.mini-controls') || 
+          target.closest('.mini-player-controls') || 
+          target.closest('.mini-progress') ||
+          target.closest('.mini-playlist-menu')) {
         return; // 如果点击的是控制按钮或播放列表菜单，不启动拖拽
       }
       
       this.isDraggingMiniPlayer = true;
-      this.dragOffset.x = event.clientX - this.miniPlayerPosition.x;
-      this.dragOffset.y = event.clientY - this.miniPlayerPosition.y;
       
-      document.addEventListener('mousemove', this.onDragMiniPlayerThrottled);
-      document.addEventListener('mouseup', this.stopDragMiniPlayer);
+      // 检测是鼠标事件还是触摸事件
+      const isTouchEvent = event.type === 'touchstart';
+      const clientX = isTouchEvent ? event.touches[0].clientX : event.clientX;
+      const clientY = isTouchEvent ? event.touches[0].clientY : event.clientY;
+      
+      this.dragOffset.x = clientX - this.miniPlayerPosition.x;
+      this.dragOffset.y = clientY - this.miniPlayerPosition.y;
+      
+      // 根据事件类型添加相应的事件监听器
+      if (isTouchEvent) {
+        document.addEventListener('touchmove', this.onDragMiniPlayerThrottled, { passive: false });
+        document.addEventListener('touchend', this.stopDragMiniPlayer);
+        document.addEventListener('touchcancel', this.stopDragMiniPlayer);
+      } else {
+        document.addEventListener('mousemove', this.onDragMiniPlayerThrottled);
+        document.addEventListener('mouseup', this.stopDragMiniPlayer);
+      }
       
       event.preventDefault();
     },
@@ -2411,9 +2739,14 @@ export default {
     onDragMiniPlayerThrottled(event) {
       if (!this.isDraggingMiniPlayer) return;
       
+      // 检测是鼠标事件还是触摸事件
+      const isTouchEvent = event.type === 'touchmove';
+      const clientX = isTouchEvent ? event.touches[0].clientX : event.clientX;
+      const clientY = isTouchEvent ? event.touches[0].clientY : event.clientY;
+      
       // 更新实际位置
-      this.miniPlayerPosition.x = event.clientX - this.dragOffset.x;
-      this.miniPlayerPosition.y = event.clientY - this.dragOffset.y;
+      this.miniPlayerPosition.x = clientX - this.dragOffset.x;
+      this.miniPlayerPosition.y = clientY - this.dragOffset.y;
       
       // 限制在窗口范围内
       const maxX = window.innerWidth - 300; // 悬浮窗宽度约300px
@@ -2424,6 +2757,11 @@ export default {
       
       // 使用滞后效果更新显示位置
       this.updateDisplayPosition();
+      
+      // 阻止默认行为（防止移动端页面滚动）
+      if (isTouchEvent) {
+        event.preventDefault();
+      }
     },
     
     // 更新显示位置（带滞后效果）
@@ -2448,8 +2786,13 @@ export default {
     // 停止拖拽悬浮播放器
     stopDragMiniPlayer() {
       this.isDraggingMiniPlayer = false;
+      
+      // 移除所有可能的事件监听器
       document.removeEventListener('mousemove', this.onDragMiniPlayerThrottled);
       document.removeEventListener('mouseup', this.stopDragMiniPlayer);
+      document.removeEventListener('touchmove', this.onDragMiniPlayerThrottled);
+      document.removeEventListener('touchend', this.stopDragMiniPlayer);
+      document.removeEventListener('touchcancel', this.stopDragMiniPlayer);
       
       // 确保最终位置准确
       if (this.dragAnimationId) {
@@ -2481,9 +2824,9 @@ export default {
         if (!this.showSearchResults) {
           this.currentPlaylist = this.playlist;
         }
-        this.$emit('notify', '歌曲已添加到播放列表', 'success');
+        this.showNotification('歌曲已添加到播放列表', 'success');
       } else {
-        this.$emit('notify', '歌曲已在播放列表中', 'warning');
+        this.showNotification('歌曲已在播放列表中', 'warning');
       }
     },
 
@@ -2499,7 +2842,7 @@ export default {
     },
 
     // 获取歌手详情
-    async getArtistDetail(artistId) {
+    async getArtistDetail(artistId, isRetry = false) {
       if (!artistId) return;
       
       // 立即显示加载动画
@@ -2508,23 +2851,24 @@ export default {
       
       try {
         // 获取歌手基本信息
-        const detailResponse = await fetch(`${this.apiUrl}/artist/detail?id=${artistId}`);
+        const cookieParam = this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : '';
+        const detailResponse = await fetch(`${this.apiUrl}/artist/detail?id=${artistId}${cookieParam}`);
         const detailData = await detailResponse.json();
         
         // 获取歌手热门歌曲
-        const hotSongsResponse = await fetch(`${this.apiUrl}/artist/top/song?id=${artistId}`);
+        const hotSongsResponse = await fetch(`${this.apiUrl}/artist/top/song?id=${artistId}${cookieParam}`);
         const hotSongsData = await hotSongsResponse.json();
         
         // 获取歌手全部歌曲
-        const allSongsResponse = await fetch(`${this.apiUrl}/artist/songs?id=${artistId}&limit=100&order=hot`);
+        const allSongsResponse = await fetch(`${this.apiUrl}/artist/songs?id=${artistId}&limit=100&order=hot${cookieParam}`);
         const allSongsData = await allSongsResponse.json();
         
         // 获取歌手专辑
-        const albumsResponse = await fetch(`${this.apiUrl}/artist/album?id=${artistId}&limit=50`);
+        const albumsResponse = await fetch(`${this.apiUrl}/artist/album?id=${artistId}&limit=50${cookieParam}`);
         const albumsData = await albumsResponse.json();
         
         // 获取歌手描述
-        const descResponse = await fetch(`${this.apiUrl}/artist/desc?id=${artistId}`);
+        const descResponse = await fetch(`${this.apiUrl}/artist/desc?id=${artistId}${cookieParam}`);
         const descData = await descResponse.json();
         
         
@@ -2642,9 +2986,29 @@ export default {
         }
         
         this.showArtistDetail = true;
+        
+        // 重置重试计数
+        this.retryCount.artist = 0;
+        this.lastFailedRequest.artist = null;
       } catch (error) {
         console.error('获取歌手详情失败:', error);
-        this.$emit('notify', `获取歌手详情失败: ${error.message}`, 'danger');
+        
+        // 重试逻辑
+        if (!isRetry && this.retryCount.artist < this.maxRetries) {
+          this.retryCount.artist++;
+          this.lastFailedRequest.artist = artistId;
+          this.showNotification(`加载失败，正在重试 (${this.retryCount.artist}/${this.maxRetries})...`, 'warning');
+          
+          // 延迟1秒后重试
+          setTimeout(() => {
+            this.getArtistDetail(artistId, true);
+          }, 1000);
+        } else {
+          // 重试次数用完或已经是重试请求
+          this.showNotification(`获取歌手详情失败: ${error.message}`, 'danger');
+          this.retryCount.artist = 0;
+          this.lastFailedRequest.artist = null;
+        }
       } finally {
         this.isLoadingArtist = false;
       }
@@ -3066,13 +3430,14 @@ export default {
     // 通过歌手名称搜索歌手
     async searchArtistByName(artistName) {
       if (!artistName || artistName === '未知艺术家') {
-        this.$emit('notify', '无法识别歌手信息', 'warning');
+        this.showNotification('无法识别歌手信息', 'warning');
         return;
       }
       
       try {
         this.isSearching = true;
-        const response = await fetch(`${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(artistName)}&type=100&limit=10`);
+        const url = `${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(artistName)}&type=100&limit=10${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           if (data.code === 200 && data.result && data.result.artists && data.result.artists.length > 0) {
@@ -3080,14 +3445,14 @@ export default {
             const artist = data.result.artists[0];
             this.getArtistDetail(artist.id);
           } else {
-            this.$emit('notify', `未找到歌手: ${artistName}`, 'warning');
+            this.showNotification(`未找到歌手: ${artistName}`, 'warning');
           }
         } else {
-          this.$emit('notify', '搜索歌手失败', 'danger');
+          this.showNotification('搜索歌手失败', 'danger');
         }
       } catch (error) {
         console.error('搜索歌手失败:', error);
-        this.$emit('notify', '搜索歌手失败', 'danger');
+        this.showNotification('搜索歌手失败', 'danger');
       } finally {
         this.isSearching = false;
       }
@@ -3209,9 +3574,15 @@ export default {
       this.showLoginModal = false;
     },
     
-    showUserMenu() {
+    handleUserContainerClick() {
       if (this.isLoggedIn) {
-        this.showUserDropdown = !this.showUserDropdown;
+        // 如果用户菜单已显示，则关闭菜单并显示登出确认
+        if (this.showUserDropdown) {
+          this.showUserDropdown = false;
+          this.showLogoutConfirm();
+        } else {
+          this.showUserDropdown = !this.showUserDropdown;
+        }
       } else {
         this.openLoginModal();
       }
@@ -3219,16 +3590,22 @@ export default {
     
     // 处理登录成功
     handleLoginSuccess(data) {
+      console.log('handleLoginSuccess: 处理登录成功', data);
       this.loginCookie = data.cookie;
       this.isLoggedIn = true;
-      this.$emit('notify', '登录成功！', 'success');
+      this.showNotification('登录成功！', 'success');
+      // 立即获取用户信息
+      this.getUserInfo();
     },
     
     // 处理用户信息更新
     handleUserInfoUpdated(userInfo) {
+      console.log('handleUserInfoUpdated: 收到用户信息更新', userInfo);
       this.userInfo = userInfo;
       // 获取用户等级信息
       this.getUserLevel();
+      // 加载主页数据
+      this.loadHomePageData();
     },
     
     // 获取用户等级信息
@@ -3236,11 +3613,8 @@ export default {
       if (!this.loginCookie) return;
       
       try {
-        const response = await fetch(`${this.apiUrl}/user/level?timestamp=${Date.now()}`, {
-          headers: {
-            'Cookie': this.loginCookie
-          }
-        });
+        const url = `/user/level?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
+        const response = await fetch(url);
         
         if (response.ok) {
           const data = await response.json();
@@ -3258,42 +3632,89 @@ export default {
       if (!this.loginCookie) return;
       
       try {
-        const response = await fetch(`${this.apiUrl}/user/account?timestamp=${Date.now()}`, {
-          headers: {
-            'Cookie': this.loginCookie
-          }
-        });
+        const url = `/user/account?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
+        console.log('refreshUserInfo: 强制从服务器刷新用户信息');
+        const response = await fetch(url);
         
         if (response.ok) {
           const data = await response.json();
           if (data.code === 200 && data.profile) {
             this.userInfo = data.profile;
-            // 保存用户信息
+            // 更新用户信息缓存
             try {
               localStorage.setItem('musicUserInfo', JSON.stringify(data.profile));
+              console.log('refreshUserInfo: 用户信息缓存已更新');
             } catch (error) {
               console.error('保存用户信息失败:', error);
             }
-            this.$emit('notify', '用户信息已刷新', 'success');
+            
+            // 清除主页缓存，以便获取最新的推荐内容
+            try {
+              localStorage.removeItem('musicUserPlaylists');
+              localStorage.removeItem('musicRecommendPlaylists');
+              localStorage.removeItem('musicRecommendSongs');
+              localStorage.removeItem('musicHomePageCacheTime');
+              console.log('refreshUserInfo: 主页缓存已清除');
+            } catch (error) {
+              console.error('清除主页缓存失败:', error);
+            }
+            
+            // 重新加载主页数据
+            await this.loadHomePageData();
+            
+            this.showNotification('用户信息已刷新', 'success');
           }
+        } else {
+          this.showNotification('刷新用户信息失败', 'danger');
         }
       } catch (error) {
         console.error('刷新用户信息失败:', error);
-        this.$emit('notify', '刷新用户信息失败', 'danger');
+        this.showNotification('刷新用户信息失败', 'danger');
       }
-      
-      this.showUserDropdown = false;
     },
     
+    // 显示登出确认
+    showLogoutConfirm() {
+      this.showLogoutConfirmModal = true;
+    },
+    
+    // 关闭登出确认
+    closeLogoutConfirm() {
+      this.showLogoutConfirmModal = false;
+    },
+    
+    // 确认登出
+    async confirmLogout() {
+      this.closeLogoutConfirm();
+      await this.logout();
+    },
+
     // 退出登录
-    logout() {
-      // 清除本地存储
+    async logout() {
+      console.log('logout: 开始退出登录流程');
       try {
+        // 调用退出登录API
+        if (this.loginCookie) {
+          const url = `/logout?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
+          await fetch(url);
+          console.log('logout: 退出登录API调用成功');
+        }
+      } catch (error) {
+        console.error('调用退出登录API失败:', error);
+      }
+      
+      try {
+        // 清除本地存储
         localStorage.removeItem('musicLoginCookie');
         localStorage.removeItem('musicLoginTime');
         localStorage.removeItem('musicUserInfo');
+        localStorage.removeItem('musicUserPlaylists');
+        localStorage.removeItem('musicRecommendPlaylists');
+        localStorage.removeItem('musicRecommendSongs');
+        localStorage.removeItem('musicHomePageCacheTime');
+        console.log('logout: 已清除所有本地缓存');
       } catch (error) {
-        console.error('清除登录信息失败:', error);
+        console.error('清除本地存储失败:', error);
       }
       
       // 重置状态
@@ -3302,8 +3723,12 @@ export default {
       this.userLevel = null;
       this.loginCookie = '';
       this.showUserDropdown = false;
+      this.userPlaylists = [];
+      this.recommendPlaylists = [];
+      this.recommendSongs = [];
       
-      this.$emit('notify', '已退出登录', 'info');
+      console.log('logout: 用户状态已重置');
+      this.showNotification('已退出登录', 'info');
     },
     
     // 检查登录状态
@@ -3313,18 +3738,31 @@ export default {
         const loginTime = localStorage.getItem('musicLoginTime');
         const userInfo = localStorage.getItem('musicUserInfo');
         
-        if (cookie && loginTime && userInfo) {
+        if (cookie && loginTime) {
           // 检查登录是否过期（30天）
           const currentTime = Date.now();
           const loginTimestamp = parseInt(loginTime, 10);
           const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
           
           if (currentTime - loginTimestamp < thirtyDaysInMs) {
+            // 登录未过期，恢复登录状态并获取用户信息
             this.loginCookie = cookie;
-            this.userInfo = JSON.parse(userInfo);
             this.isLoggedIn = true;
-            // 获取用户等级
-            this.getUserLevel();
+            
+            // 如果有缓存的用户信息，先使用缓存
+            if (userInfo) {
+              try {
+                this.userInfo = JSON.parse(userInfo);
+                this.getUserLevel();
+              } catch (error) {
+                console.error('解析用户信息失败:', error);
+              }
+            }
+            
+            // 无论是否有缓存，都重新获取最新的用户信息
+            this.getUserInfo();
+            // 加载主页数据
+            this.loadHomePageData();
           } else {
             // 登录已过期，清除信息
             this.logout();
@@ -3335,7 +3773,294 @@ export default {
       }
     },
 
+    // 获取用户信息
+    async getUserInfo() {
+      if (!this.loginCookie) {
+        console.log('getUserInfo: 无登录cookie，跳过获取用户信息');
+        return;
+      }
+      
+      // 先检查localStorage中是否有用户信息
+      try {
+        const cachedUserInfo = localStorage.getItem('musicUserInfo');
+        if (cachedUserInfo) {
+          const userInfo = JSON.parse(cachedUserInfo);
+          console.log('getUserInfo: 从localStorage获取缓存的用户信息', userInfo);
+          this.userInfo = userInfo;
+          // 获取用户等级信息
+          this.getUserLevel();
+          // 通知父组件用户信息已更新
+          this.$emit('user-info-updated', userInfo);
+          return;
+        }
+      } catch (error) {
+        console.error('getUserInfo: 读取缓存的用户信息失败', error);
+      }
+      
+      // 没有缓存或缓存无效，从服务器获取
+      try {
+        // 使用相对路径，通过vite代理转发
+        const url = `/user/account?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
+        console.log('getUserInfo: 从服务器获取用户信息，URL:', url);
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('getUserInfo: 服务器获取用户信息成功', data);
+          if (data.code === 200 && data.profile) {
+            this.userInfo = data.profile;
+            console.log('getUserInfo: 用户信息已更新', this.userInfo);
+            // 保存用户信息到localStorage
+            try {
+              localStorage.setItem('musicUserInfo', JSON.stringify(data.profile));
+              console.log('getUserInfo: 用户信息已保存到localStorage');
+            } catch (error) {
+              console.error('保存用户信息失败:', error);
+            }
+            // 获取用户等级信息
+            this.getUserLevel();
+            // 通知父组件用户信息已更新
+            this.$emit('user-info-updated', data.profile);
+          } else {
+            console.warn('getUserInfo: 返回数据异常', data);
+          }
+        } else {
+          console.error('getUserInfo: HTTP错误', response.status, response.statusText);
+        }
+      } catch (error) {
+        console.error('getUserInfo: 获取用户信息失败:', error);
+      }
+    },
+
+    // 跳转到主页
+    goToHomePage() {
+      try {
+        this.showSearchResults = false;
+        this.searchQuery = '';
+        this.loadHomePageData();
+      } catch (error) {
+        console.error('goToHomePage: 错误', error);
+        this.showNotification('返回主页失败', 'error');
+      }
+    },
+
+    // 加载主页数据
+    async loadHomePageData() {
+      if (!this.isLoggedIn) {
+        console.log('loadHomePageData: 未登录，跳过加载主页数据');
+        return;
+      }
+      
+      // 检查缓存是否有效（5分钟）
+      const cacheTime = localStorage.getItem('musicHomePageCacheTime');
+      const currentTime = Date.now();
+      const fiveMinutesInMs = 5 * 60 * 1000;
+      
+      if (cacheTime && (currentTime - parseInt(cacheTime, 10) < fiveMinutesInMs)) {
+        // 从缓存加载
+        try {
+          const cachedPlaylists = localStorage.getItem('musicUserPlaylists');
+          const cachedRecommendPlaylists = localStorage.getItem('musicRecommendPlaylists');
+          const cachedRecommendSongs = localStorage.getItem('musicRecommendSongs');
+          
+          if (cachedPlaylists) {
+            this.userPlaylists = JSON.parse(cachedPlaylists);
+          }
+          if (cachedRecommendPlaylists) {
+            this.recommendPlaylists = JSON.parse(cachedRecommendPlaylists);
+          }
+          if (cachedRecommendSongs) {
+            this.recommendSongs = JSON.parse(cachedRecommendSongs);
+          }
+          
+          console.log('loadHomePageData: 从缓存加载主页数据');
+          return;
+        } catch (error) {
+          console.error('loadHomePageData: 读取缓存失败', error);
+        }
+      }
+      
+      console.log('loadHomePageData: 开始从服务器加载主页数据');
+      // 并行加载所有数据
+      await Promise.all([
+        this.loadUserPlaylists(),
+        this.loadRecommendPlaylists(),
+        this.loadRecommendSongs()
+      ]);
+      
+      // 保存到缓存
+      try {
+        localStorage.setItem('musicUserPlaylists', JSON.stringify(this.userPlaylists));
+        localStorage.setItem('musicRecommendPlaylists', JSON.stringify(this.recommendPlaylists));
+        localStorage.setItem('musicRecommendSongs', JSON.stringify(this.recommendSongs));
+        localStorage.setItem('musicHomePageCacheTime', currentTime.toString());
+        console.log('loadHomePageData: 主页数据已缓存');
+      } catch (error) {
+        console.error('loadHomePageData: 保存缓存失败', error);
+      }
+      
+      console.log('loadHomePageData: 主页数据加载完成');
+    },
+
     
+
+    // 加载用户歌单
+    async loadUserPlaylists() {
+      if (!this.userInfo || !this.userInfo.userId) {
+        console.log('loadUserPlaylists: 无用户ID，跳过加载');
+        return;
+      }
+      
+      this.isLoadingUserPlaylists = true;
+      try {
+        const url = `${this.apiUrl}/user/playlist?uid=${this.userInfo.userId}&timestamp=${Date.now()}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200 && data.playlist) {
+            this.userPlaylists = data.playlist.map(playlist => ({
+              id: playlist.id,
+              name: playlist.name,
+              description: playlist.description || '',
+              coverImgUrl: playlist.coverImgUrl,
+              playCount: playlist.playCount || 0,
+              trackCount: playlist.trackCount || 0,
+              creator: playlist.creator ? playlist.creator.nickname : '未知创建者',
+              creatorId: playlist.creator ? playlist.creator.userId : null
+            }));
+            console.log('loadUserPlaylists: 已加载', this.userPlaylists.length, '个歌单');
+          }
+        }
+      } catch (error) {
+        console.error('loadUserPlaylists: 加载失败', error);
+      } finally {
+        this.isLoadingUserPlaylists = false;
+      }
+    },
+
+    // 加载推荐歌单
+    async loadRecommendPlaylists() {
+      this.isLoadingRecommendPlaylists = true;
+      try {
+        const url = `${this.apiUrl}/personalized?limit=10&timestamp=${Date.now()}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200 && data.result) {
+            this.recommendPlaylists = data.result.map(playlist => ({
+              id: playlist.id,
+              name: playlist.name,
+              description: playlist.description || '',
+              picUrl: playlist.picUrl,
+              playCount: playlist.playCount || 0,
+              trackCount: playlist.trackCount || 0,
+              creator: playlist.creator ? playlist.creator.nickname : '未知创建者',
+              creatorId: playlist.creator ? playlist.creator.userId : null
+            }));
+            console.log('loadRecommendPlaylists: 已加载', this.recommendPlaylists.length, '个推荐歌单');
+          }
+        }
+      } catch (error) {
+        console.error('loadRecommendPlaylists: 加载失败', error);
+      } finally {
+        this.isLoadingRecommendPlaylists = false;
+      }
+    },
+
+    // 加载推荐歌曲
+    async loadRecommendSongs() {
+      this.isLoadingRecommendSongs = true;
+      try {
+        const url = `${this.apiUrl}/recommend/songs?timestamp=${Date.now()}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        console.log('loadRecommendSongs: 请求URL', url);
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('loadRecommendSongs: API返回数据', data);
+          
+          if (data.code === 200 && data.data && data.data.dailySongs) {
+            this.recommendSongs = data.data.dailySongs.map(song => ({
+              id: song.id,
+              name: song.name,
+              artist: song.ar ? song.ar.map(a => a.name).join(', ') : '未知艺术家',
+              album: song.al,
+              duration: song.dt || 0,
+              picUrl: song.al ? song.al.picUrl : null,
+              ar: song.ar || [],
+              al: song.al || {}
+            }));
+            console.log('loadRecommendSongs: 已加载', this.recommendSongs.length, '首推荐歌曲');
+            console.log('loadRecommendSongs: 推荐歌曲数据示例', this.recommendSongs[0]);
+          } else {
+            console.error('loadRecommendSongs: 数据格式不正确', data);
+          }
+        } else {
+          console.error('loadRecommendSongs: HTTP错误', response.status, response.statusText);
+        }
+      } catch (error) {
+        console.error('loadRecommendSongs: 加载失败', error);
+      } finally {
+        this.isLoadingRecommendSongs = false;
+      }
+    },
+
+    // 播放/暂停（用于底部播放控件）
+    togglePlay() {
+      this.togglePlayPause();
+    },
+    
+    // 上一首（用于底部播放控件）
+    previousSong() {
+      this.skipPrevious();
+    },
+    
+    // 下一首（用于底部播放控件）
+    nextSong() {
+      this.skipNext();
+    },
+    
+    // 进度条跳转（用于底部播放控件）
+    seekTo(event) {
+      if (!this.audio || !this.duration) return;
+      
+      const progressBar = event.currentTarget;
+      const rect = progressBar.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const percentage = clickX / rect.width;
+      const targetTime = percentage * this.duration;
+      
+      this.audio.currentTime = targetTime;
+    },
+    
+    // 播放推荐歌曲
+    playRecommendSong(song) {
+      // 检查歌曲是否已在播放列表中
+      const index = this.getSongIndex(song, this.playlist);
+      if (index === -1) {
+        // 如果不在播放列表中，先添加到播放列表
+        this.addToPlaylist(song);
+        // 然后播放最后一首（刚添加的歌曲）
+        this.selectSongFromPlaylist(this.playlist.length - 1);
+      } else {
+        // 如果已在播放列表中，直接播放
+        this.selectSongFromPlaylist(index);
+      }
+    },
+
+    // 打开歌单
+    openPlaylist(playlist) {
+      try {
+        this.showPlaylistDetail = true;
+        this.playlistDetail = playlist;
+        this.getPlaylistDetail(playlist.id);
+      } catch (error) {
+        console.error('openPlaylist: 错误', error);
+        this.showNotification('打开歌单失败', 'error');
+      }
+    },
 
     // 高亮当前播放歌曲
     highlightCurrentSong(element) {
@@ -3373,7 +4098,7 @@ export default {
           this.currentPlaylist = [...this.playlist];
         }
         
-        this.$emit('notify', '已从播放列表中移除', 'info');
+        this.showNotification('已从播放列表中移除', 'info');
       }
     },
 
@@ -3381,6 +4106,12 @@ export default {
     clearPlaylist() {
       if (this.playlist.length === 0) return;
       
+      // 保存当前播放状态
+      const wasPlaying = this.isPlaying;
+      const currentSong = this.currentSong;
+      const currentTime = this.currentTime;
+      
+      // 完全清空播放列表
       this.playlist = [];
       
       // 如果当前显示的是播放列表，更新当前播放列表
@@ -3388,17 +4119,55 @@ export default {
         this.currentPlaylist = [];
       }
       
-      // 如果当前播放的歌曲在播放列表中，停止播放
-      if (this.currentSong) {
-        const isInPlaylist = this.playlist.some(song => song.id === this.currentSong.id);
-        if (!isInPlaylist) {
-          this.isPlaying = false;
-          this.currentSong = null;
-          this.currentTime = 0;
-        }
+      // 如果有正在播放的歌曲，保持播放状态但不将其加入播放列表
+      if (currentSong) {
+        // 保持当前歌曲和播放状态不变
+        this.currentSong = currentSong;
+        this.isPlaying = wasPlaying;
+        this.currentTime = currentTime;
+        this.showNotification('播放列表已清空，当前歌曲继续播放', 'info');
+      } else {
+        this.showNotification('播放列表已清空', 'info');
+      }
+    },
+
+    // 显示音乐播放器专属通知
+    showNotification(message, type = 'info') {
+      // 检查是否启用了音乐播放器通知
+      if (!this.settings.enableMusicPlayerNotifications) {
+        return;
       }
       
-      this.$emit('notify', '播放列表已清空', 'info');
+      // 清除之前的定时器
+      if (this.notification.timer) {
+        clearTimeout(this.notification.timer);
+      }
+      
+      // 设置通知内容
+      this.notification.message = message;
+      this.notification.type = type;
+      this.notification.show = true;
+      
+      // 计算通知位置
+      this.updateNotificationPosition();
+      
+      // 设置自动消失定时器
+      this.notification.timer = setTimeout(() => {
+        this.notification.show = false;
+      }, 3000);
+    },
+
+    // 更新通知位置
+    updateNotificationPosition() {
+      if (this.isMinimized) {
+        // 最小化状态下，通知显示在悬浮窗上方
+        this.notificationPosition.x = this.miniPlayerPosition.x;
+        this.notificationPosition.y = this.miniPlayerPosition.y - 60; // 在悬浮窗上方
+      } else {
+        // 正常状态下，通知显示在播放器内部右上角
+        this.notificationPosition.x = window.innerWidth / 2 - 150; // 居中显示
+        this.notificationPosition.y = 100; // 距离顶部100px
+      }
     },
 
     // 拖拽开始
@@ -3448,7 +4217,7 @@ export default {
       this.currentPlaylist = [...this.playlist];
       this.showSearchResults = false;
       
-      this.$emit('notify', `已同步 ${songs.length} 首歌曲到播放列表`, 'success');
+      this.showNotification(`已同步 ${songs.length} 首歌曲到播放列表`, 'success');
     },
 
     // 临时播放（不更新播放列表）
@@ -3457,7 +4226,8 @@ export default {
       
       // 设置当前播放列表为临时列表
       this.currentPlaylist = [...songs];
-      this.showSearchResults = true;
+      // 不切换界面，保持当前视图状态
+      // this.showSearchResults = true;
       
       // 播放指定歌曲
       this.selectSong(index);
@@ -7478,15 +8248,29 @@ export default {
 .user-info-container {
   position: relative;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  transition: all 0.3s ease;
+  height: 36px;
+}
+
+.user-info-container:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
 }
 
 .user-avatar {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   overflow: hidden;
   border: 2px solid rgba(255, 255, 255, 0.3);
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .user-avatar:hover {
@@ -7498,6 +8282,26 @@ export default {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.default-avatar {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.user-name {
+  font-size: 0.85rem;
+  color: white;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
 }
 
 .login-btn {
@@ -7569,7 +8373,7 @@ export default {
 
 .user-name {
   font-weight: 600;
-  color: var(--text-primary);
+  color: white;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7615,6 +8419,596 @@ export default {
 
 .menu-item.logout:hover {
   background: rgba(244, 67, 54, 0.1);
+}
+
+/* 登出确认弹窗样式 */
+.logout-confirm-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10004;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: fadeIn 0.3s ease;
+}
+
+.logout-confirm-modal-content {
+  width: 90%;
+  max-width: 380px;
+  background: var(--bg-primary);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: slideUpScale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid var(--border-color);
+}
+
+.logout-confirm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 20px 20px 0 0;
+}
+
+.logout-confirm-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.logout-confirm-body {
+  flex: 1;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.logout-confirm-icon {
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(244, 67, 54, 0.1);
+  border-radius: 50%;
+  color: #F44336;
+  margin-bottom: 0.5rem;
+}
+
+.logout-confirm-text {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.logout-confirm-user {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.logout-confirm-footer {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem 2rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: 0 0 20px 20px;
+}
+
+.cancel-btn, .confirm-btn {
+  flex: 1;
+  padding: 0.875rem;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.cancel-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.cancel-btn:hover {
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+
+.confirm-btn {
+  background: #F44336;
+  color: white;
+}
+
+.confirm-btn:hover {
+  background: #D32F2F;
+  transform: translateY(-1px);
+}
+
+/* 主页样式 */
+.home-page {
+  display: flex;
+  height: 100%;
+  gap: 1rem;
+  position: relative;
+  padding-bottom: 80px; /* 为底部播放控件预留空间 */
+}
+
+.sidebar {
+  width: 280px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 1.5rem;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+}
+
+.sidebar-section {
+  margin-bottom: 2rem;
+}
+
+.sidebar-section:last-child {
+  margin-bottom: 0;
+}
+
+.sidebar-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.user-playlists-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.playlist-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.playlist-item:hover {
+  background: var(--bg-hover);
+  transform: translateX(4px);
+}
+
+.playlist-cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.playlist-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.playlist-name {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-count {
+  font-size: 0.8rem;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.recommend-section {
+  margin-bottom: 2rem;
+}
+
+.recommend-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.3rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.recommend-playlists {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.recommend-songs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.recommend-playlist-item {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.recommend-playlist-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.recommend-song-item {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.recommend-song-item:hover {
+  background: var(--bg-hover);
+  transform: translateX(4px);
+}
+
+.recommend-playlist-cover {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  object-fit: cover;
+  margin-bottom: 0.75rem;
+}
+
+.recommend-song-cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.recommend-playlist-info {
+  text-align: center;
+}
+
+.recommend-song-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.recommend-playlist-name {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.recommend-song-name {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recommend-playlist-count {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.recommend-song-artist {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recommend-add-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.recommend-add-btn:hover {
+  background: var(--primary-color);
+  color: white;
+  transform: scale(1.1);
+}
+
+.loading-placeholder, .empty-placeholder {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 2rem;
+  font-size: 0.9rem;
+}
+
+/* 底部播放控件样式 */
+.bottom-player {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.bottom-player-content {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 1rem;
+  gap: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.bottom-song-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+  max-width: 300px;
+}
+
+.bottom-song-cover {
+  width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.bottom-song-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.empty-song-cover {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  border-radius: 6px;
+}
+
+.bottom-song-details {
+  min-width: 0;
+  flex: 1;
+}
+
+.bottom-song-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.bottom-song-artist {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bottom-song-artist .artist-name.clickable {
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.bottom-song-artist .artist-name.clickable:hover {
+  color: var(--primary-color);
+}
+
+.artist-separator {
+  margin: 0 2px;
+}
+
+.bottom-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bottom-control-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bottom-control-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.bottom-play-btn {
+  background: var(--primary-color);
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0.75rem;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0.25rem;
+}
+
+.bottom-play-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: scale(1.05);
+}
+
+.bottom-play-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bottom-control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bottom-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  max-width: 400px;
+}
+
+.bottom-time {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  min-width: 35px;
+  text-align: center;
+}
+
+.bottom-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-hover);
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.bottom-progress-fill {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 2px;
+  transition: width 0.1s ease;
+}
+
+.bottom-right-controls {
+  display: flex;
+  align-items: center;
+}
+
+.bottom-playlist-btn {
+  position: relative;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bottom-playlist-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.bottom-playlist-btn.active {
+  color: var(--primary-color);
+}
+
+.bottom-playlist-count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--primary-color);
+  color: white;
+  font-size: 0.7rem;
+  padding: 2px 5px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1;
+}
+
+.header-title {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.header-title:hover {
+  color: var(--primary-color);
+  transform: scale(1.02);
 }
 
 .menu-item svg {
@@ -8017,5 +9411,70 @@ export default {
 
 .mini-playlist-content::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
+}
+
+/* 音乐播放器专属通知 */
+.music-notification {
+  position: fixed;
+  z-index: 10000;
+  min-width: 300px;
+  max-width: 400px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  animation: notificationSlideIn 0.3s ease-out;
+  transition: all 0.3s ease;
+}
+
+.music-notification.success {
+  background: rgba(52, 211, 153, 0.9);
+  color: white;
+}
+
+.music-notification.warning {
+  background: rgba(251, 191, 36, 0.9);
+  color: white;
+}
+
+.music-notification.danger {
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+}
+
+.music-notification.info {
+  background: rgba(59, 130, 246, 0.9);
+  color: white;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-message {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+@keyframes notificationSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

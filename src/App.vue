@@ -119,7 +119,7 @@
     <!-- 主内容区域 -->
     <div class="main-content">
       
-      <div class="dynamic-island" :class="{ 'has-music': isMusicPlaying && currentMusic }" v-if="currentAgent" @mouseenter="showDynamicIslandContent = true" @mouseleave="showDynamicIslandContent = false">
+      <div class="dynamic-island" :class="{ 'has-music': isMusicPlaying && currentMusic && settings.enableDynamicIslandMusicInfo }" v-if="currentAgent" @mouseenter="showDynamicIslandContent = true" @mouseleave="showDynamicIslandContent = false">
         <div class="dynamic-island-content">
           <div class="dynamic-island-avatar">
             <div v-if="currentAgent.avatar && currentAgent.avatar.startsWith('data:image')" class="avatar-image">
@@ -175,12 +175,18 @@
           </div>
         </div>
         <!-- 音乐播放信息显示区域 -->
-        <div v-if="isMusicPlaying && currentMusic" class="dynamic-island-music-info">
+        <div v-if="isMusicPlaying && currentMusic && settings.enableDynamicIslandMusicInfo" class="dynamic-island-music-info">
           <div class="music-cover">
             <img :src="(currentMusic.al && currentMusic.al.picUrl) || currentMusic.picUrl || (currentMusic.album && currentMusic.album.picUrl) || defaultAlbumArt" :alt="currentMusic.name" />
           </div>
           <div class="music-info">
-            <div class="music-title">{{ currentMusic.name || '未知歌曲' }}</div>
+            <div class="music-title-row">
+              <div class="music-title">{{ currentMusic.name || '未知歌曲' }}</div>
+              <!-- 歌词显示 -->
+              <div class="music-lyrics" v-if="settings.enableDynamicIslandLyrics && getCurrentLyricText()">
+                {{ getCurrentLyricText() }}
+              </div>
+            </div>
             <div class="music-artist">{{ (currentMusic.ar && Array.isArray(currentMusic.ar) ? currentMusic.ar.map(a => a.name).join(', ') : (currentMusic.artists && Array.isArray(currentMusic.artists) ? currentMusic.artists.map(a => a.name).join(', ') : currentMusic.artist || '未知艺术家')) }}</div>
             <!-- 悬停时显示进度条和播放控件 -->
             <div class="music-progress-container" v-show="showDynamicIslandContent">
@@ -1538,6 +1544,7 @@
       ref="musicPlayer"
       :visible="showMusicPlayer" 
       :api-url="settings.musicApiUrl || 'http://localhost:3000'"
+      :settings="settings"
       @close="closeMusicPlayer" 
       @notify="showNotification" 
       @playback-status-changed="handleMusicPlaybackStatusChanged"
@@ -1985,6 +1992,14 @@ export default {
       musicProgress: 0,
       currentTime: 0, // 当前播放时间
       musicProgressInterval: null, // 音乐进度更新定时器
+      // 歌词相关
+      currentLyrics: null, // 当前歌词
+      currentLyricLine: 0, // 当前行歌词索引
+      lyricsInterval: null, // 歌词更新定时器
+      // Dynamic Island 宽度动画相关
+      currentIslandWidth: 0, // 当前记录的宽度
+      widthAnimationTimer: null, // 宽度动画定时器
+      resizeObserver: null, // ResizeObserver实例
       // 默认专辑封面
       defaultAlbumArt: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23e0e0e0"/><text x="50" y="55" font-family="Arial" font-size="12" fill="%23666" text-anchor="middle">专辑封面</text></svg>'
 
@@ -2029,6 +2044,9 @@ export default {
     this.$nextTick(() => {
       // 应用流光效果设置到DOM
       document.body.setAttribute('data-shine-enabled', this.settings.enableShineEffect?.toString() || 'true')
+      
+      // 初始化ResizeObserver
+      this.initResizeObserver()
     })
 
     // 初始化模型列表
@@ -2077,6 +2095,11 @@ export default {
       this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
 
     }
+
+    // 清理定时器
+    this.clearLyricsInterval();
+    this.clearWidthAnimation();
+    this.destroyResizeObserver();
 
     // 移除全局点击事件监听器
 
@@ -2214,7 +2237,13 @@ export default {
         modalBackdropBlurAmount: settings.modalBackdropBlurAmount || 8,
         modalBackdropOpacity: settings.modalBackdropOpacity || 0.5,
         // 音乐封面颜色联动设置
-        enableMusicColorSync: settings.enableMusicColorSync || false
+        enableMusicColorSync: settings.enableMusicColorSync || false,
+        // 音乐播放器通知设置
+        enableMusicPlayerNotifications: settings.enableMusicPlayerNotifications !== undefined ? settings.enableMusicPlayerNotifications : true,
+        // 灵动岛音乐信息显示设置
+        enableDynamicIslandMusicInfo: settings.enableDynamicIslandMusicInfo !== undefined ? settings.enableDynamicIslandMusicInfo : true,
+        // 灵动岛歌词显示设置
+        enableDynamicIslandLyrics: settings.enableDynamicIslandLyrics !== undefined ? settings.enableDynamicIslandLyrics : false
       }
 
       // 应用样式设置
@@ -2231,7 +2260,21 @@ export default {
       }
       
       this.styleSettings = { ...newSettings }
+      // 同时更新settings对象中的相关设置
+      this.settings = { ...this.settings, ...newSettings }
       this.applyStyleSettings()
+      
+      // 立即保存设置到localStorage
+      const updatedSettings = {
+        ...this.settings,
+        ...this.styleSettings
+      }
+      const success = this.storageManager.saveSettings(updatedSettings)
+      if (!success) {
+        console.error('保存样式设置失败')
+      } else {
+        console.log('样式设置已保存', updatedSettings)
+      }
       
       // 如果启用了音乐封面颜色联动且有当前播放的歌曲，重新提取颜色
       if (!wasColorSyncEnabled && isColorSyncEnabled && this.currentMusic && this.isMusicPlaying) {
@@ -4857,6 +4900,13 @@ export default {
       if (status.isPlaying && this.styleSettings.enableMusicColorSync && status.currentSong) {
         this.extractAndApplyMusicColor(status.currentSong);
       }
+      
+      // 处理歌词播放状态
+      if (status.isPlaying && this.currentLyrics && this.settings.enableDynamicIslandLyrics) {
+        this.startLyricsUpdate();
+      } else {
+        this.clearLyricsInterval();
+      }
     },
     
     // 处理当前歌曲变化
@@ -4870,6 +4920,21 @@ export default {
       // 如果启用了音乐封面颜色联动，提取封面颜色
       if (this.styleSettings.enableMusicColorSync && song) {
         this.extractAndApplyMusicColor(song);
+      }
+      
+      
+      
+      // 获取歌词
+      if (song && this.settings.enableDynamicIslandLyrics) {
+        this.fetchLyrics(song.id);
+      } else {
+        this.currentLyrics = null;
+        this.currentLyricLine = 0;
+        this.clearLyricsInterval();
+        // 歌词清空时也要调整宽度
+        this.$nextTick(() => {
+          this.smoothAdjustIslandWidth();
+        });
       }
     },
     
@@ -5260,7 +5325,232 @@ export default {
     // 从播放器组件触发上一首
     playPrevMusicFromPlayer() {
       this.$refs.musicPlayer && this.$refs.musicPlayer.skipPrevious();
-    }
+    },
+    
+    // 获取歌词
+    async fetchLyrics(songId) {
+      try {
+        const apiUrl = this.settings.musicApiUrl || 'http://localhost:3000';
+        const response = await fetch(`${apiUrl}/lyric?id=${songId}`);
+        const data = await response.json();
+        
+        if (data.code === 200 && data.lrc) {
+          // 解析歌词
+          this.parseLyrics(data.lrc.lyric);
+        } else {
+          this.currentLyrics = null;
+          this.currentLyricLine = 0;
+        }
+      } catch (error) {
+        console.error('获取歌词失败:', error);
+        this.currentLyrics = null;
+        this.currentLyricLine = 0;
+      }
+    },
+    
+    // 解析歌词
+    parseLyrics(lyricText) {
+      if (!lyricText) {
+        this.currentLyrics = null;
+        this.currentLyricLine = 0;
+        return;
+      }
+      
+      // 按行分割歌词
+      const lines = lyricText.split('\n');
+      const lyrics = [];
+      
+      // 正则表达式匹配时间戳和歌词内容
+      const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
+      
+      for (const line of lines) {
+        const match = line.match(timeRegex);
+        if (match) {
+          const minutes = parseInt(match[1]);
+          const seconds = parseInt(match[2]);
+          const milliseconds = parseInt(match[3]);
+          const time = minutes * 60 * 1000 + seconds * 1000 + milliseconds;
+          const text = line.replace(timeRegex, '').trim();
+          
+          if (text) {
+            lyrics.push({ time, text });
+          }
+        }
+      }
+      
+      // 按时间排序
+      lyrics.sort((a, b) => a.time - b.time);
+      
+      this.currentLyrics = lyrics;
+      this.currentLyricLine = 0;
+      
+      // 开始更新歌词
+      if (this.isMusicPlaying) {
+        this.startLyricsUpdate();
+      }
+    },
+    
+    // 开始更新歌词
+    startLyricsUpdate() {
+      this.clearLyricsInterval();
+      
+      this.lyricsInterval = setInterval(() => {
+        if (this.currentLyrics && this.isMusicPlaying) {
+          this.updateCurrentLyric();
+        }
+      }, 100);
+    },
+    
+    // 更新当前歌词
+    updateCurrentLyric() {
+      if (!this.currentLyrics || !this.currentMusic) return;
+      
+      const currentTime = this.currentTime * 1000; // 转换为毫秒
+      let newLyricLine = 0;
+      
+      // 找到当前应该显示的歌词
+      for (let i = 0; i < this.currentLyrics.length; i++) {
+        if (this.currentLyrics[i].time <= currentTime) {
+          newLyricLine = i;
+        } else {
+          break;
+        }
+      }
+      
+      // 如果歌词行发生变化，更新并添加过渡动画
+      if (newLyricLine !== this.currentLyricLine) {
+        // 先淡出当前歌词
+        const lyricsElement = document.querySelector('.music-lyrics');
+        if (lyricsElement) {
+          lyricsElement.style.animation = 'lyricFadeOut 0.2s ease-out forwards';
+          
+          // 在淡出完成后更新歌词并淡入
+          setTimeout(() => {
+            this.currentLyricLine = newLyricLine;
+            this.$nextTick(() => {
+              lyricsElement.style.animation = 'lyricFadeIn 0.3s ease-in forwards';
+              // 在歌词更新后调整Dynamic Island宽度
+              setTimeout(() => {
+                this.smoothAdjustIslandWidth();
+              }, 100);
+            });
+          }, 200);
+        } else {
+          this.currentLyricLine = newLyricLine;
+          this.$nextTick(() => {
+            this.smoothAdjustIslandWidth();
+          });
+        }
+      }
+    },
+    
+    
+    
+    // 清除歌词更新定时器
+    clearLyricsInterval() {
+      if (this.lyricsInterval) {
+        clearInterval(this.lyricsInterval);
+        this.lyricsInterval = null;
+      }
+    },
+    
+    // 清除宽度动画
+    clearWidthAnimation() {
+      if (this.widthAnimationTimer) {
+        clearTimeout(this.widthAnimationTimer);
+        this.widthAnimationTimer = null;
+      }
+      
+      const island = document.querySelector('.dynamic-island');
+      if (island) {
+        island.style.transition = '';
+        island.style.width = '';
+      }
+    },
+    
+    // 获取当前歌词文本
+    getCurrentLyricText() {
+      if (!this.currentLyrics || this.currentLyricLine >= this.currentLyrics.length) {
+        return '';
+      }
+      return this.currentLyrics[this.currentLyricLine].text;
+    },
+    
+    // 平滑调整Dynamic Island宽度
+    smoothAdjustIslandWidth() {
+      const island = document.querySelector('.dynamic-island');
+      if (!island) return;
+      
+      // 强制浏览器重排，获取准确的当前宽度
+      island.offsetHeight;
+      
+      // 获取内容的自然宽度
+      const originalWidth = island.style.width;
+      island.style.width = 'auto';
+      const naturalWidth = island.offsetWidth;
+      island.style.width = originalWidth;
+      
+      // 如果宽度没有变化，不需要调整
+      if (this.currentIslandWidth === naturalWidth) return;
+      
+      // 清除之前的动画
+      this.clearWidthAnimation();
+      
+      // 记录新宽度
+      this.currentIslandWidth = naturalWidth;
+      
+      // 设置起始和结束宽度
+      const startWidth = island.offsetWidth;
+      const endWidth = naturalWidth;
+      
+      // 如果宽度相同，直接返回
+      if (Math.abs(startWidth - endWidth) < 1) return;
+      
+      // 使用CSS transition实现平滑动画
+      island.style.transition = 'width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      island.style.width = `${endWidth}px`;
+      
+      // 动画完成后清理
+      setTimeout(() => {
+        island.style.transition = '';
+        island.style.width = '';
+      }, 400);
+    },
+    
+    // 缓动函数
+    easeInOutCubic(t) {
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    },
+    
+    // 初始化ResizeObserver
+    initResizeObserver() {
+      if (this.resizeObserver) return;
+      
+      this.resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const { width } = entry.contentRect;
+          if (Math.abs(width - this.currentIslandWidth) > 1) {
+            this.currentIslandWidth = width;
+            // 不在这里直接调整宽度，避免无限循环
+          }
+        }
+      });
+      
+      const island = document.querySelector('.dynamic-island');
+      if (island) {
+        this.resizeObserver.observe(island);
+      }
+    },
+    
+    // 销毁ResizeObserver
+    destroyResizeObserver() {
+      if (this.resizeObserver) {
+        this.resizeObserver.disconnect();
+        this.resizeObserver = null;
+      }
+    },
+    
+    
 
   }
 
@@ -5677,7 +5967,7 @@ export default {
 
 /* 动态岛样式 */
 .dynamic-island {
-  display: flex;
+  display: inline-flex; /* 使用inline-flex让宽度自适应内容 */
   flex-direction: column;
   justify-content: flex-start;
   min-height: 40px;
@@ -5685,7 +5975,9 @@ export default {
   border-radius: var(--dynamic-island-radius, 20px); /* 使用CSS变量 */
   padding: 5px 15px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: all var(--dynamic-island-animation-speed, 0.5s) cubic-bezier(0.25, 0.8, 0.25, 1);
+  /* 添加基础transition，增强平滑度 */
+  transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+              transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   background: var(--primary-color, #ec4899);
   color: white;
   position: absolute;
@@ -5696,7 +5988,12 @@ export default {
   overflow: hidden;
   max-width: 600px;
   min-width: 0;
+  width: auto; /* 确保宽度自适应 */
+  white-space: nowrap; /* 防止内容换行影响宽度计算 */
   border: var(--dynamic-island-border-width, 0px) solid var(--dynamic-island-border-color, transparent); /* 添加边框支持 */
+  /* 优化渲染性能 */
+  backface-visibility: hidden;
+  transform: translateX(-50%) translateZ(0); /* 开启硬件加速 */
 }
 
 /* 根据不同颜色模式调整动态岛样式 */
@@ -6068,6 +6365,15 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   justify-content: center;
 }
 
+.music-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+  min-width: 0;
+  white-space: nowrap; /* 确保不换行 */
+}
+
 .music-title {
   font-size: 11px;
   font-weight: 600;
@@ -6075,7 +6381,8 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   overflow: hidden;
   text-overflow: ellipsis;
   color: white;
-  margin-bottom: 2px;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .music-artist {
@@ -6086,6 +6393,45 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   text-overflow: ellipsis;
   color: white;
   margin-bottom: 4px;
+}
+
+.music-lyrics {
+  font-size: 10px;
+  opacity: 0.9;
+  color: white;
+  font-style: italic;
+  animation: lyricFadeIn 0.5s ease-in-out;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.3;
+  max-height: 40px; /* 最多显示约3行 */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
+@keyframes lyricFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 0.9;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lyricFadeOut {
+  from {
+    opacity: 0.9;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
 }
 
 
@@ -6102,6 +6448,10 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
 .theme-dark .music-artist {
   color: rgba(255, 255, 255, 0.8);
+}
+
+.theme-dark .music-lyrics {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .theme-dark .music-progress-text {

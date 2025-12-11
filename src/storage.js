@@ -233,7 +233,12 @@ export class StorageManager {
                 // 弹窗背景设置
                 modalBackdropBlur: true, // 是否启用弹窗背景模糊
                 modalBackdropBlurAmount: 8, // 模糊程度 (0-20)
-                modalBackdropOpacity: 0.5 // 背景暗化程度 (0.1-1.0)
+                modalBackdropOpacity: 0.5, // 背景暗化程度 (0.1-1.0)
+                // 音乐播放器设置
+                enableMusicPlayerNotifications: true, // 是否启用音乐播放器弹窗通知
+                // 灵动岛设置
+                enableDynamicIslandMusicInfo: true, // 是否在灵动岛显示音乐信息
+                enableDynamicIslandLyrics: false // 是否在灵动岛显示歌词
             }
 
             if (settings) {

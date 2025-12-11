@@ -390,6 +390,17 @@
           开启后，当音乐播放器中有音乐正在播放时会获取歌曲封面的颜色并设置为临时主题色
         </div>
       </div>
+
+      <div class="form-group">
+        <CustomCheckbox
+          :model-value="settings.enableMusicPlayerNotifications"
+          label="开启音乐播放器弹窗通知"
+          @update:model-value="updateSetting('enableMusicPlayerNotifications', $event)"
+        />
+        <div class="form-hint">
+          开启后，音乐播放器中的操作（如添加歌曲、播放失败等）会显示弹窗提示
+        </div>
+      </div>
     </div>
 
     <!-- 界面样式 -->
@@ -546,7 +557,27 @@
 
       <h4 class="section-title">灵动岛设置</h4>
 
-
+      <div class="form-group">
+        <CustomCheckbox
+          :model-value="settings.enableDynamicIslandMusicInfo"
+          label="灵动岛音乐信息显示"
+          @update:model-value="updateSetting('enableDynamicIslandMusicInfo', $event)"
+        />
+        <div class="form-hint">
+          开启后，当音乐播放器中有音乐正在播放时会在灵动岛显示音乐信息
+        </div>
+      </div>
+      
+      <div class="form-group" v-if="settings.enableDynamicIslandMusicInfo">
+        <CustomCheckbox
+          :model-value="settings.enableDynamicIslandLyrics"
+          label="灵动岛歌词显示"
+          @update:model-value="updateSetting('enableDynamicIslandLyrics', $event)"
+        />
+        <div class="form-hint">
+          开启后，会在灵动岛音乐信息中显示实时歌词
+        </div>
+      </div>
 
       <div class="form-group">
 
@@ -1058,7 +1089,14 @@ export default {
         modalBackdropOpacity: 0.5,
         
         // 音乐封面颜色联动默认设置
-        enableMusicColorSync: false
+        enableMusicColorSync: false,
+        
+        // 音乐播放器默认设置
+        enableMusicPlayerNotifications: true,
+        
+        // 灵动岛默认设置
+        enableDynamicIslandMusicInfo: true,
+        enableDynamicIslandLyrics: false
 
       })
 
