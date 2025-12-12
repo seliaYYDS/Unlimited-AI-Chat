@@ -107,7 +107,7 @@ export default {
     },
     apiUrl: {
       type: String,
-      default: 'https://zm.i9mr.com'
+      required: true
     }
   },
   data() {

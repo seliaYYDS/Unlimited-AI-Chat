@@ -57,32 +57,32 @@
             <div class="user-name" @click.stop="handleUserContainerClick">
               {{ isLoggedIn && userInfo ? userInfo.nickname : '未登录' }}
             </div>
-          </div>
-          
-          <!-- 用户菜单 -->
-          <div v-if="showUserDropdown" class="user-dropdown" @click.stop>
-            <div v-if="isLoggedIn && userInfo" class="user-menu">
-              <div class="user-info">
-                <div class="user-avatar-large">
-                  <img :src="userInfo.avatarUrl || defaultAlbumArt" :alt="userInfo.nickname" />
+            
+            <!-- 用户菜单 -->
+            <div v-if="showUserDropdown" class="user-dropdown" @click.stop>
+              <div v-if="isLoggedIn && userInfo" class="user-menu">
+                <div class="user-info">
+                  <div class="user-avatar-large">
+                    <img :src="userInfo.avatarUrl || defaultAlbumArt" :alt="userInfo.nickname" />
+                  </div>
+                  <div class="user-details">
+                    <div class="user-name">{{ userInfo.nickname }}</div>
+                    <div class="user-level" v-if="userLevel">Lv.{{ userLevel.level }}</div>
+                  </div>
                 </div>
-                <div class="user-details">
-                  <div class="user-name">{{ userInfo.nickname }}</div>
-                  <div class="user-level" v-if="userLevel">Lv.{{ userLevel.level }}</div>
+                <div class="menu-divider"></div>
+                <div class="menu-item" @click="refreshUserInfo">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                  </svg>
+                  刷新用户信息
                 </div>
-              </div>
-              <div class="menu-divider"></div>
-              <div class="menu-item" @click="refreshUserInfo">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                </svg>
-                刷新用户信息
-              </div>
-              <div class="menu-item logout" @click="logout">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-                </svg>
-                退出登录
+                <div class="menu-item logout" @click="showLogoutConfirm">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                  </svg>
+                  退出登录
+                </div>
               </div>
             </div>
           </div>
@@ -101,18 +101,41 @@
         <!-- 主页内容 -->
         <div v-if="!showSearchResults" class="home-page">
           <!-- 左侧边栏 -->
-          <div class="sidebar">
+          <div class="sidebar" v-if="isLoggedIn">
             <div class="sidebar-section">
-              <h4 class="sidebar-title">我的歌单</h4>
+              <div class="sidebar-header">
+                <h4 class="sidebar-title">我的歌单</h4>
+                <button v-if="isLoggedIn" class="create-playlist-btn" @click="openCreatePlaylistModal" title="创建新歌单">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                  </svg>
+                </button>
+              </div>
               <div class="user-playlists">
                 <div v-if="isLoadingUserPlaylists" class="loading-placeholder">加载中...</div>
                 <div v-else-if="userPlaylists.length === 0" class="empty-placeholder">暂无创建的歌单</div>
                 <div v-else class="user-playlists-list">
-                  <div v-for="playlist in userPlaylists.slice(0, 10)" :key="playlist.id" class="playlist-item" @click="openPlaylist(playlist)">
-                    <img :src="playlist.coverImgUrl || defaultAlbumArt" :alt="playlist.name" class="playlist-cover">
-                    <div class="playlist-info">
-                      <div class="playlist-name">{{ playlist.name }}</div>
-                      <div class="playlist-count">{{ playlist.trackCount }} 首</div>
+                  <div v-for="playlist in userPlaylists.slice(0, 10)" :key="playlist.id" class="playlist-item">
+                    <div class="playlist-content" 
+                         @click="openPlaylist(playlist)"
+                         @contextmenu="showContextMenu($event, 'playlist', playlist)">
+                      <img :src="playlist.coverImgUrl || defaultAlbumArt" :alt="playlist.name" class="playlist-cover">
+                      <div class="playlist-info">
+                        <div class="playlist-name">{{ playlist.name }}</div>
+                        <div class="playlist-count">{{ playlist.trackCount }} 首</div>
+                      </div>
+                    </div>
+                    <div class="playlist-actions" v-if="isLoggedIn && playlist.creator && playlist.creator.userId === userInfo.userId">
+                      <button class="playlist-action-btn edit" @click.stop="openEditPlaylistModal(playlist)" title="编辑歌单">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                        </svg>
+                      </button>
+                      <button class="playlist-action-btn delete" @click.stop="deletePlaylist(playlist)" title="删除歌单">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -121,41 +144,87 @@
           </div>
           
           <!-- 主内容区 -->
-          <div class="main-content">
-            <!-- 推荐歌单 -->
-            <div class="recommend-section">
-              <h3 class="section-title">推荐歌单</h3>
-              <div v-if="isLoadingRecommendPlaylists" class="loading-placeholder">加载中...</div>
-              <div v-else class="recommend-playlists">
-                <div v-for="playlist in recommendPlaylists" :key="playlist.id" class="recommend-playlist-item" @click="openPlaylist(playlist)">
-                  <img :src="playlist.picUrl || defaultAlbumArt" :alt="playlist.name" class="recommend-playlist-cover">
-                  <div class="recommend-playlist-info">
-                    <div class="recommend-playlist-name">{{ playlist.name }}</div>
-                    <div class="recommend-playlist-count">{{ playlist.playCount }} 次播放</div>
-                  </div>
+          <div class="main-content" :class="{ 'full-width': !isLoggedIn }">
+            <!-- 未登录提示 -->
+            <div v-if="!isLoggedIn" class="login-prompt-section">
+              <div class="login-prompt-content">
+                <div class="login-prompt-icon">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                  </svg>
                 </div>
+                <h3 class="login-prompt-title">登录以加载个性化内容</h3>
+                <p class="login-prompt-description">登录网易云音乐账号后，可以查看您的个人歌单、推荐歌单和推荐歌曲</p>
+                <button class="login-prompt-btn" @click="openLoginModal">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                  </svg>
+                  立即登录
+                </button>
               </div>
             </div>
             
-            <!-- 推荐歌曲 -->
-            <div class="recommend-section">
-              <h3 class="section-title">推荐歌曲</h3>
-              <div v-if="isLoadingRecommendSongs" class="loading-placeholder">加载中...</div>
-              <div v-else class="recommend-songs">
-                <div v-for="song in recommendSongs" :key="song.id" class="recommend-song-item">
-                  <img :src="song.picUrl || (song.al && song.al.picUrl) || defaultAlbumArt" :alt="song.name" class="recommend-song-cover" @click="playRecommendSong(song)">
-                  <div class="recommend-song-info" @click="playRecommendSong(song)">
-                    <div class="recommend-song-name">{{ song.name }}</div>
-                    <div class="recommend-song-artist">{{ song.artist }}</div>
+            <!-- 已登录内容 -->
+            <template v-else>
+              <!-- 推荐歌单 -->
+              <div class="recommend-section">
+                <h3 class="section-title">推荐歌单</h3>
+                <div v-if="isLoadingRecommendPlaylists" class="loading-placeholder">加载中...</div>
+                <div v-else class="recommend-playlists">
+                  <div v-for="playlist in recommendPlaylists" :key="playlist.id" class="recommend-playlist-item">
+                    <div class="recommend-playlist-content" @click="openPlaylist(playlist)">
+                      <img :src="playlist.picUrl || defaultAlbumArt" :alt="playlist.name" class="recommend-playlist-cover">
+                      <div class="recommend-playlist-info">
+                        <div class="recommend-playlist-name">{{ playlist.name }}</div>
+                        <div class="recommend-playlist-count">{{ playlist.playCount }} 次播放</div>
+                      </div>
+                    </div>
+                    <button 
+                      v-if="isLoggedIn" 
+                      class="recommend-playlist-subscribe-btn" 
+                      @click.stop="toggleSubscribePlaylist(playlist)"
+                      :title="userPlaylists.some(p => p.id === playlist.id) ? '取消收藏' : '收藏歌单'"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" :fill="userPlaylists.some(p => p.id === playlist.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                      </svg>
+                    </button>
                   </div>
-                  <button v-if="!isSongInPlaylist(song)" class="recommend-add-btn" @click.stop="addToPlaylist(song)" title="添加到播放列表">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                    </svg>
-                  </button>
                 </div>
               </div>
-            </div>
+              
+              <!-- 推荐歌曲 -->
+              <div class="recommend-section">
+                <h3 class="section-title">推荐歌曲</h3>
+                <div v-if="isLoadingRecommendSongs" class="loading-placeholder">加载中...</div>
+                <div v-else class="recommend-songs">
+                  <div v-for="song in recommendSongs" :key="song.id" class="recommend-song-item" @contextmenu="showContextMenu($event, 'song', song)">
+                    <img :src="song.picUrl || (song.al && song.al.picUrl) || defaultAlbumArt" :alt="song.name" class="recommend-song-cover" @click="playRecommendSong(song)">
+                    <div class="recommend-song-info" @click="playRecommendSong(song)">
+                      <div class="recommend-song-name">{{ song.name }}</div>
+                      <div class="recommend-song-artist">{{ song.artist }}</div>
+                    </div>
+                    <div class="recommend-song-actions">
+                      <button 
+                        v-if="isLoggedIn" 
+                        :class="['recommend-like-btn', { 'liked': isSongLiked(song.id) }]" 
+                        @click.stop="toggleLikeSong(song)" 
+                        :title="isSongLiked(song.id) ? '取消收藏' : '收藏歌曲'"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" :fill="isSongLiked(song.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
+                      </button>
+                      <button v-if="!isSongInPlaylist(song)" class="recommend-add-btn" @click.stop="addToPlaylist(song)" title="添加到播放列表">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
           
           <!-- 底部播放控件面板 -->
@@ -286,6 +355,7 @@
                   v-for="(song, index) in currentPlaylist" 
                   :key="song.id || index"
                   :class="['playlist-item song-search-item', { 'playing': currentSong && currentSong.id === song.id, 'loading': isLoadingSong && currentSong && currentSong.id === song.id }]"
+                  @contextmenu="showContextMenu($event, 'song', song)"
                 >
                   <div class="song-cover-container">
                     <div class="song-cover-rounded" v-if="song.picUrl">
@@ -340,6 +410,18 @@
                       <div class="mini-loader"></div>
                     </div>
                     <template v-else>
+                      <!-- 收藏按钮 -->
+                      <button 
+                        v-if="isLoggedIn" 
+                        :class="['like-btn', { 'liked': isSongLiked(song.id) }]" 
+                        @click.stop="toggleLikeSong(song)" 
+                        :title="isSongLiked(song.id) ? '取消收藏' : '收藏歌曲'"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" :fill="isSongLiked(song.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
+                      </button>
+                      <!-- 添加到播放列表按钮 -->
                       <button v-if="showSearchResults && !isSongInPlaylist(song)" class="add-to-playlist-btn" @click.stop="addToPlaylist(song)" title="添加到播放列表">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
@@ -360,6 +442,7 @@
                   :ref="el => { if (el) gridItemRefs[index] = el }"
                   :style="getGridItemStyle(index)"
                   @click="playFromSearchResults(song)"
+                  @contextmenu="showContextMenu($event, 'song', song)"
                   @mouseenter="handleBallHover(index, true)"
                   @mouseleave="handleBallHover(index, false)"
                 >
@@ -665,6 +748,7 @@
                         'loading': isLoadingSong && currentSong && currentSong.id === song.id 
                       }]"
                       @click="selectSongFromPlaylist(index)"
+                      @contextmenu="showContextMenu($event, 'song', song)"
                     >
                       <div class="playlist-item-info">
                         <div class="playlist-item-index">{{ index + 1 }}</div>
@@ -845,6 +929,7 @@
                   :key="song.id"
                   class="artist-song-item"
                   @click="selectArtistSong(index, 'hot')"
+                  @contextmenu="showContextMenu($event, 'song', song)"
                 >
                   <div class="song-index">{{ index + 1 }}</div>
                   <div class="song-cover">
@@ -866,6 +951,7 @@
                   v-for="(song, index) in artistAllSongs" 
                   :key="song.id"
                   class="artist-song-item no-cover"
+                  @contextmenu="showContextMenu($event, 'song', song)"
                   @click="selectArtistSong(index, 'all')"
                 >
                   <div class="song-index">{{ index + 1 }}</div>
@@ -1008,6 +1094,7 @@
                   :key="song.id"
                   class="playlist-song-item"
                   @click="selectPlaylistDetailSong(index)"
+                  @contextmenu="showContextMenu($event, 'song', song)"
                 >
                   <div class="song-index">{{ (playlistDetailPage - 1) * pageSize + index + 1 }}</div>
                   <div class="song-cover-small">
@@ -1147,6 +1234,7 @@
                     :key="song.id"
                     class="album-song-item"
                     @click="selectAlbumSong(index)"
+                    @contextmenu="showContextMenu($event, 'song', song)"
                   >
                     <div class="song-index">{{ index + 1 }}</div>
                     <div class="song-cover">
@@ -1168,7 +1256,7 @@
     <!-- 登录组件 -->
     <MusicLogin 
       :visible="showLoginModal" 
-      :api-url="apiUrl"
+      :api-url="currentApiUrl"
       @close="hideLoginModal"
       @login-success="handleLoginSuccess"
       @user-info-updated="handleUserInfoUpdated"
@@ -1383,6 +1471,292 @@
       </div>
     </div>
   </div>
+
+  <!-- 创建歌单模态框 -->
+  <div v-if="showCreatePlaylistModal" class="modal-overlay" @click="closeCreatePlaylistModal">
+    <div class="modal-content playlist-modal modern-modal" @click.stop>
+      <div class="modern-modal-header">
+        <div class="modal-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2L13.09 8.26L19 7L15.45 11.82L18 18L12 14.9L6 18L8.55 11.82L5 7L10.91 8.26L12 2Z" fill="currentColor" opacity="0.8"/>
+            <path d="M12 6L12.54 9.13L15 8.5L13.23 10.91L14.5 13.5L12 11.95L9.5 13.5L10.77 10.91L9 8.5L11.46 9.13L12 6Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="modal-title-section">
+          <h3 class="modal-title">创建新歌单</h3>
+          <p class="modal-subtitle">创建属于你的音乐收藏</p>
+        </div>
+        <button class="modern-modal-close-btn" @click="closeCreatePlaylistModal">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="modern-modal-body">
+        <div class="form-group-modern">
+          <div class="form-label-wrapper">
+            <label class="form-label-modern">歌单名称</label>
+            <span class="required-mark">*</span>
+          </div>
+          <div class="input-wrapper">
+            <input 
+              type="text" 
+              v-model="newPlaylistName" 
+              class="form-control-modern" 
+              :class="{ 'has-content': newPlaylistName }"
+              placeholder="给你的歌单起个名字"
+              maxlength="50"
+              ref="playlistNameInput"
+            />
+            <div class="input-counter">
+              <span>{{ newPlaylistName.length }}/50</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-group-modern">
+          <div class="form-label-wrapper">
+            <label class="form-label-modern">歌单描述</label>
+            <span class="optional-mark">可选</span>
+          </div>
+          <div class="textarea-wrapper">
+            <textarea 
+              v-model="newPlaylistDescription" 
+              class="form-control-modern textarea-modern" 
+              :class="{ 'has-content': newPlaylistDescription }"
+              placeholder="描述一下这个歌单的风格或内容..."
+              maxlength="200"
+              rows="3"
+            ></textarea>
+            <div class="textarea-counter">
+              <span>{{ newPlaylistDescription.length }}/200</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="playlist-preview" v-if="newPlaylistName">
+          <div class="preview-header">
+            <span class="preview-label">预览</span>
+          </div>
+          <div class="preview-content">
+            <div class="preview-cover">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <rect width="32" height="32" rx="8" fill="currentColor" opacity="0.1"/>
+                <path d="M12 12L12 20L20 16L12 12Z" fill="currentColor" opacity="0.6"/>
+              </svg>
+            </div>
+            <div class="preview-info">
+              <div class="preview-title">{{ newPlaylistName || '未命名歌单' }}</div>
+              <div class="preview-desc">{{ newPlaylistDescription || '暂无描述' }}</div>
+              <div class="preview-meta">0 首歌曲 · 刚刚创建</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modern-modal-footer">
+        <button class="modern-btn modern-btn-secondary" @click="closeCreatePlaylistModal">
+          <span>取消</span>
+        </button>
+        <button 
+          class="modern-btn modern-btn-primary" 
+          @click="createPlaylist" 
+          :disabled="isCreatingPlaylist || !newPlaylistName.trim()"
+          :class="{ 'loading': isCreatingPlaylist }"
+        >
+          <span v-if="!isCreatingPlaylist" class="btn-content">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="btn-icon">
+              <path d="M8 2L8 14M2 8L14 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            创建歌单
+          </span>
+          <span v-else class="btn-content">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="loading-icon">
+              <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="24" stroke-dashoffset="6" transform="rotate(-90 8 8)"/>
+            </svg>
+            创建中...
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑歌单模态框 -->
+  <div v-if="showEditPlaylistModal" class="modal-overlay" @click="closeEditPlaylistModal">
+    <div class="modal-content playlist-modal modern-modal" @click.stop>
+      <div class="modern-modal-header">
+        <div class="modal-icon edit-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M18.5 2.50001C18.8978 2.10219 19.4374 1.87869 20 1.87869C20.5626 1.87869 21.1022 2.10219 21.5 2.50001C21.8978 2.89784 22.1213 3.4374 22.1213 4.00001C22.1213 4.56262 21.8978 5.10219 21.5 5.50001L12 15L8 16L9 12L18.5 2.50001Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="modal-title-section">
+          <h3 class="modal-title">编辑歌单</h3>
+          <p class="modal-subtitle">修改歌单信息</p>
+        </div>
+        <button class="modern-modal-close-btn" @click="closeEditPlaylistModal">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="modern-modal-body">
+        <div class="form-group-modern">
+          <div class="form-label-wrapper">
+            <label class="form-label-modern">歌单名称</label>
+            <span class="required-mark">*</span>
+          </div>
+          <div class="input-wrapper">
+            <input 
+              type="text" 
+              v-model="newPlaylistName" 
+              class="form-control-modern" 
+              :class="{ 'has-content': newPlaylistName }"
+              placeholder="给你的歌单起个名字"
+              maxlength="50"
+              ref="playlistNameInput"
+            />
+            <div class="input-counter">
+              <span>{{ newPlaylistName.length }}/50</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-group-modern">
+          <div class="form-label-wrapper">
+            <label class="form-label-modern">歌单描述</label>
+            <span class="optional-mark">可选</span>
+          </div>
+          <div class="textarea-wrapper">
+            <textarea 
+              v-model="newPlaylistDescription" 
+              class="form-control-modern textarea-modern" 
+              :class="{ 'has-content': newPlaylistDescription }"
+              placeholder="描述一下这个歌单的风格或内容..."
+              maxlength="200"
+              rows="3"
+            ></textarea>
+            <div class="textarea-counter">
+              <span>{{ newPlaylistDescription.length }}/200</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="playlist-preview" v-if="newPlaylistName">
+          <div class="preview-header">
+            <span class="preview-label">预览</span>
+          </div>
+          <div class="preview-content">
+            <div class="preview-cover">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <rect width="32" height="32" rx="8" fill="currentColor" opacity="0.1"/>
+                <path d="M12 12L12 20L20 16L12 12Z" fill="currentColor" opacity="0.6"/>
+              </svg>
+            </div>
+            <div class="preview-info">
+              <div class="preview-title">{{ newPlaylistName || '未命名歌单' }}</div>
+              <div class="preview-desc">{{ newPlaylistDescription || '暂无描述' }}</div>
+              <div class="preview-meta">{{ currentPlaylist?.songCount || 0 }} 首歌曲 · 已创建</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modern-modal-footer">
+        <button class="modern-btn modern-btn-secondary" @click="closeEditPlaylistModal">
+          <span>取消</span>
+        </button>
+        <button 
+          class="modern-btn modern-btn-primary" 
+          @click="updatePlaylist" 
+          :disabled="isUpdatingPlaylist || !newPlaylistName.trim()"
+          :class="{ 'loading': isUpdatingPlaylist }"
+        >
+          <span v-if="!isUpdatingPlaylist" class="btn-content">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="btn-icon">
+              <path d="M11.5 2.5L4 10L2.5 13.5L6 12L13.5 4.5C14.3 3.7 14.3 2.3 13.5 1.5C12.7 0.7 11.3 0.7 10.5 1.5L11.5 2.5Z" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9.5 4.5L12.5 7.5" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            保存修改
+          </span>
+          <span v-else class="btn-content">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="loading-icon">
+              <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="24" stroke-dashoffset="6" transform="rotate(-90 8 8)"/>
+            </svg>
+            更新中...
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+<!-- 右键菜单 -->
+  <div v-if="contextMenu.visible" 
+       class="context-menu" 
+       :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+       @click.stop
+       ref="contextMenu">
+    
+    <!-- 歌单右键菜单 -->
+    <template v-if="contextMenu.type === 'playlist' && contextMenu.playlist">
+      <div class="context-menu-item" @click="editPlaylistFromMenu">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+        </svg>
+        <span>编辑歌单</span>
+      </div>
+      <div class="context-menu-item danger" @click="deletePlaylistFromMenu">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+        </svg>
+        <span>删除歌单</span>
+      </div>
+    </template>
+    
+    <!-- 歌曲右键菜单 -->
+    <template v-if="contextMenu.type === 'song' && contextMenu.song">
+      <div class="context-menu-item" @click="toggleLikeSong">
+        <svg width="16" height="16" viewBox="0 0 24 24" :fill="isSongLiked(contextMenu.song) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+        <span>{{ isSongLiked(contextMenu.song) ? '取消收藏' : '收藏歌曲' }}</span>
+      </div>
+      <div class="context-menu-item" @click="addSongToCurrentPlaylist">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+        </svg>
+        <span>添加到播放列表</span>
+      </div>
+      <div class="context-menu-divider" v-if="isLoggedIn && userPlaylists.length > 0"></div>
+      <template v-if="isLoggedIn && userPlaylists.length > 0">
+        <div class="context-menu-submenu">
+          <div class="context-menu-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/>
+            </svg>
+            <span>添加到歌单</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" class="submenu-arrow">
+              <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+            </svg>
+          </div>
+          <div class="context-menu-submenu-content">
+            <div v-for="playlist in userPlaylists" 
+                 :key="playlist.id" 
+                 class="context-menu-item"
+                 @click="addSongToPlaylistDirectly(playlist)">
+              <img :src="playlist.coverImgUrl || defaultAlbumArt" :alt="playlist.name" class="submenu-playlist-cover">
+              <span>{{ playlist.name }}</span>
+              <div class="playlist-item-count">{{ playlist.trackCount }} 首</div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </template>
+  </div>
+
+  
 </template>
 
 <script>
@@ -1411,7 +1785,7 @@ export default {
     },
     apiUrl: {
       type: String,
-      default: 'https://zm.i9mr.com'
+      required: true
     },
     settings: {
       type: Object,
@@ -1426,6 +1800,18 @@ export default {
       searchType: 'songs', // 搜索类型：songs, playlists, artists
       currentPlaylist: [],
       showSearchResults: false,
+      // 右键菜单
+      contextMenu: {
+        visible: false,
+        x: 0,
+        y: 0,
+        type: '', // playlist, song
+        target: null, // 当前目标对象
+        song: null, // 当前歌曲（当type为song时）
+        playlist: null // 当前歌单（当type为playlist时）
+      },
+      
+  
       // 完整的歌单歌曲列表（用于分页显示）
       fullPlaylistSongs: [],
       // 歌单详情界面
@@ -1532,6 +1918,18 @@ export default {
       isLoadingRecommendSongs: false,
       // 播放列表菜单
       showPlaylistMenu: false,
+      // 收藏相关
+      likedSongs: [], // 用户喜欢的歌曲ID列表
+      isLoadingLikedSongs: false,
+      // 歌单管理相关
+      showCreatePlaylistModal: false,
+      showEditPlaylistModal: false,
+      editingPlaylist: null,
+      newPlaylistName: '',
+      newPlaylistDescription: '',
+      newPlaylistTags: '',
+      isCreatingPlaylist: false,
+      isUpdatingPlaylist: false,
       // 拖拽相关
       draggedItemIndex: null,
       draggedOverIndex: null,
@@ -1636,26 +2034,41 @@ export default {
       deep: true
     }
   },
-  mounted() {
-    // 加载保存的音量设置
-    this.loadSavedVolume();
-    // 加载保存的播放模式
-    this.loadPlayMode();
+  watch: {
+    // 监听apiUrl变化
+    apiUrl(newVal) {
+      console.log('MusicPlayer apiUrl prop changed:', newVal);
+    },
+    // 监听settings变化
+    settings: {
+      handler(newVal) {
+        console.log('MusicPlayer settings changed, musicApiUrl:', newVal.musicApiUrl);
+      },
+      deep: true
+    }
+  },
+  computed: {
+    // 获取API地址，优先使用settings中的musicApiUrl
+    currentApiUrl() {
+      return this.settings.musicApiUrl || this.apiUrl;
+    }
+  },
+mounted() {
+    // 初始化
     this.initAudio();
-    this.loadDefaultPlaylist();
-    // 添加点击外部关闭下拉菜单的事件监听
-    document.addEventListener('click', this.handleClickOutside);
-    // 初始化网格项目引用数组
-    this.gridItemRefs = [];
-    // 初始化音乐颜色提取器
-    this.musicColorExtractor = new MusicColorExtractor();
+    
+    // 监听点击事件关闭右键菜单
+    document.addEventListener('click', this.hideContextMenu);
+    
+    // 加载保存的音量
+    this.loadSavedVolume();
+    
     // 检查登录状态
     this.checkLoginStatus();
-    console.log('MusicPlayer: 组件已挂载，已检查登录状态');
   },
   beforeUnmount() {
     // 移除事件监听
-    document.removeEventListener('click', this.handleClickOutside);
+    document.removeEventListener('click', this.hideContextMenu);
     // 停止物理模拟
     this.stopPhysicsSimulation();
     // 清理播放模式提示定时器
@@ -1798,7 +2211,7 @@ export default {
     // 搜索歌曲
     async searchSongs() {
       const offset = (this.currentPage - 1) * this.pageSize;
-      const url = `${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=1&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const url = `${this.currentApiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=1&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -1839,7 +2252,7 @@ export default {
     // 搜索歌单
     async searchPlaylists() {
       const offset = (this.currentPage - 1) * this.pageSize;
-      const url = `${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=1000&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const url = `${this.currentApiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=1000&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -1879,7 +2292,7 @@ export default {
     // 搜索歌手
     async searchArtists() {
       const offset = (this.currentPage - 1) * this.pageSize;
-      const url = `${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=100&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const url = `${this.currentApiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=100&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -1972,7 +2385,7 @@ export default {
         this.isLoadingPlaylist = true;
         this.showPlaylistDetail = true;
         
-        const url = `${this.apiUrl}/playlist/detail?id=${playlistId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const url = `${this.currentApiUrl}/playlist/detail?id=${playlistId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
       const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
@@ -2048,7 +2461,7 @@ export default {
     // 搜索专辑
     async searchAlbums() {
       const offset = (this.currentPage - 1) * this.pageSize;
-      const url = `${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=10&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+      const url = `${this.currentApiUrl}/cloudsearch?keywords=${encodeURIComponent(this.searchQuery)}&type=10&limit=${this.pageSize}&offset=${offset}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -2094,7 +2507,7 @@ export default {
       this.showAlbumDetail = true;
       
       try {
-        const url = `${this.apiUrl}/album?id=${albumId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const url = `${this.currentApiUrl}/album?id=${albumId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
       const response = await fetch(url);
         const data = await response.json();
         
@@ -2360,27 +2773,55 @@ export default {
         this.duration = 0;
         this.currentTime = 0;
         
-        // 调用API获取真实歌曲URL
-        const url = `${this.apiUrl}/song/url?id=${song.id}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
-      const response = await fetch(url);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.code === 200 && data.data && data.data[0] && data.data[0].url) {
-            const songUrl = data.data[0].url;
-            if (songUrl) {
-              this.audio.src = songUrl;
-              // 尝试获取歌曲详细信息
-              await this.loadSongDetail(song.id);
-            } else {
-              // 如果API返回的URL为空，使用备用URL
-              this.audio.src = song.url || `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`;
-            }
-          } else {
-            this.audio.src = song.url || `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`;
-          }
-        } else {
-          this.audio.src = song.url || `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`;
+        // 同时发送两个请求：获取歌曲URL和歌曲详情
+        const songUrlPromise = fetch(`${this.currentApiUrl}/song/url?id=${song.id}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`);
+        const songDetailPromise = fetch(`${this.currentApiUrl}/song/detail?ids=${song.id}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`);
+        
+        // 等待两个请求都完成
+        const [urlResponse, detailResponse] = await Promise.all([songUrlPromise, songDetailPromise]);
+        
+        // 检查两个请求是否都成功
+        if (!urlResponse.ok || !detailResponse.ok) {
+          throw new Error('获取歌曲信息失败');
         }
+        
+        const urlData = await urlResponse.json();
+        const detailData = await detailResponse.json();
+        
+        // 检查数据格式
+        if (urlData.code !== 200 || !urlData.data || !urlData.data[0]) {
+          throw new Error('歌曲URL数据格式错误');
+        }
+        
+        if (detailData.code !== 200 || !detailData.songs || !detailData.songs[0]) {
+          throw new Error('歌曲详情数据格式错误');
+        }
+        
+        // 获取歌曲URL
+        const songUrl = urlData.data[0].url;
+        if (!songUrl) {
+          // 如果API返回的URL为空，使用备用URL
+          this.audio.src = song.url || `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`;
+        } else {
+          this.audio.src = songUrl;
+        }
+        
+        // 更新当前歌曲信息
+        const songDetail = detailData.songs[0];
+        this.currentSong = {
+          ...this.currentSong,
+          name: songDetail.name || this.currentSong.name,
+          artist: (songDetail.ar && Array.isArray(songDetail.ar)) ? 
+                   songDetail.ar.map(a => a.name).join(', ') : 
+                   this.currentSong.artist,
+          album: (songDetail.al && songDetail.al.name) ? 
+                 songDetail.al.name : 
+                 this.currentSong.album,
+          duration: songDetail.dt || songDetail.duration || this.currentSong.duration,
+          picUrl: (songDetail.al && songDetail.al.picUrl) ? 
+                  songDetail.al.picUrl : 
+                  this.currentSong.picUrl
+        };
         
         // 设置音频加载完成后的回调
         this.audio.onloadedmetadata = () => {
@@ -2415,7 +2856,7 @@ export default {
     async loadSongDetail(songId) {
       try {
         // 获取歌曲详细信息以更新当前歌曲数据
-        const url = `${this.apiUrl}/song/detail?ids=${songId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const url = `${this.currentApiUrl}/song/detail?ids=${songId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
       const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
@@ -2561,6 +3002,25 @@ export default {
         }
       } catch (error) {
         console.error('加载音量设置失败:', error);
+      }
+      
+      // 加载收藏的歌曲
+      this.loadLikedSongs();
+    },
+
+    loadLikedSongs() {
+      try {
+        const savedLikedSongs = localStorage.getItem('musicLikedSongs');
+        if (savedLikedSongs) {
+          const likedSongsArray = JSON.parse(savedLikedSongs);
+          this.likedSongs = new Set(likedSongsArray);
+        }
+      } catch (error) {
+        console.error('加载收藏歌曲失败:', error);
+        // 确保likedSongs是一个Set
+        if (!(this.likedSongs instanceof Set)) {
+          this.likedSongs = new Set();
+        }
       }
     },
 
@@ -2852,23 +3312,23 @@ export default {
       try {
         // 获取歌手基本信息
         const cookieParam = this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : '';
-        const detailResponse = await fetch(`${this.apiUrl}/artist/detail?id=${artistId}${cookieParam}`);
+        const detailResponse = await fetch(`${this.currentApiUrl}/artist/detail?id=${artistId}${cookieParam}`);
         const detailData = await detailResponse.json();
         
         // 获取歌手热门歌曲
-        const hotSongsResponse = await fetch(`${this.apiUrl}/artist/top/song?id=${artistId}${cookieParam}`);
+        const hotSongsResponse = await fetch(`${this.currentApiUrl}/artist/top/song?id=${artistId}${cookieParam}`);
         const hotSongsData = await hotSongsResponse.json();
         
         // 获取歌手全部歌曲
-        const allSongsResponse = await fetch(`${this.apiUrl}/artist/songs?id=${artistId}&limit=100&order=hot${cookieParam}`);
+        const allSongsResponse = await fetch(`${this.currentApiUrl}/artist/songs?id=${artistId}&limit=100&order=hot${cookieParam}`);
         const allSongsData = await allSongsResponse.json();
         
         // 获取歌手专辑
-        const albumsResponse = await fetch(`${this.apiUrl}/artist/album?id=${artistId}&limit=50${cookieParam}`);
+        const albumsResponse = await fetch(`${this.currentApiUrl}/artist/album?id=${artistId}&limit=50${cookieParam}`);
         const albumsData = await albumsResponse.json();
         
         // 获取歌手描述
-        const descResponse = await fetch(`${this.apiUrl}/artist/desc?id=${artistId}${cookieParam}`);
+        const descResponse = await fetch(`${this.currentApiUrl}/artist/desc?id=${artistId}${cookieParam}`);
         const descData = await descResponse.json();
         
         
@@ -3062,14 +3522,24 @@ export default {
 
     // 点击外部关闭下拉菜单
     handleClickOutside(event) {
+      // 关闭搜索类型下拉菜单
       if (!event.target.closest('.search-type-dropdown')) {
         this.showSearchTypeDropdown = false;
       }
-      if (!event.target.closest('.user-info-container') && !event.target.closest('.user-dropdown')) {
+      
+      // 关闭用户下拉菜单
+      if (!event.target.closest('.user-info-container')) {
         this.showUserDropdown = false;
       }
+      
+      // 关闭播放列表菜单
       if (!event.target.closest('.playlist-button-container')) {
         this.showPlaylistMenu = false;
+      }
+      
+      // 关闭迷你播放列表菜单（如果存在）
+      if (!event.target.closest('.mini-playlist-menu')) {
+        // 这里可以添加迷你播放列表的关闭逻辑
       }
     },
 
@@ -3436,7 +3906,7 @@ export default {
       
       try {
         this.isSearching = true;
-        const url = `${this.apiUrl}/cloudsearch?keywords=${encodeURIComponent(artistName)}&type=100&limit=10${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const url = `${this.currentApiUrl}/cloudsearch?keywords=${encodeURIComponent(artistName)}&type=100&limit=10${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
       const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
@@ -3576,13 +4046,8 @@ export default {
     
     handleUserContainerClick() {
       if (this.isLoggedIn) {
-        // 如果用户菜单已显示，则关闭菜单并显示登出确认
-        if (this.showUserDropdown) {
-          this.showUserDropdown = false;
-          this.showLogoutConfirm();
-        } else {
-          this.showUserDropdown = !this.showUserDropdown;
-        }
+        // 只切换用户菜单显示状态
+        this.showUserDropdown = !this.showUserDropdown;
       } else {
         this.openLoginModal();
       }
@@ -3606,6 +4071,8 @@ export default {
       this.getUserLevel();
       // 加载主页数据
       this.loadHomePageData();
+      // 加载用户喜欢的歌曲列表
+      this.loadLikedSongs();
     },
     
     // 获取用户等级信息
@@ -3613,7 +4080,7 @@ export default {
       if (!this.loginCookie) return;
       
       try {
-        const url = `/user/level?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
+        const url = `${this.currentApiUrl}/user/level?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
         const response = await fetch(url);
         
         if (response.ok) {
@@ -3631,8 +4098,11 @@ export default {
     async refreshUserInfo() {
       if (!this.loginCookie) return;
       
+      // 关闭用户菜单
+      this.showUserDropdown = false;
+      
       try {
-        const url = `/user/account?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
+        const url = `${this.currentApiUrl}/user/account?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
         console.log('refreshUserInfo: 强制从服务器刷新用户信息');
         const response = await fetch(url);
         
@@ -3695,7 +4165,7 @@ export default {
       try {
         // 调用退出登录API
         if (this.loginCookie) {
-          const url = `/logout?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
+          const url = `${this.currentApiUrl}/logout?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
           await fetch(url);
           console.log('logout: 退出登录API调用成功');
         }
@@ -3763,6 +4233,8 @@ export default {
             this.getUserInfo();
             // 加载主页数据
             this.loadHomePageData();
+            // 加载用户喜欢的歌曲列表
+            this.loadLikedSongs();
           } else {
             // 登录已过期，清除信息
             this.logout();
@@ -3799,8 +4271,8 @@ export default {
       
       // 没有缓存或缓存无效，从服务器获取
       try {
-        // 使用相对路径，通过vite代理转发
-        const url = `/user/account?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
+        // 使用完整API URL，避免代理
+        const url = `${this.currentApiUrl}/user/account?timestamp=${Date.now()}&cookie=${encodeURIComponent(this.loginCookie)}`;
         console.log('getUserInfo: 从服务器获取用户信息，URL:', url);
         const response = await fetch(url);
         
@@ -3851,52 +4323,60 @@ export default {
         return;
       }
       
-      // 检查缓存是否有效（5分钟）
-      const cacheTime = localStorage.getItem('musicHomePageCacheTime');
       const currentTime = Date.now();
-      const fiveMinutesInMs = 5 * 60 * 1000;
+      const oneDayInMs = 24 * 60 * 60 * 1000; // 24小时缓存
       
-      if (cacheTime && (currentTime - parseInt(cacheTime, 10) < fiveMinutesInMs)) {
-        // 从缓存加载
+      // 每次打开都加载用户歌单
+      await this.loadUserPlaylists();
+      
+      // 检查推荐歌单缓存（每日刷新）
+      const recommendPlaylistsCacheTime = localStorage.getItem('musicRecommendPlaylistsCacheTime');
+      const hasValidPlaylistCache = recommendPlaylistsCacheTime && (currentTime - parseInt(recommendPlaylistsCacheTime, 10) < oneDayInMs);
+      
+      if (hasValidPlaylistCache) {
         try {
-          const cachedPlaylists = localStorage.getItem('musicUserPlaylists');
           const cachedRecommendPlaylists = localStorage.getItem('musicRecommendPlaylists');
-          const cachedRecommendSongs = localStorage.getItem('musicRecommendSongs');
-          
-          if (cachedPlaylists) {
-            this.userPlaylists = JSON.parse(cachedPlaylists);
-          }
           if (cachedRecommendPlaylists) {
             this.recommendPlaylists = JSON.parse(cachedRecommendPlaylists);
+            console.log('loadHomePageData: 使用推荐歌单缓存数据');
+          } else {
+            // 缓存时间存在但数据不存在，重新加载
+            await this.loadRecommendPlaylists();
           }
-          if (cachedRecommendSongs) {
-            this.recommendSongs = JSON.parse(cachedRecommendSongs);
-          }
-          
-          console.log('loadHomePageData: 从缓存加载主页数据');
-          return;
         } catch (error) {
-          console.error('loadHomePageData: 读取缓存失败', error);
+          console.error('loadHomePageData: 读取推荐歌单缓存失败', error);
+          // 缓存读取失败，重新加载
+          await this.loadRecommendPlaylists();
         }
+      } else {
+        // 缓存过期或不存在，重新加载推荐歌单
+        console.log('loadHomePageData: 推荐歌单缓存不存在或已过期，重新加载');
+        await this.loadRecommendPlaylists();
       }
       
-      console.log('loadHomePageData: 开始从服务器加载主页数据');
-      // 并行加载所有数据
-      await Promise.all([
-        this.loadUserPlaylists(),
-        this.loadRecommendPlaylists(),
-        this.loadRecommendSongs()
-      ]);
+      // 检查推荐歌曲缓存（每日刷新）
+      const recommendSongsCacheTime = localStorage.getItem('musicRecommendSongsCacheTime');
+      const hasValidSongCache = recommendSongsCacheTime && (currentTime - parseInt(recommendSongsCacheTime, 10) < oneDayInMs);
       
-      // 保存到缓存
-      try {
-        localStorage.setItem('musicUserPlaylists', JSON.stringify(this.userPlaylists));
-        localStorage.setItem('musicRecommendPlaylists', JSON.stringify(this.recommendPlaylists));
-        localStorage.setItem('musicRecommendSongs', JSON.stringify(this.recommendSongs));
-        localStorage.setItem('musicHomePageCacheTime', currentTime.toString());
-        console.log('loadHomePageData: 主页数据已缓存');
-      } catch (error) {
-        console.error('loadHomePageData: 保存缓存失败', error);
+      if (hasValidSongCache) {
+        try {
+          const cachedRecommendSongs = localStorage.getItem('musicRecommendSongs');
+          if (cachedRecommendSongs) {
+            this.recommendSongs = JSON.parse(cachedRecommendSongs);
+            console.log('loadHomePageData: 使用推荐歌曲缓存数据');
+          } else {
+            // 缓存时间存在但数据不存在，重新加载
+            await this.loadRecommendSongs();
+          }
+        } catch (error) {
+          console.error('loadHomePageData: 读取推荐歌曲缓存失败', error);
+          // 缓存读取失败，重新加载
+          await this.loadRecommendSongs();
+        }
+      } else {
+        // 缓存过期或不存在，重新加载推荐歌曲
+        console.log('loadHomePageData: 推荐歌曲缓存不存在或已过期，重新加载');
+        await this.loadRecommendSongs();
       }
       
       console.log('loadHomePageData: 主页数据加载完成');
@@ -3913,7 +4393,7 @@ export default {
       
       this.isLoadingUserPlaylists = true;
       try {
-        const url = `${this.apiUrl}/user/playlist?uid=${this.userInfo.userId}&timestamp=${Date.now()}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const url = `${this.currentApiUrl}/user/playlist?uid=${this.userInfo.userId}&timestamp=${Date.now()}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
         const response = await fetch(url);
         
         if (response.ok) {
@@ -3943,7 +4423,7 @@ export default {
     async loadRecommendPlaylists() {
       this.isLoadingRecommendPlaylists = true;
       try {
-        const url = `${this.apiUrl}/personalized?limit=10&timestamp=${Date.now()}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const url = `${this.currentApiUrl}/personalized?limit=10&timestamp=${Date.now()}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
         const response = await fetch(url);
         
         if (response.ok) {
@@ -3959,6 +4439,16 @@ export default {
               creator: playlist.creator ? playlist.creator.nickname : '未知创建者',
               creatorId: playlist.creator ? playlist.creator.userId : null
             }));
+            
+            // 保存到缓存，记录当前时间戳
+            try {
+              localStorage.setItem('musicRecommendPlaylists', JSON.stringify(this.recommendPlaylists));
+              localStorage.setItem('musicRecommendPlaylistsCacheTime', Date.now().toString());
+              console.log('loadRecommendPlaylists: 推荐歌单已缓存');
+            } catch (error) {
+              console.error('loadRecommendPlaylists: 保存缓存失败', error);
+            }
+            
             console.log('loadRecommendPlaylists: 已加载', this.recommendPlaylists.length, '个推荐歌单');
           }
         }
@@ -3973,7 +4463,7 @@ export default {
     async loadRecommendSongs() {
       this.isLoadingRecommendSongs = true;
       try {
-        const url = `${this.apiUrl}/recommend/songs?timestamp=${Date.now()}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const url = `${this.currentApiUrl}/recommend/songs?timestamp=${Date.now()}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
         console.log('loadRecommendSongs: 请求URL', url);
         const response = await fetch(url);
         
@@ -3992,6 +4482,16 @@ export default {
               ar: song.ar || [],
               al: song.al || {}
             }));
+            
+            // 保存到缓存，记录当前时间戳
+            try {
+              localStorage.setItem('musicRecommendSongs', JSON.stringify(this.recommendSongs));
+              localStorage.setItem('musicRecommendSongsCacheTime', Date.now().toString());
+              console.log('loadRecommendSongs: 推荐歌曲已缓存');
+            } catch (error) {
+              console.error('loadRecommendSongs: 保存缓存失败', error);
+            }
+            
             console.log('loadRecommendSongs: 已加载', this.recommendSongs.length, '首推荐歌曲');
             console.log('loadRecommendSongs: 推荐歌曲数据示例', this.recommendSongs[0]);
           } else {
@@ -4035,19 +4535,11 @@ export default {
       this.audio.currentTime = targetTime;
     },
     
-    // 播放推荐歌曲
+    // 播放推荐歌曲（临时播放）
     playRecommendSong(song) {
-      // 检查歌曲是否已在播放列表中
-      const index = this.getSongIndex(song, this.playlist);
-      if (index === -1) {
-        // 如果不在播放列表中，先添加到播放列表
-        this.addToPlaylist(song);
-        // 然后播放最后一首（刚添加的歌曲）
-        this.selectSongFromPlaylist(this.playlist.length - 1);
-      } else {
-        // 如果已在播放列表中，直接播放
-        this.selectSongFromPlaylist(index);
-      }
+      // 创建临时播放列表，只包含当前歌曲
+      const tempPlaylist = [song];
+      this.playTemporarily(tempPlaylist, 0);
     },
 
     // 打开歌单
@@ -4157,6 +4649,279 @@ export default {
       }, 3000);
     },
 
+    // ========== 收藏和歌单管理功能 ==========
+
+    // 获取用户喜欢的歌曲列表
+    async loadLikedSongs() {
+      if (!this.isLoggedIn) {
+        console.log('loadLikedSongs: 用户未登录');
+        return;
+      }
+
+      this.isLoadingLikedSongs = true;
+      try {
+        const url = `${this.currentApiUrl}/likelist?uid=${this.userInfo.userId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200) {
+            this.likedSongs = data.ids || [];
+            console.log('loadLikedSongs: 已加载', this.likedSongs.length, '首喜欢的歌曲');
+          }
+        }
+      } catch (error) {
+        console.error('loadLikedSongs: 加载失败', error);
+      } finally {
+        this.isLoadingLikedSongs = false;
+      }
+    },
+
+    
+
+    // 喜欢/取消喜欢歌曲
+    async toggleLikeSong(song) {
+      if (!this.isLoggedIn) {
+        this.showNotification('请先登录', 'warning');
+        return;
+      }
+
+      if (!song || !song.id) {
+        this.showNotification('无效的歌曲信息', 'error');
+        return;
+      }
+
+      // 确保likedSongs是一个Set
+      if (!(this.likedSongs instanceof Set)) {
+        this.likedSongs = new Set(this.likedSongs);
+      }
+
+      const isLiked = this.likedSongs.has(song.id);
+      const likeAction = isLiked ? 0 : 1; // 0: 取消喜欢, 1: 喜欢
+
+      try {
+        const url = `${this.currentApiUrl}/like?id=${song.id}&like=${likeAction}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200) {
+            if (isLiked) {
+              // 从喜欢列表中移除
+              this.likedSongs.delete(song.id);
+              this.showNotification(`已取消收藏《${song.name}》`, 'info');
+            } else {
+              // 添加到喜欢列表
+              this.likedSongs.add(song.id);
+              this.showNotification(`已收藏《${song.name}》`, 'success');
+            }
+          } else {
+            this.showNotification(data.message || '操作失败', 'error');
+          }
+        } else {
+          this.showNotification('网络错误，请稍后重试', 'error');
+        }
+      } catch (error) {
+        console.error('toggleLikeSong: 操作失败', error);
+        this.showNotification('操作失败，请稍后重试', 'error');
+      }
+    },
+
+    // 打开创建歌单模态框
+    openCreatePlaylistModal() {
+      if (!this.isLoggedIn) {
+        this.showNotification('请先登录', 'warning');
+        return;
+      }
+      
+      this.newPlaylistName = '';
+      this.newPlaylistDescription = '';
+      this.newPlaylistTags = '';
+      this.showCreatePlaylistModal = true;
+    },
+
+    // 关闭创建歌单模态框
+    closeCreatePlaylistModal() {
+      this.showCreatePlaylistModal = false;
+      this.newPlaylistName = '';
+      this.newPlaylistDescription = '';
+      this.newPlaylistTags = '';
+    },
+
+    // 创建新歌单
+    async createPlaylist() {
+      if (!this.isLoggedIn) {
+        this.showNotification('请先登录', 'warning');
+        return;
+      }
+
+      if (!this.newPlaylistName.trim()) {
+        this.showNotification('请输入歌单名称', 'warning');
+        return;
+      }
+
+      this.isCreatingPlaylist = true;
+      try {
+        const url = `${this.currentApiUrl}/playlist/create?name=${encodeURIComponent(this.newPlaylistName)}${this.newPlaylistDescription ? '&desc=' + encodeURIComponent(this.newPlaylistDescription) : ''}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200 && data.id) {
+            this.showNotification(`歌单"${this.newPlaylistName}"创建成功`, 'success');
+            this.closeCreatePlaylistModal();
+            // 重新加载用户歌单
+            await this.loadUserPlaylists();
+          } else {
+            this.showNotification(data.message || '创建失败', 'error');
+          }
+        } else {
+          this.showNotification('网络错误，请稍后重试', 'error');
+        }
+      } catch (error) {
+        console.error('createPlaylist: 创建失败', error);
+        this.showNotification('创建失败，请稍后重试', 'error');
+      } finally {
+        this.isCreatingPlaylist = false;
+      }
+    },
+
+    // 打开编辑歌单模态框
+    openEditPlaylistModal(playlist) {
+      if (!this.isLoggedIn) {
+        this.showNotification('请先登录', 'warning');
+        return;
+      }
+
+      this.editingPlaylist = { ...playlist };
+      this.newPlaylistName = playlist.name;
+      this.newPlaylistDescription = playlist.description || '';
+      this.newPlaylistTags = '';
+      this.showEditPlaylistModal = true;
+    },
+
+    // 关闭编辑歌单模态框
+    closeEditPlaylistModal() {
+      this.showEditPlaylistModal = false;
+      this.editingPlaylist = null;
+      this.newPlaylistName = '';
+      this.newPlaylistDescription = '';
+      this.newPlaylistTags = '';
+    },
+
+    // 更新歌单信息
+    async updatePlaylist() {
+      if (!this.isLoggedIn || !this.editingPlaylist) {
+        this.showNotification('请先登录', 'warning');
+        return;
+      }
+
+      if (!this.newPlaylistName.trim()) {
+        this.showNotification('请输入歌单名称', 'warning');
+        return;
+      }
+
+      this.isUpdatingPlaylist = true;
+      try {
+        const url = `${this.currentApiUrl}/playlist/update?id=${this.editingPlaylist.id}&name=${encodeURIComponent(this.newPlaylistName)}${this.newPlaylistDescription ? '&desc=' + encodeURIComponent(this.newPlaylistDescription) : ''}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200) {
+            this.showNotification(`歌单"${this.newPlaylistName}"更新成功`, 'success');
+            this.closeEditPlaylistModal();
+            // 重新加载用户歌单
+            await this.loadUserPlaylists();
+          } else {
+            this.showNotification(data.message || '更新失败', 'error');
+          }
+        } else {
+          this.showNotification('网络错误，请稍后重试', 'error');
+        }
+      } catch (error) {
+        console.error('updatePlaylist: 更新失败', error);
+        this.showNotification('更新失败，请稍后重试', 'error');
+      } finally {
+        this.isUpdatingPlaylist = false;
+      }
+    },
+
+    // 删除歌单
+    async deletePlaylist(playlist) {
+      if (!this.isLoggedIn) {
+        this.showNotification('请先登录', 'warning');
+        return;
+      }
+
+      if (!confirm(`确定要删除歌单"${playlist.name}"吗？此操作不可恢复。`)) {
+        return;
+      }
+
+      try {
+        const url = `${this.currentApiUrl}/playlist/delete?id=${playlist.id}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200) {
+            this.showNotification(`歌单"${playlist.name}"删除成功`, 'success');
+            // 重新加载用户歌单
+            await this.loadUserPlaylists();
+          } else {
+            this.showNotification(data.message || '删除失败', 'error');
+          }
+        } else {
+          this.showNotification('网络错误，请稍后重试', 'error');
+        }
+      } catch (error) {
+        console.error('deletePlaylist: 删除失败', error);
+        this.showNotification('删除失败，请稍后重试', 'error');
+      }
+    },
+
+    // 收藏/取消收藏歌单
+    async toggleSubscribePlaylist(playlist) {
+      if (!this.isLoggedIn) {
+        this.showNotification('请先登录', 'warning');
+        return;
+      }
+
+      if (!playlist || !playlist.id) {
+        this.showNotification('无效的歌单信息', 'error');
+        return;
+      }
+
+      // 检查是否已收藏（通过检查用户歌单中是否有该歌单）
+      const isSubscribed = this.userPlaylists.some(p => p.id === playlist.id);
+      const subscribeAction = isSubscribed ? 2 : 1; // 1: 收藏, 2: 取消收藏
+
+      try {
+        const url = `${this.currentApiUrl}/playlist/subscribe?t=${subscribeAction}&id=${playlist.id}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200) {
+            if (isSubscribed) {
+              this.showNotification(`已取消收藏歌单"${playlist.name}"`, 'info');
+            } else {
+              this.showNotification(`已收藏歌单"${playlist.name}"`, 'success');
+            }
+            // 重新加载用户歌单
+            await this.loadUserPlaylists();
+          } else {
+            this.showNotification(data.message || '操作失败', 'error');
+          }
+        } else {
+          this.showNotification('网络错误，请稍后重试', 'error');
+        }
+      } catch (error) {
+        console.error('toggleSubscribePlaylist: 操作失败', error);
+        this.showNotification('操作失败，请稍后重试', 'error');
+      }
+    },
+
     // 更新通知位置
     updateNotificationPosition() {
       if (this.isMinimized) {
@@ -4239,6 +5004,179 @@ export default {
       if (index !== -1) {
         this.playTemporarily(this.currentPlaylist, index);
       }
+    },
+
+    // 右键菜单相关方法
+    showContextMenu(event, type, target) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.hideContextMenu();
+      
+      this.contextMenu = {
+        visible: true,
+        x: event.clientX,
+        y: event.clientY,
+        type: type,
+        target: target,
+        song: type === 'song' ? target : null,
+        playlist: type === 'playlist' ? target : null
+      };
+
+      // 确保菜单不会超出视窗
+      this.$nextTick(() => {
+        if (this.$refs.contextMenu) {
+          const rect = this.$refs.contextMenu.getBoundingClientRect();
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+
+          let x = event.clientX;
+          let y = event.clientY;
+
+          // 检查右边界
+          if (rect.right > viewportWidth) {
+            x = viewportWidth - rect.width - 8;
+          }
+
+          // 检查下边界
+          if (rect.bottom > viewportHeight) {
+            y = viewportHeight - rect.height - 8;
+          }
+
+          this.contextMenu.x = x;
+          this.contextMenu.y = y;
+        }
+      });
+    },
+
+    hideContextMenu() {
+      this.contextMenu.visible = false;
+    },
+
+    // 歌单右键菜单方法
+    editPlaylistFromMenu() {
+      if (this.contextMenu.playlist) {
+        this.openEditPlaylistModal(this.contextMenu.playlist);
+        this.hideContextMenu();
+      }
+    },
+
+    deletePlaylistFromMenu() {
+      if (this.contextMenu.playlist) {
+        this.deletePlaylist(this.contextMenu.playlist);
+        this.hideContextMenu();
+      }
+    },
+
+    // 歌曲右键菜单方法
+    async toggleLikeSong() {
+      if (!this.contextMenu.song || !this.isLoggedIn) {
+        this.hideContextMenu();
+        return;
+      }
+
+      try {
+        const songId = this.contextMenu.song.id;
+        const isLiked = this.isSongLiked(this.contextMenu.song);
+        const url = `${this.currentApiUrl}/like?id=${songId}&like=${!isLiked}&cookie=${encodeURIComponent(this.loginCookie)}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.code === 200) {
+          if (isLiked) {
+            this.likedSongs.delete(songId);
+          } else {
+            this.likedSongs.add(songId);
+          }
+          this.saveLikedSongs();
+        } else {
+          console.error('收藏/取消收藏失败:', data);
+        }
+      } catch (error) {
+        console.error('收藏/取消收藏歌曲出错:', error);
+      }
+
+      this.hideContextMenu();
+    },
+
+    addSongToCurrentPlaylist() {
+      if (this.contextMenu.song) {
+        this.addToPlaylist(this.contextMenu.song);
+        this.hideContextMenu();
+      }
+    },
+
+    addSongToPlaylist(playlist) {
+      if (!this.contextMenu.song || !this.isLoggedIn) {
+        this.hideContextMenu();
+        return;
+      }
+
+      this.selectedSongToAdd = this.contextMenu.song;
+      this.selectedPlaylistId = playlist.id;
+      this.showAddToPlaylistModal = true;
+      this.hideContextMenu();
+    },
+
+    // 直接添加歌曲到歌单（不打开弹窗）
+    async addSongToPlaylistDirectly(playlist) {
+      if (!this.contextMenu.song || !this.isLoggedIn || !playlist.id) {
+        this.hideContextMenu();
+        return;
+      }
+
+      const song = this.contextMenu.song;
+      const playlistId = playlist.id;
+      this.hideContextMenu();
+
+      try {
+        const url = `${this.currentApiUrl}/playlist/tracks?op=add&pid=${playlistId}&tracks=${song.id}&cookie=${encodeURIComponent(this.loginCookie)}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.code === 200) {
+          // 更新歌单的歌曲数量
+          playlist.trackCount = (playlist.trackCount || 0) + 1;
+          
+          this.showToast(`《${song.name}》已添加到歌单"${playlist.name}"`, 'success');
+        } else {
+          console.error('添加到歌单失败:', data);
+          this.showToast('添加失败，请重试', 'error');
+        }
+      } catch (error) {
+        console.error('添加到歌单出错:', error);
+        this.showToast('添加失败，请重试', 'error');
+      }
+    },
+
+    
+
+    // 工具方法
+    isSongLiked(songOrId) {
+      // 确保likedSongs是一个Set
+      if (!(this.likedSongs instanceof Set)) {
+        this.likedSongs = new Set(this.likedSongs);
+      }
+      
+      // 支持传入song对象或songId
+      const songId = typeof songOrId === 'object' ? songOrId.id : songOrId;
+      return this.likedSongs.has(songId);
+    },
+
+    showToast(message, type = 'success') {
+      // 简单的提示实现，可以后续优化
+      console.log(`${type}: ${message}`);
+    },
+
+    saveLikedSongs() {
+      // 确保likedSongs是一个Set
+      if (!(this.likedSongs instanceof Set)) {
+        this.likedSongs = new Set(this.likedSongs);
+      }
+      // 将Set转换为数组保存到localStorage
+      const likedSongsArray = Array.from(this.likedSongs);
+      localStorage.setItem('musicLikedSongs', JSON.stringify(likedSongsArray));
     }
   }
 }
@@ -6669,6 +7607,35 @@ export default {
   text-align: right;
 }
 
+/* 搜索结果中的收藏按钮 */
+.like-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.5rem;
+}
+
+.like-btn:hover {
+  background: rgba(244, 67, 54, 0.1);
+  color: var(--danger-color);
+  transform: scale(1.1);
+}
+
+.like-btn.liked {
+  color: var(--danger-color);
+}
+
+.like-btn.liked:hover {
+  background: rgba(244, 67, 54, 0.2);
+}
+
 /* 歌单搜索结果样式 */
 .playlist-result-item {
   display: flex;
@@ -8260,7 +9227,6 @@ export default {
 
 .user-info-container:hover {
   background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-1px);
 }
 
 .user-avatar {
@@ -8334,7 +9300,7 @@ export default {
   border: 1px solid var(--border-color);
   border-radius: 1rem;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  z-index: 1000;
+  z-index: 10005;
   overflow: hidden;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -8549,18 +9515,21 @@ export default {
 .home-page {
   display: flex;
   height: 100%;
-  gap: 1rem;
+  gap: 0;
   position: relative;
-  padding-bottom: 80px; /* 为底部播放控件预留空间 */
+  padding-bottom: 70px; /* 为底部播放控件预留空间，与bottom-player高度一致 */
 }
 
 .sidebar {
   width: 280px;
   background: var(--bg-secondary);
-  border-radius: 12px;
+  border-radius: 0;
   padding: 1.5rem;
   overflow-y: auto;
-  border: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  border-left: none;
+  border-top: none;
+  border-bottom: none;
 }
 
 .sidebar-section {
@@ -8618,20 +9587,86 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 .playlist-count {
   font-size: 0.8rem;
   color: white;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .main-content {
   flex: 1;
   overflow-y: auto;
   padding: 1rem;
+  border-right: none;
+  border-left: none;
+  border-top: none;
+  border-bottom: none;
+}
+
+.main-content.full-width {
+  flex: 1;
+  width: 100%;
+}
+
+/* 登录提示样式 */
+.login-prompt-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 400px;
+}
+
+.login-prompt-content {
+  text-align: center;
+  max-width: 400px;
+  padding: 2rem;
+}
+
+.login-prompt-icon {
+  margin-bottom: 1.5rem;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.login-prompt-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 1rem 0;
+}
+
+.login-prompt-description {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 2rem 0;
+}
+
+.login-prompt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.login-prompt-btn:hover {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .recommend-section {
@@ -9476,5 +10511,944 @@ export default {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ========== 收藏和歌单管理样式 ========== */
+
+/* 歌曲操作按钮组 */
+.recommend-song-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.recommend-like-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.recommend-like-btn:hover {
+  background: rgba(244, 67, 54, 0.1);
+  color: var(--danger-color);
+  transform: scale(1.1);
+}
+
+.recommend-like-btn.liked {
+  color: var(--danger-color);
+}
+
+.recommend-like-btn.liked:hover {
+  background: rgba(244, 67, 54, 0.2);
+}
+
+/* 侧边栏头部 */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.create-playlist-btn {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(var(--primary-color-rgb), 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.create-playlist-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.create-playlist-btn:hover {
+  transform: scale(1.05) translateY(-2px);
+  box-shadow: 0 6px 20px rgba(var(--primary-color-rgb), 0.4);
+}
+
+.create-playlist-btn:hover::before {
+  left: 100%;
+}
+
+.create-playlist-btn:active {
+  transform: scale(0.98) translateY(-1px);
+}
+
+/* 歌单项布局 */
+.playlist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.playlist-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.playlist-item:hover {
+  background: var(--bg-hover);
+}
+
+
+
+.playlist-actions {
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  flex-shrink: 0;
+}
+
+.playlist-item:hover .playlist-actions {
+  opacity: 1;
+}
+
+.playlist-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.playlist-action-btn:hover {
+  background: var(--bg-hover);
+}
+
+.playlist-action-btn.edit:hover {
+  color: var(--primary-color);
+}
+
+.playlist-action-btn.delete:hover {
+  color: var(--danger-color);
+}
+
+/* 推荐歌单项布局 */
+.recommend-playlist-item {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
+  text-align: center;
+  position: relative;
+}
+
+.recommend-playlist-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.recommend-playlist-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.recommend-playlist-subscribe-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.recommend-playlist-subscribe-btn:hover {
+  background: var(--primary-color);
+  color: white;
+  transform: scale(1.1);
+}
+
+.recommend-playlist-subscribe-btn:has(svg[fill="currentColor"]) {
+  color: var(--danger-color);
+}
+
+.recommend-playlist-subscribe-btn:has(svg[fill="currentColor"]):hover {
+  background: var(--danger-color);
+  color: white;
+}
+
+/* 歌单模态框样式 */
+.playlist-modal {
+  width: 90%;
+  max-width: 520px;
+  background: var(--bg-primary);
+  border-radius: 20px;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  animation: modalSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* 现代化模态框样式 */
+.modern-modal {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.modern-modal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.2), 
+    transparent
+  );
+  z-index: 1;
+}
+
+.modern-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 24px 20px;
+  background: linear-gradient(135deg, 
+    rgba(var(--primary-color-rgb, 236, 72, 153), 0.05), 
+    transparent
+  );
+  border-bottom: 1px solid var(--border-light);
+  position: relative;
+}
+
+.modal-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 12px rgba(var(--primary-color-rgb, 236, 72, 153), 0.3);
+  flex-shrink: 0;
+}
+
+.edit-icon {
+  background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+  box-shadow: 0 4px 12px rgba(var(--secondary-color-rgb, 59, 130, 246), 0.3);
+}
+
+.modal-title-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.modal-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.modern-modal-close-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.modern-modal-close-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  transform: scale(1.05);
+}
+
+.modern-modal-body {
+  padding: 24px;
+}
+
+.form-group-modern {
+  margin-bottom: 24px;
+}
+
+.form-label-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.form-label-modern {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.required-mark {
+  color: var(--danger-color);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.optional-mark {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.input-wrapper, .textarea-wrapper {
+  position: relative;
+}
+
+.form-control-modern {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.form-control-modern:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 236, 72, 153), 0.1);
+}
+
+.form-control-modern.has-content {
+  border-color: var(--primary-color);
+}
+
+.form-control-modern::placeholder {
+  color: var(--text-tertiary);
+}
+
+.textarea-modern {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+.input-counter, .textarea-counter {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  background: var(--bg-primary);
+  padding: 2px 4px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.playlist-preview {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
+}
+
+.preview-header {
+  margin-bottom: 12px;
+}
+
+.preview-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.preview-content {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.preview-cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.preview-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.preview-meta {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.modern-modal-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 20px 24px 24px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-light);
+}
+
+.modern-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  outline: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.modern-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.modern-btn-secondary {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.modern-btn-secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-dark);
+  transform: translateY(-1px);
+}
+
+.modern-btn-primary {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  box-shadow: 0 4px 12px rgba(var(--primary-color-rgb, 236, 72, 153), 0.3);
+}
+
+.modern-btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(var(--primary-color-rgb, 236, 72, 153), 0.4);
+}
+
+.modern-btn-primary.loading {
+  pointer-events: none;
+}
+
+.btn-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-icon {
+  flex-shrink: 0;
+}
+
+.loading-icon {
+  flex-shrink: 0;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 右键菜单样式 */
+.context-menu {
+  position: fixed;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 4px 0;
+  min-width: 160px;
+  z-index: 10007;
+  animation: contextMenuFadeIn 0.15s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.context-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.context-menu-item.danger {
+  color: var(--danger-color);
+}
+
+.context-menu-item.danger:hover {
+  background: rgba(var(--danger-color-rgb, 239, 68, 68), 0.1);
+}
+
+.context-menu-item svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 4px 8px;
+}
+
+.context-menu-submenu {
+  position: relative;
+}
+
+.context-menu-submenu-content {
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 4px 0;
+  min-width: 180px;
+  max-height: 300px;
+  overflow-y: auto;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-8px);
+  transition: all 0.15s ease;
+  z-index: 10008;
+}
+
+.context-menu-submenu:hover .context-menu-submenu-content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+.submenu-arrow {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.submenu-playlist-cover {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+
+
+/* 暗色主题适配 */
+[data-theme="dark"] .modern-modal {
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .modern-modal-header {
+  background: linear-gradient(135deg, 
+    rgba(var(--primary-color-rgb, 236, 72, 153), 0.1), 
+    transparent
+  );
+}
+
+[data-theme="dark"] .context-menu {
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .context-menu-submenu-content {
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10006;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2rem 2.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-primary));
+  position: relative;
+}
+
+.modal-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 2.5rem;
+  right: 2.5rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: linear-gradient(135deg, var(--text-primary), var(--primary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.modal-close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.modal-close-btn:hover {
+  background: rgba(244, 67, 54, 0.2);
+  border-color: rgba(244, 67, 54, 0.3);
+  color: var(--danger-color);
+  transform: rotate(90deg) scale(1.1);
+}
+
+.modal-body {
+  padding: 2.5rem;
+  background: var(--bg-primary);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 2rem 2.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-primary));
+  position: relative;
+}
+
+.modal-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 2.5rem;
+  right: 2.5rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  letter-spacing: 0.025em;
+}
+
+.form-control {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 4px rgba(var(--primary-color-rgb), 0.15);
+  transform: translateY(-1px);
+}
+
+.form-control::placeholder {
+  color: var(--text-tertiary);
+  opacity: 0.7;
+}
+
+.form-control.textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.875rem 2rem;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  letter-spacing: 0.025em;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.btn:disabled::before {
+  display: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: white;
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 15px rgba(var(--primary-color-rgb), 0.3);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(var(--primary-color-rgb), 0.4);
+}
+
+.btn-primary:hover:not(:disabled)::before {
+  left: 100%;
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:hover:not(:disabled)::before {
+  left: 100%;
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(0);
 }
 </style>

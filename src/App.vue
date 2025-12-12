@@ -754,10 +754,10 @@
           type="text"
           class="form-control"
           v-model="settings.musicApiUrl"
-          placeholder="http://localhost:3000"
+          placeholder="https://zm.i9mr.com"
         >
         <div class="form-hint">
-          网易云音乐API服务器地址，默认为http://localhost:3000
+          网易云音乐API服务器地址，默认为https://zm.i9mr.com
         </div>
       </div>
 
@@ -1543,7 +1543,7 @@
     <MusicPlayer 
       ref="musicPlayer"
       :visible="showMusicPlayer" 
-      :api-url="settings.musicApiUrl || 'http://localhost:3000'"
+      :api-url="settings.musicApiUrl"
       :settings="settings"
       @close="closeMusicPlayer" 
       @notify="showNotification" 
@@ -1854,7 +1854,7 @@ export default {
         autoClearConversations: false,
         autoClearDays: 3,
         // 音乐API设置
-        musicApiUrl: 'http://localhost:3000'
+        musicApiUrl: 'https://zm.i9mr.com'
       },
 
       // 样式设置
@@ -1914,7 +1914,7 @@ export default {
 
 
       // 音乐API设置
-      musicApiUrl: 'http://localhost:3000', // 默认API地址
+      musicApiUrl: 'https://zm.i9mr.com', // 默认API地址
 
 
 
@@ -2026,6 +2026,8 @@ export default {
     // 加载数据
     this.agents = this.storageManager.getAgents()
     this.settings = this.storageManager.getSettings()
+    console.log('App mounted, settings.musicApiUrl:', this.settings.musicApiUrl)
+    console.log('App mounted, full settings object:', this.settings)
 
     // 确保数值设置正确类型
 
@@ -2863,6 +2865,7 @@ export default {
 
     // 设置管理
     saveSettings() {
+      console.log('Saving settings, musicApiUrl:', this.settings.musicApiUrl)
       const success = this.storageManager.saveSettings(this.settings)
       if (success) {
         this.showSettingsModal = false
@@ -5330,7 +5333,7 @@ export default {
     // 获取歌词
     async fetchLyrics(songId) {
       try {
-        const apiUrl = this.settings.musicApiUrl || 'http://localhost:3000';
+        const apiUrl = this.settings.musicApiUrl || 'https://zm.i9mr.com';
         const response = await fetch(`${apiUrl}/lyric?id=${songId}`);
         const data = await response.json();
         

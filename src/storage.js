@@ -236,6 +236,7 @@ export class StorageManager {
                 modalBackdropOpacity: 0.5, // 背景暗化程度 (0.1-1.0)
                 // 音乐播放器设置
                 enableMusicPlayerNotifications: true, // 是否启用音乐播放器弹窗通知
+                musicApiUrl: 'https://zm.i9mr.com', // 音乐API服务器地址
                 // 灵动岛设置
                 enableDynamicIslandMusicInfo: true, // 是否在灵动岛显示音乐信息
                 enableDynamicIslandLyrics: false // 是否在灵动岛显示歌词
