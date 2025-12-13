@@ -208,7 +208,7 @@
                       <button 
                         v-if="isLoggedIn" 
                         :class="['recommend-like-btn', { 'liked': isSongLiked(song.id) }]" 
-                        @click.stop="toggleLikeSong(song)" 
+                        @click.stop="handleLikeButtonClick(song)" 
                         :title="isSongLiked(song.id) ? '取消收藏' : '收藏歌曲'"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" :fill="isSongLiked(song.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
@@ -414,7 +414,7 @@
                       <button 
                         v-if="isLoggedIn" 
                         :class="['like-btn', { 'liked': isSongLiked(song.id) }]" 
-                        @click.stop="toggleLikeSong(song)" 
+                        @click.stop="handleLikeButtonClick(song)" 
                         :title="isSongLiked(song.id) ? '取消收藏' : '收藏歌曲'"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" :fill="isSongLiked(song.id) ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2">
@@ -964,7 +964,7 @@
               </div>
               
               <!-- 翻页组件 -->
-            <div v-if="artistAllSongsTotal > 0" class="pagination-container">
+            <div v-if="artistAllSongsTotal > 0 && fullArtistAllSongs && fullArtistAllSongs.length > 0" class="pagination-container">
               <div class="pagination-info">
                 共 {{ artistAllSongsTotal }} 首歌曲，第 {{ artistAllSongsPage }} / {{ artistAllSongsTotalPages }} 页
               </div>
@@ -1110,7 +1110,7 @@
               </div>
               
               <!-- 翻页组件 -->
-              <div v-if="fullPlaylistSongs.length > 0" class="pagination-container">
+              <div v-if="fullPlaylistSongs && fullPlaylistSongs.length > 0" class="pagination-container">
                 <div class="pagination-info">
                   共 {{ fullPlaylistSongs.length }} 首歌曲，第 {{ playlistDetailPage }} / {{ playlistDetailTotalPages }} 页
                 </div>
@@ -1284,6 +1284,32 @@
           <button class="cancel-btn" @click="closeLogoutConfirm">取消</button>
           <button class="confirm-btn" @click="confirmLogout">确认退出</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除歌单确认弹窗 -->
+  <div class="delete-confirm-modal-overlay" v-if="showDeletePlaylistConfirmModal" @click="closeDeletePlaylistConfirm">
+    <div class="delete-confirm-modal-content" @click.stop>
+      <div class="delete-confirm-header">
+        <h3>删除歌单</h3>
+        <button class="close-btn" @click="closeDeletePlaylistConfirm">×</button>
+      </div>
+      
+      <div class="delete-confirm-body">
+        <div class="delete-confirm-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1H5v2h14V4z"/>
+          </svg>
+        </div>
+        <p class="delete-confirm-text">确定要删除这个歌单吗？</p>
+        <p class="delete-confirm-playlist-name" v-if="playlistToDelete">{{ playlistToDelete.name }}</p>
+        <p class="delete-confirm-warning">此操作不可恢复</p>
+      </div>
+      
+      <div class="delete-confirm-footer">
+        <button class="cancel-btn" @click="closeDeletePlaylistConfirm">取消</button>
+        <button class="confirm-btn danger" @click="confirmDeletePlaylist">确认删除</button>
       </div>
     </div>
   </div>
@@ -1474,109 +1500,103 @@
 
   <!-- 创建歌单模态框 -->
   <div v-if="showCreatePlaylistModal" class="modal-overlay" @click="closeCreatePlaylistModal">
-    <div class="modal-content playlist-modal modern-modal" @click.stop>
-      <div class="modern-modal-header">
-        <div class="modal-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L13.09 8.26L19 7L15.45 11.82L18 18L12 14.9L6 18L8.55 11.82L5 7L10.91 8.26L12 2Z" fill="currentColor" opacity="0.8"/>
-            <path d="M12 6L12.54 9.13L15 8.5L13.23 10.91L14.5 13.5L12 11.95L9.5 13.5L10.77 10.91L9 8.5L11.46 9.13L12 6Z" fill="currentColor"/>
+    <div class="create-playlist-modal" @click.stop>
+      <!-- 头部区域 -->
+      <div class="create-playlist-header">
+        <div class="create-playlist-close" @click="closeCreatePlaylistModal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
         </div>
-        <div class="modal-title-section">
-          <h3 class="modal-title">创建新歌单</h3>
-          <p class="modal-subtitle">创建属于你的音乐收藏</p>
-        </div>
-        <button class="modern-modal-close-btn" @click="closeCreatePlaylistModal">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
       </div>
       
-      <div class="modern-modal-body">
-        <div class="form-group-modern">
-          <div class="form-label-wrapper">
-            <label class="form-label-modern">歌单名称</label>
-            <span class="required-mark">*</span>
-          </div>
-          <div class="input-wrapper">
-            <input 
-              type="text" 
-              v-model="newPlaylistName" 
-              class="form-control-modern" 
-              :class="{ 'has-content': newPlaylistName }"
-              placeholder="给你的歌单起个名字"
-              maxlength="50"
-              ref="playlistNameInput"
-            />
-            <div class="input-counter">
-              <span>{{ newPlaylistName.length }}/50</span>
+      <!-- 主要内容区 -->
+      <div class="create-playlist-content">
+        <!-- 左侧封面预览区 -->
+        <div class="create-playlist-cover-section">
+          <div class="playlist-cover-preview">
+            <div class="cover-image">
+              <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+                <rect width="120" height="120" rx="12" fill="currentColor" opacity="0.1"/>
+                <path d="M45 45L45 75L75 60L45 45Z" fill="currentColor" opacity="0.5"/>
+              </svg>
+            </div>
+            <div class="cover-overlay">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+              </svg>
             </div>
           </div>
         </div>
         
-        <div class="form-group-modern">
-          <div class="form-label-wrapper">
-            <label class="form-label-modern">歌单描述</label>
-            <span class="optional-mark">可选</span>
-          </div>
-          <div class="textarea-wrapper">
-            <textarea 
-              v-model="newPlaylistDescription" 
-              class="form-control-modern textarea-modern" 
-              :class="{ 'has-content': newPlaylistDescription }"
-              placeholder="描述一下这个歌单的风格或内容..."
-              maxlength="200"
-              rows="3"
-            ></textarea>
-            <div class="textarea-counter">
-              <span>{{ newPlaylistDescription.length }}/200</span>
+        <!-- 右侧信息输入区 -->
+        <div class="create-playlist-info-section">
+          <h2 class="create-playlist-title">创建新歌单</h2>
+          <p class="create-playlist-subtitle">创建属于你的音乐收藏</p>
+          
+          <!-- 歌单名称输入 -->
+          <div class="form-section">
+            <label class="form-label">歌单名称 <span class="required">*</span></label>
+            <div class="input-container">
+              <input 
+                type="text" 
+                v-model="newPlaylistName" 
+                class="form-input" 
+                placeholder="给你的歌单起个名字"
+                maxlength="50"
+                ref="playlistNameInput"
+              />
+              <div class="input-counter">{{ newPlaylistName.length }}/50</div>
             </div>
           </div>
-        </div>
-
-        <div class="playlist-preview" v-if="newPlaylistName">
-          <div class="preview-header">
-            <span class="preview-label">预览</span>
-          </div>
-          <div class="preview-content">
-            <div class="preview-cover">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <rect width="32" height="32" rx="8" fill="currentColor" opacity="0.1"/>
-                <path d="M12 12L12 20L20 16L12 12Z" fill="currentColor" opacity="0.6"/>
-              </svg>
+          
+          <!-- 歌单描述输入 -->
+          <div class="form-section">
+            <label class="form-label">歌单描述 <span class="optional">可选</span></label>
+            <div class="textarea-container">
+              <textarea 
+                v-model="newPlaylistDescription" 
+                class="form-textarea" 
+                placeholder="描述一下这个歌单的风格或内容..."
+                maxlength="200"
+                rows="3"
+              ></textarea>
+              <div class="textarea-counter">{{ newPlaylistDescription.length }}/200</div>
             </div>
-            <div class="preview-info">
-              <div class="preview-title">{{ newPlaylistName || '未命名歌单' }}</div>
-              <div class="preview-desc">{{ newPlaylistDescription || '暂无描述' }}</div>
-              <div class="preview-meta">0 首歌曲 · 刚刚创建</div>
+          </div>
+          
+          <!-- 隐私设置 -->
+          <div class="form-section">
+            <label class="form-label">隐私设置</label>
+            <div class="privacy-options">
+              <label class="privacy-option">
+                <input type="radio" name="privacy" value="public" v-model="newPlaylistPrivacy" />
+                <span class="privacy-label">公开歌单</span>
+                <span class="privacy-desc">所有人可见</span>
+              </label>
+              <label class="privacy-option">
+                <input type="radio" name="privacy" value="private" v-model="newPlaylistPrivacy" />
+                <span class="privacy-label">私密歌单</span>
+                <span class="privacy-desc">仅自己可见</span>
+              </label>
             </div>
           </div>
         </div>
       </div>
       
-      <div class="modern-modal-footer">
-        <button class="modern-btn modern-btn-secondary" @click="closeCreatePlaylistModal">
-          <span>取消</span>
+      <!-- 创建按钮 - 固定在右下角 -->
+      <div class="create-playlist-fixed-actions">
+        <button class="action-btn secondary" @click="closeCreatePlaylistModal">
+          取消
         </button>
         <button 
-          class="modern-btn modern-btn-primary" 
+          class="action-btn primary" 
           @click="createPlaylist" 
           :disabled="isCreatingPlaylist || !newPlaylistName.trim()"
-          :class="{ 'loading': isCreatingPlaylist }"
         >
-          <span v-if="!isCreatingPlaylist" class="btn-content">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="btn-icon">
-              <path d="M8 2L8 14M2 8L14 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-            创建歌单
-          </span>
-          <span v-else class="btn-content">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="loading-icon">
-              <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="24" stroke-dashoffset="6" transform="rotate(-90 8 8)"/>
-            </svg>
-            创建中...
-          </span>
+          <span v-if="!isCreatingPlaylist">创建歌单</span>
+          <span v-else>创建中...</span>
         </button>
       </div>
     </div>
@@ -1696,7 +1716,6 @@
   <div v-if="contextMenu.visible" 
        class="context-menu" 
        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-       @click.stop
        ref="contextMenu">
     
     <!-- 歌单右键菜单 -->
@@ -1904,6 +1923,8 @@ export default {
       // 登录相关
       showLoginModal: false,
       showLogoutConfirmModal: false,
+      showDeletePlaylistConfirmModal: false,
+      playlistToDelete: null,
       showUserDropdown: false,
       isLoggedIn: false,
       userInfo: null,
@@ -1919,7 +1940,7 @@ export default {
       // 播放列表菜单
       showPlaylistMenu: false,
       // 收藏相关
-      likedSongs: [], // 用户喜欢的歌曲ID列表
+      likedSongs: new Set(), // 用户喜欢的歌曲ID列表
       isLoadingLikedSongs: false,
       // 歌单管理相关
       showCreatePlaylistModal: false,
@@ -1927,6 +1948,7 @@ export default {
       editingPlaylist: null,
       newPlaylistName: '',
       newPlaylistDescription: '',
+      newPlaylistPrivacy: 'public',
       newPlaylistTags: '',
       isCreatingPlaylist: false,
       isUpdatingPlaylist: false,
@@ -1994,6 +2016,10 @@ export default {
     // 计算歌单详情总页数
     playlistDetailTotalPages() {
       return Math.ceil(this.fullPlaylistSongs.length / this.pageSize);
+    },
+    // 获取API地址，优先使用settings中的musicApiUrl
+    currentApiUrl() {
+      return this.settings.musicApiUrl || this.apiUrl;
     }
   },
   watch: {
@@ -2032,9 +2058,7 @@ export default {
         }
       },
       deep: true
-    }
-  },
-  watch: {
+    },
     // 监听apiUrl变化
     apiUrl(newVal) {
       console.log('MusicPlayer apiUrl prop changed:', newVal);
@@ -2047,18 +2071,18 @@ export default {
       deep: true
     }
   },
-  computed: {
-    // 获取API地址，优先使用settings中的musicApiUrl
-    currentApiUrl() {
-      return this.settings.musicApiUrl || this.apiUrl;
-    }
-  },
 mounted() {
     // 初始化
     this.initAudio();
     
-    // 监听点击事件关闭右键菜单
-    document.addEventListener('click', this.hideContextMenu);
+    // 使用mousedown事件，更可靠地捕获点击
+    document.addEventListener('mousedown', this.handleMouseDown, true);
+    
+    // 监听键盘事件，ESC键关闭右键菜单
+    document.addEventListener('keydown', this.handleKeyDown);
+    
+    // 监听窗口大小变化
+    window.addEventListener('resize', this.handleWindowResize);
     
     // 加载保存的音量
     this.loadSavedVolume();
@@ -2068,7 +2092,9 @@ mounted() {
   },
   beforeUnmount() {
     // 移除事件监听
-    document.removeEventListener('click', this.hideContextMenu);
+    document.removeEventListener('mousedown', this.handleMouseDown, true);
+    document.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('resize', this.handleWindowResize);
     // 停止物理模拟
     this.stopPhysicsSimulation();
     // 清理播放模式提示定时器
@@ -2385,54 +2411,74 @@ mounted() {
         this.isLoadingPlaylist = true;
         this.showPlaylistDetail = true;
         
-        const url = `${this.currentApiUrl}/playlist/detail?id=${playlistId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
-      const response = await fetch(url);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.code === 200 && data.playlist && data.playlist.tracks) {
-            const songs = data.playlist.tracks.map(song => ({
-              id: song.id,
-              name: song.name,
-              artists: song.ar || song.artists || [],
-              artist: song.artists ? song.artists.map(a => a.name).join(', ') : (song.ar ? song.ar.map(a => a.name).join(', ') : '未知艺术家'),
-              duration: song.duration || (song.dt ? song.dt : 0),
-              album: song.al || song.album || {},
-              albumName: song.al ? song.al.name : (song.album ? song.album.name : '未知专辑'),
-              picUrl: song.al ? song.al.picUrl : (song.album ? song.album.picUrl : null),
-              url: `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`
-            }));
-            
-            // 保存歌单详情信息
-            this.playlistDetail = {
-              id: data.playlist.id,
-              name: data.playlist.name,
-              description: data.playlist.description || '',
-              coverImgUrl: data.playlist.coverImgUrl,
-              creator: data.playlist.creator ? data.playlist.creator.nickname : '未知',
-              playCount: data.playlist.playCount,
-              trackCount: data.playlist.trackCount,
-              tags: data.playlist.tags || []
-            };
-            
-            // 保存完整的歌单歌曲列表
-            this.fullPlaylistSongs = songs;
-            
-            // 重置分页并显示第一页
-            this.playlistDetailPage = 1;
-            const startIndex = 0;
-            const endIndex = Math.min(this.pageSize, songs.length);
-            this.playlistDetailSongs = songs.slice(startIndex, endIndex);
-            
-            // 显示歌单详情界面
-            this.showPlaylistDetail = true;
-            
-            // 重置重试计数
-            this.retryCount.playlist = 0;
-            this.lastFailedRequest.playlist = null;
-            
-            this.showNotification(`已加载歌单: ${data.playlist.name} (共${songs.length}首歌曲)`, 'success');
-          }
+        // 首先获取歌单基本信息
+        const detailUrl = `${this.currentApiUrl}/playlist/detail?id=${playlistId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const detailResponse = await fetch(detailUrl);
+        
+        if (!detailResponse.ok) {
+          throw new Error('获取歌单基本信息失败');
         }
+        
+        const detailData = await detailResponse.json();
+        if (detailData.code !== 200 || !detailData.playlist) {
+          throw new Error('歌单详情数据格式错误');
+        }
+        
+        // 保存歌单详情信息
+        this.playlistDetail = {
+          id: detailData.playlist.id,
+          name: detailData.playlist.name,
+          description: detailData.playlist.description || '',
+          coverImgUrl: detailData.playlist.coverImgUrl,
+          creator: detailData.playlist.creator ? detailData.playlist.creator.nickname : '未知',
+          playCount: detailData.playlist.playCount,
+          trackCount: detailData.playlist.trackCount,
+          tags: detailData.playlist.tags || []
+        };
+        
+        // 然后获取歌单所有歌曲
+        const trackAllUrl = `${this.currentApiUrl}/playlist/track/all?id=${playlistId}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const trackResponse = await fetch(trackAllUrl);
+        
+        if (!trackResponse.ok) {
+          throw new Error('获取歌单歌曲失败');
+        }
+        
+        const trackData = await trackResponse.json();
+        if (trackData.code !== 200 || !trackData.songs) {
+          throw new Error('歌单歌曲数据格式错误');
+        }
+        
+        // 处理歌曲数据
+        const songs = trackData.songs.map(song => ({
+          id: song.id,
+          name: song.name,
+          artists: song.ar || song.artists || [],
+          artist: song.artists ? song.artists.map(a => a.name).join(', ') : (song.ar ? song.ar.map(a => a.name).join(', ') : '未知艺术家'),
+          duration: song.duration || (song.dt ? song.dt : 0),
+          album: song.al || song.album || {},
+          albumName: song.al ? song.al.name : (song.album ? song.album.name : '未知专辑'),
+          picUrl: song.al ? song.al.picUrl : (song.album ? song.album.picUrl : null),
+          url: `https://music.163.com/song/media/outer/url?id=${song.id}.mp3`
+        }));
+        
+        // 保存完整的歌单歌曲列表
+        this.fullPlaylistSongs = songs;
+        
+        // 重置分页并显示第一页
+        this.playlistDetailPage = 1;
+        const startIndex = 0;
+        const endIndex = Math.min(this.pageSize, songs.length);
+        this.playlistDetailSongs = songs.slice(startIndex, endIndex);
+        
+        // 显示歌单详情界面
+        this.showPlaylistDetail = true;
+        
+        // 重置重试计数
+        this.retryCount.playlist = 0;
+        this.lastFailedRequest.playlist = null;
+        
+        this.showNotification(`已加载歌单: ${detailData.playlist.name} (共${songs.length}首歌曲)`, 'success');
       } catch (error) {
         console.error('获取歌单详情失败:', error);
         
@@ -3008,21 +3054,7 @@ mounted() {
       this.loadLikedSongs();
     },
 
-    loadLikedSongs() {
-      try {
-        const savedLikedSongs = localStorage.getItem('musicLikedSongs');
-        if (savedLikedSongs) {
-          const likedSongsArray = JSON.parse(savedLikedSongs);
-          this.likedSongs = new Set(likedSongsArray);
-        }
-      } catch (error) {
-        console.error('加载收藏歌曲失败:', error);
-        // 确保likedSongs是一个Set
-        if (!(this.likedSongs instanceof Set)) {
-          this.likedSongs = new Set();
-        }
-      }
-    },
+    
 
     // 保存音量设置到localStorage
     saveVolume() {
@@ -3319,9 +3351,29 @@ mounted() {
         const hotSongsResponse = await fetch(`${this.currentApiUrl}/artist/top/song?id=${artistId}${cookieParam}`);
         const hotSongsData = await hotSongsResponse.json();
         
-        // 获取歌手全部歌曲
-        const allSongsResponse = await fetch(`${this.currentApiUrl}/artist/songs?id=${artistId}&limit=100&order=hot${cookieParam}`);
-        const allSongsData = await allSongsResponse.json();
+        // 获取歌手全部歌曲，分页获取所有歌曲
+        let allSongs = [];
+        let offset = 0;
+        const limit = 100;
+        let hasMore = true;
+        
+        while (hasMore) {
+          const allSongsResponse = await fetch(`${this.currentApiUrl}/artist/songs?id=${artistId}&limit=${limit}&offset=${offset}&order=hot${cookieParam}`);
+          const allSongsData = await allSongsResponse.json();
+          
+          if (allSongsData.code === 200 && allSongsData.songs && allSongsData.songs.length > 0) {
+            allSongs = allSongs.concat(allSongsData.songs);
+            
+            // 如果返回的歌曲数小于limit，说明已经是最后一页
+            if (allSongsData.songs.length < limit) {
+              hasMore = false;
+            } else {
+              offset += limit;
+            }
+          } else {
+            hasMore = false;
+          }
+        }
         
         // 获取歌手专辑
         const albumsResponse = await fetch(`${this.currentApiUrl}/artist/album?id=${artistId}&limit=50${cookieParam}`);
@@ -3412,9 +3464,9 @@ mounted() {
           }));
         }
         
-        // 处理全部歌曲 - 一次性获取所有歌曲
-        if (allSongsData.code === 200 && allSongsData.songs) {
-          const allSongs = allSongsData.songs.map(song => ({
+        // 处理全部歌曲 - 已通过分页获取所有歌曲
+        if (allSongs && allSongs.length > 0) {
+          const processedSongs = allSongs.map(song => ({
             id: song.id,
             name: song.name,
             artists: song.ar || song.artists || [],
@@ -3427,14 +3479,14 @@ mounted() {
           }));
           
           // 保存完整列表
-          this.fullArtistAllSongs = allSongs;
-          this.artistAllSongsTotal = allSongsData.total || allSongs.length;
+          this.fullArtistAllSongs = processedSongs;
+          this.artistAllSongsTotal = processedSongs.length;
           
           // 重置分页并显示第一页
           this.artistAllSongsPage = 1;
           const startIndex = 0;
-          const endIndex = Math.min(this.pageSize, allSongs.length);
-          this.artistAllSongs = allSongs.slice(startIndex, endIndex);
+          const endIndex = Math.min(this.pageSize, processedSongs.length);
+          this.artistAllSongs = processedSongs.slice(startIndex, endIndex);
         }
         
         // 处理专辑
@@ -4182,6 +4234,7 @@ mounted() {
         localStorage.removeItem('musicRecommendPlaylists');
         localStorage.removeItem('musicRecommendSongs');
         localStorage.removeItem('musicHomePageCacheTime');
+        localStorage.removeItem('musicLikedSongs');
         console.log('logout: 已清除所有本地缓存');
       } catch (error) {
         console.error('清除本地存储失败:', error);
@@ -4196,6 +4249,7 @@ mounted() {
       this.userPlaylists = [];
       this.recommendPlaylists = [];
       this.recommendSongs = [];
+      this.likedSongs = new Set();
       
       console.log('logout: 用户状态已重置');
       this.showNotification('已退出登录', 'info');
@@ -4655,6 +4709,7 @@ mounted() {
     async loadLikedSongs() {
       if (!this.isLoggedIn) {
         console.log('loadLikedSongs: 用户未登录');
+        this.likedSongs = new Set();
         return;
       }
 
@@ -4666,12 +4721,15 @@ mounted() {
         if (response.ok) {
           const data = await response.json();
           if (data.code === 200) {
-            this.likedSongs = data.ids || [];
-            console.log('loadLikedSongs: 已加载', this.likedSongs.length, '首喜欢的歌曲');
+            // 确保likedSongs是一个Set
+            this.likedSongs = new Set(data.ids || []);
+            console.log('loadLikedSongs: 已加载', this.likedSongs.size, '首喜欢的歌曲');
           }
         }
       } catch (error) {
         console.error('loadLikedSongs: 加载失败', error);
+        // 加载失败时确保likedSongs为空Set
+        this.likedSongs = new Set();
       } finally {
         this.isLoadingLikedSongs = false;
       }
@@ -4679,52 +4737,65 @@ mounted() {
 
     
 
-    // 喜欢/取消喜欢歌曲
-    async toggleLikeSong(song) {
+    // 处理收藏按钮点击
+    handleLikeButtonClick(song) {
+      console.log('=== 收藏按钮被点击 ===');
+      console.log('歌曲信息:', song);
+      
       if (!this.isLoggedIn) {
         this.showNotification('请先登录', 'warning');
         return;
       }
-
+      
       if (!song || !song.id) {
         this.showNotification('无效的歌曲信息', 'error');
         return;
       }
-
-      // 确保likedSongs是一个Set
+      
+      // 确保likedSongs是Set
       if (!(this.likedSongs instanceof Set)) {
         this.likedSongs = new Set(this.likedSongs);
       }
-
+      
       const isLiked = this.likedSongs.has(song.id);
-      const likeAction = isLiked ? 0 : 1; // 0: 取消喜欢, 1: 喜欢
-
-      try {
-        const url = `${this.currentApiUrl}/like?id=${song.id}&like=${likeAction}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
-        const response = await fetch(url);
-        
-        if (response.ok) {
-          const data = await response.json();
+      const likeAction = isLiked ? 'unlike' : 'like';
+      
+      console.log(`准备${likeAction}歌曲: ${song.name} (ID: ${song.id})`);
+      
+      // 构建请求URL
+      const likeParam = isLiked ? 0 : 1;
+      const url = `${this.currentApiUrl}/like?id=${song.id}&like=${likeParam}&cookie=${encodeURIComponent(this.loginCookie)}`;
+      
+      console.log('请求URL:', url);
+      
+      // 发送请求
+      fetch(url)
+        .then(response => {
+          console.log('响应状态:', response.status);
+          return response.json();
+        })
+        .then(data => {
+          console.log('响应数据:', data);
+          
           if (data.code === 200) {
+            // 更新本地状态
             if (isLiked) {
-              // 从喜欢列表中移除
               this.likedSongs.delete(song.id);
               this.showNotification(`已取消收藏《${song.name}》`, 'info');
             } else {
-              // 添加到喜欢列表
               this.likedSongs.add(song.id);
               this.showNotification(`已收藏《${song.name}》`, 'success');
             }
+            console.log('收藏状态更新成功');
           } else {
+            console.error('API返回错误:', data);
             this.showNotification(data.message || '操作失败', 'error');
           }
-        } else {
+        })
+        .catch(error => {
+          console.error('请求失败:', error);
           this.showNotification('网络错误，请稍后重试', 'error');
-        }
-      } catch (error) {
-        console.error('toggleLikeSong: 操作失败', error);
-        this.showNotification('操作失败，请稍后重试', 'error');
-      }
+        });
     },
 
     // 打开创建歌单模态框
@@ -4745,7 +4816,7 @@ mounted() {
       this.showCreatePlaylistModal = false;
       this.newPlaylistName = '';
       this.newPlaylistDescription = '';
-      this.newPlaylistTags = '';
+      this.newPlaylistPrivacy = 'public';
     },
 
     // 创建新歌单
@@ -4762,7 +4833,24 @@ mounted() {
 
       this.isCreatingPlaylist = true;
       try {
-        const url = `${this.currentApiUrl}/playlist/create?name=${encodeURIComponent(this.newPlaylistName)}${this.newPlaylistDescription ? '&desc=' + encodeURIComponent(this.newPlaylistDescription) : ''}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        // 构建请求参数
+        let url = `${this.currentApiUrl}/playlist/create?name=${encodeURIComponent(this.newPlaylistName)}`;
+        
+        // 添加描述
+        if (this.newPlaylistDescription) {
+          url += `&desc=${encodeURIComponent(this.newPlaylistDescription)}`;
+        }
+        
+        // 添加隐私设置
+        if (this.newPlaylistPrivacy === 'private') {
+          url += '&privacy=10';
+        }
+        
+        // 添加登录cookie
+        if (this.loginCookie) {
+          url += `&cookie=${encodeURIComponent(this.loginCookie)}`;
+        }
+        
         const response = await fetch(url);
         
         if (response.ok) {
@@ -5024,85 +5112,220 @@ mounted() {
 
       // 确保菜单不会超出视窗
       this.$nextTick(() => {
-        if (this.$refs.contextMenu) {
-          const rect = this.$refs.contextMenu.getBoundingClientRect();
-          const viewportWidth = window.innerWidth;
-          const viewportHeight = window.innerHeight;
-
-          let x = event.clientX;
-          let y = event.clientY;
-
-          // 检查右边界
-          if (rect.right > viewportWidth) {
-            x = viewportWidth - rect.width - 8;
-          }
-
-          // 检查下边界
-          if (rect.bottom > viewportHeight) {
-            y = viewportHeight - rect.height - 8;
-          }
-
-          this.contextMenu.x = x;
-          this.contextMenu.y = y;
-        }
+        this.adjustContextMenuPosition();
       });
     },
 
-    hideContextMenu() {
-      this.contextMenu.visible = false;
+    hideContextMenu(delay = 0) {
+      if (delay > 0) {
+        setTimeout(() => {
+          this.contextMenu.visible = false;
+          this.resetContextMenuData();
+        }, delay);
+      } else {
+        this.contextMenu.visible = false;
+        this.resetContextMenuData();
+      }
+    },
+
+    // 重置右键菜单数据
+    resetContextMenuData() {
+      this.contextMenu.x = 0;
+      this.contextMenu.y = 0;
+      this.contextMenu.type = '';
+      this.contextMenu.target = null;
+      this.contextMenu.song = null;
+      this.contextMenu.playlist = null;
+    },
+
+    // 打开删除歌单确认弹窗
+    showDeletePlaylistConfirm() {
+      this.showDeletePlaylistConfirmModal = true;
+    },
+
+    // 关闭删除歌单确认弹窗
+    closeDeletePlaylistConfirm() {
+      this.showDeletePlaylistConfirmModal = false;
+      this.playlistToDelete = null;
+    },
+
+    // 确认删除歌单
+    async confirmDeletePlaylist() {
+      if (!this.playlistToDelete) return;
+      
+      try {
+        const url = `${this.currentApiUrl}/playlist/delete?id=${this.playlistToDelete.id}${this.loginCookie ? '&cookie=' + encodeURIComponent(this.loginCookie) : ''}`;
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200) {
+            this.showNotification(`歌单"${this.playlistToDelete.name}"已删除`, 'success');
+            // 重新加载用户歌单
+            await this.loadUserPlaylists();
+          } else {
+            this.showNotification(data.message || '删除失败', 'error');
+          }
+        } else {
+          this.showNotification('网络错误，请稍后重试', 'error');
+        }
+      } catch (error) {
+        console.error('删除歌单失败:', error);
+        this.showNotification('删除失败，请稍后重试', 'error');
+      } finally {
+        this.closeDeletePlaylistConfirm();
+      }
+    },
+
+    // 处理键盘事件
+    handleKeyDown(event) {
+      // ESC键关闭右键菜单
+      if (event.key === 'Escape' && this.contextMenu.visible) {
+        this.hideContextMenu();
+      }
+    },
+
+    // 处理鼠标按下事件（使用capture阶段确保优先处理）
+    handleMouseDown(event) {
+      // 如果右键菜单可见
+      if (this.contextMenu.visible) {
+        // 检查点击是否在右键菜单内部
+        const contextMenuElement = this.$refs.contextMenu;
+        if (contextMenuElement) {
+          // 使用composedPath获取完整的点击路径，包括shadow DOM
+          const path = event.composedPath();
+          const clickedInsideMenu = path.includes(contextMenuElement);
+          
+          // 如果点击在菜单外部，关闭菜单
+          if (!clickedInsideMenu) {
+            this.hideContextMenu();
+          }
+        }
+      }
+    },
+
+    // 处理窗口大小变化
+    handleWindowResize() {
+      // 如果右键菜单可见，重新调整位置
+      if (this.contextMenu.visible) {
+        this.adjustContextMenuPosition();
+      }
+    },
+
+    // 调整右键菜单位置，确保不超出视窗
+    adjustContextMenuPosition() {
+      if (!this.$refs.contextMenu) return;
+      
+      const menu = this.$refs.contextMenu;
+      const menuRect = menu.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      let adjustedX = this.contextMenu.x;
+      let adjustedY = this.contextMenu.y;
+      
+      // 检查右边界
+      if (this.contextMenu.x + menuRect.width > viewportWidth) {
+        adjustedX = viewportWidth - menuRect.width - 10;
+      }
+      
+      // 检查下边界
+      if (this.contextMenu.y + menuRect.height > viewportHeight) {
+        adjustedY = viewportHeight - menuRect.height - 10;
+      }
+      
+      // 检查左边界
+      if (adjustedX < 10) {
+        adjustedX = 10;
+      }
+      
+      // 检查上边界
+      if (adjustedY < 10) {
+        adjustedY = 10;
+      }
+      
+      // 更新位置
+      this.contextMenu.x = adjustedX;
+      this.contextMenu.y = adjustedY;
     },
 
     // 歌单右键菜单方法
     editPlaylistFromMenu() {
       if (this.contextMenu.playlist) {
         this.openEditPlaylistModal(this.contextMenu.playlist);
-        this.hideContextMenu();
+        // 延迟关闭菜单，确保操作完成
+        this.hideContextMenu(100);
       }
     },
 
     deletePlaylistFromMenu() {
       if (this.contextMenu.playlist) {
-        this.deletePlaylist(this.contextMenu.playlist);
+        this.playlistToDelete = this.contextMenu.playlist;
+        this.showDeletePlaylistConfirmModal = true;
         this.hideContextMenu();
       }
     },
 
     // 歌曲右键菜单方法
-    async toggleLikeSong() {
+    toggleLikeSong() {
       if (!this.contextMenu.song || !this.isLoggedIn) {
         this.hideContextMenu();
         return;
       }
 
-      try {
-        const songId = this.contextMenu.song.id;
-        const isLiked = this.isSongLiked(this.contextMenu.song);
-        const url = `${this.currentApiUrl}/like?id=${songId}&like=${!isLiked}&cookie=${encodeURIComponent(this.loginCookie)}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.code === 200) {
-          if (isLiked) {
-            this.likedSongs.delete(songId);
-          } else {
-            this.likedSongs.add(songId);
-          }
-          this.saveLikedSongs();
-        } else {
-          console.error('收藏/取消收藏失败:', data);
-        }
-      } catch (error) {
-        console.error('收藏/取消收藏歌曲出错:', error);
+      const song = this.contextMenu.song;
+      console.log('=== 右键菜单收藏歌曲 ===');
+      console.log('歌曲信息:', song);
+      
+      // 确保likedSongs是Set
+      if (!(this.likedSongs instanceof Set)) {
+        this.likedSongs = new Set(this.likedSongs);
       }
-
-      this.hideContextMenu();
+      
+      const isLiked = this.likedSongs.has(song.id);
+      const likeParam = isLiked ? 0 : 1;
+      
+      console.log(`准备${isLiked ? '取消收藏' : '收藏'}歌曲: ${song.name}`);
+      
+      const url = `${this.currentApiUrl}/like?id=${song.id}&like=${likeParam}&cookie=${encodeURIComponent(this.loginCookie)}`;
+      console.log('请求URL:', url);
+      
+      fetch(url)
+        .then(response => {
+          console.log('响应状态:', response.status);
+          return response.json();
+        })
+        .then(data => {
+          console.log('响应数据:', data);
+          
+          if (data.code === 200) {
+            if (isLiked) {
+              this.likedSongs.delete(song.id);
+              this.showNotification(`已取消收藏《${song.name}》`, 'info');
+            } else {
+              this.likedSongs.add(song.id);
+              this.showNotification(`已收藏《${song.name}》`, 'success');
+            }
+          } else {
+            this.showNotification(data.message || '操作失败', 'error');
+            console.error('收藏/取消收藏失败:', data);
+          }
+        })
+        .catch(error => {
+          console.error('收藏/取消收藏歌曲出错:', error);
+          this.showNotification('操作失败，请稍后重试', 'error');
+        })
+        .finally(() => {
+          // 延迟关闭菜单，确保操作完成
+          this.hideContextMenu(100);
+        });
     },
 
     addSongToCurrentPlaylist() {
       if (this.contextMenu.song) {
         this.addToPlaylist(this.contextMenu.song);
-        this.hideContextMenu();
+        // 延迟关闭菜单，确保操作完成
+        this.hideContextMenu(100);
       }
     },
 
@@ -5169,15 +5392,7 @@ mounted() {
       console.log(`${type}: ${message}`);
     },
 
-    saveLikedSongs() {
-      // 确保likedSongs是一个Set
-      if (!(this.likedSongs instanceof Set)) {
-        this.likedSongs = new Set(this.likedSongs);
-      }
-      // 将Set转换为数组保存到localStorage
-      const likedSongsArray = Array.from(this.likedSongs);
-      localStorage.setItem('musicLikedSongs', JSON.stringify(likedSongsArray));
-    }
+    
   }
 }
 </script>
@@ -9479,6 +9694,108 @@ mounted() {
   border-radius: 0 0 20px 20px;
 }
 
+/* 删除歌单确认弹窗样式 */
+.delete-confirm-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10004;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: fadeIn 0.3s ease;
+}
+
+.delete-confirm-modal-content {
+  width: 90%;
+  max-width: 380px;
+  background: var(--bg-primary);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: slideUpScale 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid var(--border-color);
+}
+
+.delete-confirm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  border-radius: 20px 20px 0 0;
+}
+
+.delete-confirm-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.delete-confirm-body {
+  flex: 1;
+  padding: 2rem;
+  text-align: center;
+}
+
+.delete-confirm-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  background: rgba(244, 67, 54, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--danger-color);
+}
+
+.delete-confirm-text {
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.delete-confirm-playlist-name {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 0 0 0.5rem 0;
+  font-weight: 500;
+}
+
+.delete-confirm-warning {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.delete-confirm-footer {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem 2rem;
+  background: var(--bg-secondary);
+  border-radius: 0 0 20px 20px;
+}
+
+.confirm-btn.danger {
+  background: var(--danger-color);
+  color: white;
+}
+
+.confirm-btn.danger:hover {
+  background: #d32f2f;
+  transform: translateY(-1px);
+}
+
 .cancel-btn, .confirm-btn {
   flex: 1;
   padding: 0.875rem;
@@ -10741,31 +11058,336 @@ mounted() {
   -webkit-backdrop-filter: blur(20px);
 }
 
-/* 现代化模态框样式 */
-.modern-modal {
+/* 创建歌单模态框 */
+.create-playlist-modal {
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
   background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  border-radius: 16px;
   box-shadow: 
-    0 20px 60px rgba(0, 0, 0, 0.15),
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  position: relative;
+}
+
+.create-playlist-header {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+}
+
+.create-playlist-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.create-playlist-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.create-playlist-content {
+  display: flex;
+  padding: 40px;
+  gap: 40px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.create-playlist-cover-section {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.playlist-cover-preview {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+.cover-image {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color, #ec4899));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
   position: relative;
   overflow: hidden;
 }
 
-.modern-modal::before {
+.cover-image::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, 
-    transparent, 
-    rgba(255, 255, 255, 0.2), 
-    transparent
-  );
-  z-index: 1;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.cover-overlay {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.create-playlist-info-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.create-playlist-title {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.create-playlist-subtitle {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin: 0 0 0 0;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.required {
+  color: var(--danger-color);
+}
+
+.optional {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.input-container {
+  position: relative;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 59, 130, 246), 0.1);
+}
+
+.input-counter {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.textarea-container {
+  position: relative;
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 59, 130, 246), 0.1);
+}
+
+.textarea-counter {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.privacy-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.privacy-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.privacy-option:hover {
+  background: var(--bg-secondary);
+}
+
+.privacy-option input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary-color);
+}
+
+.privacy-label {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.privacy-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.create-playlist-fixed-actions {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  display: flex;
+  gap: 12px;
+  z-index: 100;
+  opacity: 0.9;
+  transition: opacity 0.2s ease;
+}
+
+.create-playlist-fixed-actions:hover {
+  opacity: 1;
+}
+
+.action-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn.secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.action-btn.secondary:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.action-btn.primary {
+  background: var(--primary-color);
+  color: white;
+  position: relative;
+  z-index: 10;
+}
+
+.action-btn.primary:hover:not(:disabled) {
+  background: var(--primary-color-dark);
+  transform: translateY(-1px);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .create-playlist-content {
+    flex-direction: column;
+    padding: 24px;
+    gap: 24px;
+    padding-bottom: 80px; /* 为固定按钮留出空间 */
+  }
+  
+  .create-playlist-cover-section {
+    order: 2;
+  }
+  
+  .create-playlist-info-section {
+    order: 1;
+  }
+  
+  .playlist-cover-preview {
+    width: 160px;
+    height: 160px;
+  }
+  
+  .create-playlist-fixed-actions {
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    justify-content: stretch;
+  }
+  
+  .action-btn {
+    flex: 1;
+  }
 }
 
 .modern-modal-header {

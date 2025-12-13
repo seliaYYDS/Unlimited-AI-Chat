@@ -6,7 +6,7 @@
 export class MusicColorExtractor {
   constructor() {
     this.canvas = document.createElement('canvas');
-    this.ctx = this.canvas.getContext('2d');
+    this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
     this.cache = new Map(); // 缓存已提取的颜色
   }
 
