@@ -95,7 +95,7 @@ export default {
       document.addEventListener('mousemove', this.onDrag)
       document.addEventListener('mouseup', this.stopDrag)
       document.addEventListener('touchmove', this.onDrag, { passive: false })
-      document.addEventListener('touchend', this.stopDrag)
+      document.addEventListener('touchend', this.stopDrag, { passive: true })
     },
     onDrag(event) {
       if (!this.isDragging || this.disabled) return

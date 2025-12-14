@@ -60,12 +60,12 @@ export class MusicColorExtractor {
             const pixels = imageData.data;
             
             // 提取颜色
-            const color = this.analyzePixels(pixels);
+            const result = this.analyzePixels(pixels);
             
             // 缓存结果
-            this.cache.set(songId, color);
+            this.cache.set(songId, result.color);
             
-            resolve(color);
+            resolve(result);
           } catch (error) {
             console.error('分析图像颜色失败:', error);
             resolve('#ec4899'); // 返回默认颜色
@@ -177,6 +177,8 @@ export class MusicColorExtractor {
     // 颜色分组统计
     const colorGroups = {};
     const step = 4; // 每个像素4个值(RGBA)
+    let totalBrightness = 0;
+    let pixelCount = 0;
     
     for (let i = 0; i < pixels.length; i += step * 4) { // 采样，提高性能
       const r = pixels[i];
@@ -186,6 +188,11 @@ export class MusicColorExtractor {
       
       // 跳过透明像素
       if (a < 128) continue;
+      
+      // 计算明暗度（使用感知亮度公式）
+      const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
+      totalBrightness += brightness;
+      pixelCount++;
       
       // 将颜色量化到较小的范围，以减少颜色数量
       const quantizedR = Math.round(r / 32) * 32;
@@ -220,7 +227,10 @@ export class MusicColorExtractor {
     // 增强颜色饱和度和亮度
     const enhancedColor = this.enhanceColor(dominantColor);
     
-    return this.rgbToHex(enhancedColor.r, enhancedColor.g, enhancedColor.b);
+    return {
+      color: this.rgbToHex(enhancedColor.r, enhancedColor.g, enhancedColor.b),
+      brightness: pixelCount > 0 ? totalBrightness / pixelCount : 128 // 返回平均明暗度
+    };
   }
 
   /**

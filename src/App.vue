@@ -4611,8 +4611,8 @@ export default {
       // 添加全局事件监听器
       document.addEventListener('mousemove', this.handleGlobalDrag);
       document.addEventListener('mouseup', this.handleGlobalDragEnd);
-      document.addEventListener('touchmove', this.handleGlobalDrag);
-      document.addEventListener('touchend', this.handleGlobalDragEnd);
+      document.addEventListener('touchmove', this.handleGlobalDrag, { passive: false });
+      document.addEventListener('touchend', this.handleGlobalDragEnd, { passive: true });
 
       event.preventDefault();
 

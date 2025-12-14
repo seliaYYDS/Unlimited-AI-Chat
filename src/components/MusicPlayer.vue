@@ -6,6 +6,13 @@
         <!-- Canvas 背景 -->
         <canvas ref="immersiveCanvas" class="immersive-background"></canvas>
         
+        <!-- 右上角关闭按钮 -->
+        <button class="immersive-close-btn" @click="closeImmersivePlayer">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+        
         <!-- 沉浸式播放内容 -->
         <div class="immersive-content">
           <!-- 左侧：歌曲封面和信息 -->
@@ -17,17 +24,61 @@
                 class="immersive-cover"
                 @error="handleImageError"
               />
+              <!-- 歌曲信息移动到封面左下角 -->
+              <div class="immersive-song-info">
+                <h2 class="immersive-song-name">{{ currentSong?.name || '未知歌曲' }}</h2>
+                <p class="immersive-artist-name">{{ currentSong?.artist || '未知歌手' }}</p>
+                <p class="immersive-album-name">{{ currentSong?.album || '未知专辑' }}</p>
+              </div>
             </div>
-            <div class="immersive-song-info">
-              <h2 class="immersive-song-name">{{ currentSong?.name || '未知歌曲' }}</h2>
-              <p class="immersive-artist-name">{{ currentSong?.artist || '未知歌手' }}</p>
-              <p class="immersive-album-name">{{ currentSong?.album || '未知专辑' }}</p>
+            
+            <!-- 垂直排列的播放控件 -->
+            <div class="immersive-controls-vertical">
+              <!-- 操控按钮 -->
+              <div class="control-buttons">
+                <button class="control-btn" @click="skipPrevious">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                  </svg>
+                </button>
+                <button class="control-btn play-pause" @click="togglePlayPause">
+                  <svg v-if="!isPlaying" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                  <svg v-else width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                  </svg>
+                </button>
+                <button class="control-btn" @click="skipNext">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                  </svg>
+                </button>
+              </div>
+              
+              <!-- 进度条 -->
+              <div class="progress-section">
+                <div class="progress-time progress-time-current">{{ formatTime(currentTime) }}</div>
+                <div class="progress-track" @click="seekTo" @touchstart="seekTo">
+                  <div class="progress-buffer" :style="{ width: bufferedProgress + '%' }"></div>
+                  <div class="progress-current" :style="{ width: progress + '%' }"></div>
+                  <div class="progress-thumb" :style="{ left: progress + '%' }"></div>
+                </div>
+                <div class="progress-time progress-time-total">{{ formatTime(duration) }}</div>
+              </div>
+              
+              <!-- 显示译文按钮 -->
+              <div class="translation-control">
+                <button class="translation-btn" @click="toggleTranslation">
+                  {{ showTranslation ? '隐藏译文' : '显示译文' }}
+                </button>
+              </div>
             </div>
           </div>
           
           <!-- 右侧：滚动歌词 -->
           <div class="immersive-right">
-            <div class="lyrics-container" ref="lyricsContainer">
+            <div class="lyrics-container" ref="lyricsContainer" @wheel="handleLyricsWheel">
               <div class="lyrics-scroll" ref="lyricsScroll">
                 <div 
                   v-for="(lyric, index) in lyrics" 
@@ -53,54 +104,7 @@
           </div>
         </div>
       
-      <!-- 底部：小型播放控件 -->
-      <transition name="immersive-controls-fade">
-        <div v-if="showImmersiveControls" class="immersive-controls">
-          <div class="immersive-progress">
-            <span class="time-current">{{ formatTime(currentTime) }}</span>
-            <div class="progress-bar" @click="seekTo">
-              <div class="progress-fill" :style="{ width: progressPercentage + '%' }"></div>
-            </div>
-            <span class="time-total">{{ formatTime(duration) }}</span>
-          </div>
-          
-          <div class="immersive-buttons">
-            <button class="immersive-btn" @click="skipPrevious">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
-              </svg>
-            </button>
-            <button class="immersive-btn play-pause" @click="togglePlayPause">
-              <svg v-if="!isPlaying" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
-              <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-              </svg>
-            </button>
-            <button class="immersive-btn" @click="skipNext">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
-              </svg>
-            </button>
-          </div>
-          
-          <!-- 歌词控制 -->
-          <div class="lyrics-controls">
-            <button class="lyrics-control-btn" @click="toggleTranslation">
-              {{ showTranslation ? '隐藏译文' : '显示译文' }}
-            </button>
-          </div>
-          
-          <div class="immersive-exit">
-            <button class="exit-btn" @click="closeImmersivePlayer">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </transition>
+      
       </div>
       <div class="music-player-header">
         <div class="header-left">
@@ -1975,6 +1979,10 @@ export default {
       currentLyricIndex: -1,
       showTranslation: false,
       currentScrollTop: 0,
+      // 歌词滚轮滚动控制
+      isUserScrolling: false,
+      userScrollTimer: null,
+      userScrollOffset: 0,
       artistAllSongsPage: 1,
       artistAllSongsTotal: 0,
       // 专辑详情相关
@@ -2115,6 +2123,20 @@ export default {
     progress() {
       if (this.duration === 0) return 0;
       return (this.currentTime / this.duration) * 100;
+    },
+    // 缓冲进度
+    bufferedProgress() {
+      if (!this.audio || !this.audio.buffered.length || this.duration === 0) return 0;
+      
+      // 找到最大的缓冲时间点
+      let bufferedEnd = 0;
+      for (let i = 0; i < this.audio.buffered.length; i++) {
+        if (this.audio.buffered.end(i) > bufferedEnd) {
+          bufferedEnd = this.audio.buffered.end(i);
+        }
+      }
+      
+      return (bufferedEnd / this.duration) * 100;
     },
     // 进度百分比（用于底部播放控件）
     progressPercentage() {
@@ -3441,9 +3463,8 @@ mounted() {
       // 根据事件类型添加相应的事件监听器
       if (isTouchEvent) {
         document.addEventListener('touchmove', this.onDragMiniPlayerThrottled, { passive: false });
-        document.addEventListener('touchend', this.stopDragMiniPlayer);
-        document.addEventListener('touchcancel', this.stopDragMiniPlayer);
-      } else {
+            document.addEventListener('touchend', this.stopDragMiniPlayer, { passive: true });
+            document.addEventListener('touchcancel', this.stopDragMiniPlayer, { passive: true });      } else {
         document.addEventListener('mousemove', this.onDragMiniPlayerThrottled);
         document.addEventListener('mouseup', this.stopDragMiniPlayer);
       }
@@ -4901,14 +4922,28 @@ mounted() {
       this.skipNext();
     },
     
-    // 进度条跳转（用于底部播放控件）
+    // 进度条跳转（用于底部播放控件和沉浸式播放器）
     seekTo(event) {
       if (!this.audio || !this.duration) return;
       
+      // 阻止触摸事件的默认行为（防止页面滚动）
+      if (event.type.includes('touch')) {
+        event.preventDefault();
+      }
+      
       const progressBar = event.currentTarget;
       const rect = progressBar.getBoundingClientRect();
-      const clickX = event.clientX - rect.left;
-      const percentage = clickX / rect.width;
+      
+      // 处理触摸事件和鼠标事件
+      let clientX;
+      if (event.type.includes('touch')) {
+        clientX = event.touches[0].clientX;
+      } else {
+        clientX = event.clientX;
+      }
+      
+      const clickX = clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, clickX / rect.width));
       const targetTime = percentage * this.duration;
       
       this.audio.currentTime = targetTime;
@@ -5747,9 +5782,21 @@ mounted() {
 
     // 处理窗口大小变化
     handleWindowResize() {
+      console.log('[Canvas Debug] 窗口大小变化，新尺寸:', window.innerWidth, 'x', window.innerHeight);
+      
       // 如果右键菜单可见，重新调整位置
       if (this.contextMenu.visible) {
         this.adjustContextMenuPosition();
+      }
+      
+      // 如果沉浸式播放器可见，重新加载背景
+      if (this.showImmersivePlayer && this.$refs.immersiveCanvas) {
+        console.log('[Canvas Debug] 沉浸式播放器可见，重新加载背景');
+        this.loadImmersiveBackground();
+      } else {
+        console.log('[Canvas Debug] 沉浸式播放器不可见或Canvas未找到，跳过重载');
+        console.log('[Canvas Debug] showImmersivePlayer:', this.showImmersivePlayer);
+        console.log('[Canvas Debug] immersiveCanvas存在:', !!this.$refs.immersiveCanvas);
       }
     },
 
@@ -5996,16 +6043,22 @@ mounted() {
           
           // 打开沉浸式播放器
           openImmersivePlayer() {
+            console.log('[Canvas Debug] 打开沉浸式播放器');
+            
             if (!this.currentSong) {
+              console.log('[Canvas Debug] 没有当前歌曲，显示警告');
               this.showNotification('请先选择一首歌曲', 'warning');
               return;
             }
+            
+            console.log('[Canvas Debug] 当前歌曲:', this.currentSong.name);
             
             this.showImmersivePlayer = true;
             this.showImmersiveControls = false; // 初始隐藏控件
             this.clearImmersiveControlsTimer(); // 清除可能存在的定时器
             
             this.$nextTick(() => {
+              console.log('[Canvas Debug] 在nextTick中加载背景');
               this.loadImmersiveBackground();
               this.loadLyrics().then(() => {
                 // 歌词加载完成后，根据当前播放时间滚动到正确位置
@@ -6021,18 +6074,58 @@ mounted() {
             this.showImmersivePlayer = false;
             this.showImmersiveControls = false;
             this.clearImmersiveControlsTimer();
+            
+            // 清理用户滚动定时器
+            if (this.userScrollTimer) {
+              clearTimeout(this.userScrollTimer);
+              this.userScrollTimer = null;
+            }
+            this.isUserScrolling = false;
+            
+            // 清理沉浸式文字颜色样式
+            const styleElement = document.getElementById('immersive-text-styles');
+            if (styleElement) {
+              styleElement.remove();
+            }
           },
           
           // 加载沉浸式背景
               async loadImmersiveBackground() {
-                if (!this.$refs.immersiveCanvas || !this.currentSong) return;
+                console.log('[Canvas Debug] 开始加载沉浸式背景');
+                
+                if (!this.$refs.immersiveCanvas) {
+                  console.error('[Canvas Debug] Canvas元素未找到');
+                  return;
+                }
+                
+                if (!this.currentSong) {
+                  console.error('[Canvas Debug] 当前没有歌曲');
+                  return;
+                }
                 
                 const canvas = this.$refs.immersiveCanvas;
                 const ctx = canvas.getContext('2d');
                 
+                console.log('[Canvas Debug] Canvas元素:', canvas);
+                console.log('[Canvas Debug] 2D上下文:', ctx);
+                
                 // 设置canvas尺寸
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
+                const dpr = window.devicePixelRatio || 1;
+                const displayWidth = window.innerWidth;
+                const displayHeight = window.innerHeight;
+                
+                // 设置显示尺寸
+                canvas.style.width = displayWidth + 'px';
+                canvas.style.height = displayHeight + 'px';
+                
+                // 设置实际像素尺寸
+                canvas.width = displayWidth * dpr;
+                canvas.height = displayHeight * dpr;
+                
+                console.log('[Canvas Debug] 窗口尺寸:', displayWidth, 'x', displayHeight);
+                console.log('[Canvas Debug] 设备像素比:', dpr);
+                console.log('[Canvas Debug] Canvas实际尺寸:', canvas.width, 'x', canvas.height);
+                console.log('[Canvas Debug] Canvas显示尺寸:', canvas.style.width, 'x', canvas.style.height);
                 
                 try {
                   // 使用现有的音乐颜色提取器
@@ -6051,69 +6144,745 @@ mounted() {
                   }
                   
                   if (imageUrl) {
+                    console.log('[Canvas Debug] 图像URL:', imageUrl);
                     // 使用歌曲ID作为缓存键
                     const songId = this.currentSong.id || this.currentSong.songId;
-                    const colors = await this.musicColorExtractor.extractMultipleColors(imageUrl, songId, 3);
+                    console.log('[Canvas Debug] 歌曲ID:', songId);
+                    
+                    // 提取颜色和明暗度
+                    const colorResult = await this.musicColorExtractor.extractPrimaryColor(imageUrl, songId);
+                    console.log('[Canvas Debug] 提取的颜色和明暗度:', colorResult);
+                    
+                    // 根据明暗度设置文字颜色
+                    this.setImmersiveTextColor(colorResult.brightness);
+                    
+                    const colors = await this.musicColorExtractor.extractMultipleColors(imageUrl, songId, 4);
+                    console.log('[Canvas Debug] 提取的颜色:', colors);
                     
                     if (colors && colors.length > 0) {
                       this.immersiveColors = colors;
+                      console.log('[Canvas Debug] 开始绘制渐变背景');
                       // 绘制渐变背景
                       this.drawGradientBackground(ctx, colors);
+                      console.log('[Canvas Debug] 渐变背景绘制完成');
                     } else {
+                      console.log('[Canvas Debug] 使用默认颜色（提取失败）');
                       // 使用默认颜色
                       this.drawGradientBackground(ctx, ['#1a1a2e', '#16213e', '#0f3460']);
+                      // 设置默认文字颜色（深色背景）
+                      this.setImmersiveTextColor(50);
                     }
                   } else {
+                    console.log('[Canvas Debug] 使用默认颜色（无图像URL）');
                     // 使用默认颜色
                     this.drawGradientBackground(ctx, ['#1a1a2e', '#16213e', '#0f3460']);
+                    // 设置默认文字颜色（深色背景）
+                    this.setImmersiveTextColor(50);
                   }
                 } catch (error) {
                   console.error('加载背景失败:', error);
                   // 使用默认颜色
                   this.drawGradientBackground(ctx, ['#1a1a2e', '#16213e', '#0f3460']);
                 }
-              },          
-          // 绘制渐变背景
+              },
+                        
+                        // 根据封面明暗度设置沉浸式播放器文字颜色
+                        setImmersiveTextColor(brightness) {
+                          // 移除之前的样式
+                          const oldStyle = document.getElementById('immersive-text-styles');
+                          if (oldStyle) {
+                            oldStyle.remove();
+                          }
+                          
+                          // 创建新的样式
+                          const style = document.createElement('style');
+                          style.id = 'immersive-text-styles';
+                          
+                          // 根据明暗度决定文字颜色
+                          // brightness范围是0-255，128是中间值
+                          const isDark = brightness < 128;
+                          
+                          if (isDark) {
+                            // 封面较暗，使用白色文字
+                            style.textContent = `
+                              .immersive-song-name {
+                                color: rgba(255, 255, 255, 0.95) !important;
+                                text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+                              }
+                              .immersive-artist-name,
+                              .immersive-album-name {
+                                color: rgba(255, 255, 255, 0.75) !important;
+                                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+                              }
+                              .control-btn {
+                                color: rgba(255, 255, 255, 0.8) !important;
+                              }
+                              .control-btn:hover {
+                                color: white !important;
+                              }
+                              .progress-time {
+                                color: rgba(255, 255, 255, 0.7) !important;
+                              }
+                              .translation-btn {
+                                color: rgba(255, 255, 255, 0.7) !important;
+                                border-color: rgba(255, 255, 255, 0.3) !important;
+                              }
+                              .translation-btn:hover {
+                                color: white !important;
+                                border-color: rgba(255, 255, 255, 0.5) !important;
+                              }
+                            `;
+                          } else {
+                            // 封面较亮，使用黑色文字
+                            style.textContent = `
+                              .immersive-song-name {
+                                color: rgba(0, 0, 0, 0.95) !important;
+                                text-shadow: 0 1px 3px rgba(255, 255, 255, 0.5);
+                              }
+                              .immersive-artist-name,
+                              .immersive-album-name {
+                                color: rgba(0, 0, 0, 0.75) !important;
+                                text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+                              }
+                              .control-btn {
+                                color: rgba(0, 0, 0, 0.8) !important;
+                              }
+                              .control-btn:hover {
+                                color: black !important;
+                              }
+                              .progress-time {
+                                color: rgba(0, 0, 0, 0.7) !important;
+                              }
+                              .translation-btn {
+                                color: rgba(0, 0, 0, 0.7) !important;
+                                border-color: rgba(0, 0, 0, 0.3) !important;
+                              }
+                              .translation-btn:hover {
+                                color: black !important;
+                                border-color: rgba(0, 0, 0, 0.5) !important;
+                              }
+                            `;
+                          }
+                          
+                          document.head.appendChild(style);
+                        },
+                        
+                        // 绘制渐变背景          
           drawGradientBackground(ctx, colors) {
+            console.log('[Canvas Debug] 开始绘制随机色块背景，颜色数量:', colors.length);
+            console.log('[Canvas Debug] 颜色值:', colors);
+            
+            // 获取Canvas实际尺寸
             const width = ctx.canvas.width;
             const height = ctx.canvas.height;
+            
+            console.log('[Canvas Debug] Canvas尺寸:', width, 'x', height);
+            
+            // 重置所有状态
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.globalAlpha = 1;
+            ctx.filter = 'none';
             
             // 清空画布
             ctx.clearRect(0, 0, width, height);
             
-            // 创建多层渐变效果
-            // 第一层：径向渐变
-            const radialGradient = ctx.createRadialGradient(
+            // 填充基础背景色
+            ctx.fillStyle = colors[0] || '#1a1a2e';
+            ctx.fillRect(0, 0, width, height);
+            console.log('[Canvas Debug] 填充基础背景色');
+            
+            // 生成随机种子
+            const seed = Date.now() / 1000;
+            
+            // 创建随机色块
+            const blocks = this.generateRandomColorBlocks(width, height, colors, seed);
+            console.log('[Canvas Debug] 生成了', blocks.length, '个色块');
+            
+            // 绘制色块
+            blocks.forEach((block, index) => {
+              this.drawColorBlock(ctx, block, width, height);
+              console.log('[Canvas Debug] 绘制色块', index + 1, '位置:', block.x, block.y, '尺寸:', block.size);
+            });
+            
+            // 在色块交界处绘制过渡效果
+            this.drawTransitions(ctx, blocks, colors, width, height);
+            console.log('[Canvas Debug] 绘制过渡效果完成');
+            
+            // 添加整体融合效果
+            this.applyBlendingEffect(ctx, width, height, colors);
+            console.log('[Canvas Debug] 应用融合效果完成');
+            
+            console.log('[Canvas Debug] 随机色块背景绘制完成');
+            
+            // 计算背景平均亮度并设置字体颜色
+            this.calculateAndSetTextColor(colors);
+          },
+          
+          // 计算背景平均亮度并设置字体颜色
+          calculateAndSetTextColor(colors) {
+            console.log('[Canvas Debug] 开始智能计算背景颜色特征');
+            
+            // 分析颜色特征
+            const colorAnalysis = this.analyzeColorPalette(colors);
+            console.log('[Canvas Debug] 颜色分析结果:', colorAnalysis);
+            
+            // 智能计算最佳字体颜色
+            const textColors = this.calculateOptimalTextColors(colorAnalysis);
+            console.log('[Canvas Debug] 计算出的字体颜色:', textColors);
+            
+            // 设置CSS变量
+            this.setImmersiveTextColors(textColors.primary, textColors.secondary, textColors.accent);
+          },
+          
+          // 分析调色板特征
+          analyzeColorPalette(colors) {
+            let totalBrightness = 0;
+            let totalSaturation = 0;
+            let totalHue = 0;
+            let warmth = 0; // 暖色调程度
+            let contrast = 0; // 对比度
+            
+            const rgbColors = colors.map(color => this.hexToRgb(color));
+            const hslColors = rgbColors.map(rgb => this.rgbToHsl(rgb.r, rgb.g, rgb.b));
+            
+            // 计算各项指标
+            hslColors.forEach(hsl => {
+              totalBrightness += hsl.l;
+              totalSaturation += hsl.s;
+              totalHue += hsl.h;
+              
+              // 计算暖色调程度（红黄为暖色，蓝绿为冷色）
+              if ((hsl.h >= 0 && hsl.h <= 60) || (hsl.h >= 300 && hsl.h <= 360)) {
+                warmth += 1; // 红色、黄色系
+              } else if (hsl.h >= 180 && hsl.h <= 240) {
+                warmth -= 1; // 蓝色、青色系
+              }
+            });
+            
+            // 计算亮度对比度
+            const brightnesses = hslColors.map(hsl => hsl.l);
+            const maxBrightness = Math.max(...brightnesses);
+            const minBrightness = Math.min(...brightnesses);
+            contrast = maxBrightness - minBrightness;
+            
+            const avgBrightness = totalBrightness / colors.length;
+            const avgSaturation = totalSaturation / colors.length;
+            const avgHue = (totalHue / colors.length + 360) % 360;
+            const warmthRatio = (warmth + colors.length) / (colors.length * 2); // 归一化到0-1
+            
+            return {
+              avgBrightness,
+              avgSaturation,
+              avgHue,
+              warmthRatio,
+              contrast,
+              isDark: avgBrightness < 40,
+              isLight: avgBrightness > 60,
+              isHighContrast: contrast > 40,
+              isWarm: warmthRatio > 0.6,
+              isCool: warmthRatio < 0.4
+            };
+          },
+          
+          // 智能计算最佳字体颜色
+          calculateOptimalTextColors(analysis) {
+            let primary, secondary, accent;
+            
+            if (analysis.isDark) {
+              // 暗背景
+              if (analysis.isWarm) {
+                // 暖色调暗背景
+                primary = '#ffffff';
+                secondary = '#f0f0f0';
+                accent = '#ffe4b5'; // 暖白色调
+              } else if (analysis.isCool) {
+                // 冷色调暗背景
+                primary = '#ffffff';
+                secondary = '#e8f4f8';
+                accent = '#e0f2fe'; // 冷白色调
+              } else {
+                // 中性暗背景
+                primary = '#ffffff';
+                secondary = '#e0e0e0';
+                accent = '#f5f5f5';
+              }
+            } else if (analysis.isLight) {
+              // 亮背景
+              if (analysis.isWarm) {
+                // 暖色调亮背景
+                primary = '#2c1810';
+                secondary = '#4a2c1a';
+                accent = '#8b4513'; // 暖深色调
+              } else if (analysis.isCool) {
+                // 冷色调亮背景
+                primary = '#0a1929';
+                secondary = '#1a2332';
+                accent = '#0d47a1'; // 冷深色调
+              } else {
+                // 中性亮背景
+                primary = '#1a1a1a';
+                secondary = '#424242';
+                accent = '#616161';
+              }
+            } else {
+              // 中等亮度背景
+              if (analysis.isHighContrast) {
+                // 高对比度
+                primary = analysis.avgBrightness > 50 ? '#000000' : '#ffffff';
+                secondary = analysis.avgBrightness > 50 ? '#424242' : '#e0e0e0';
+                accent = this.generateComplementaryColor(analysis.avgHue, analysis.avgBrightness);
+              } else {
+                // 低对比度，需要增强可读性
+                if (analysis.avgBrightness > 50) {
+                  primary = '#2c2c2c';
+                  secondary = '#5a5a5a';
+                  accent = '#7a7a7a';
+                } else {
+                  primary = '#f5f5f5';
+                  secondary = '#d0d0d0';
+                  accent = '#b8b8b8';
+                }
+              }
+            }
+            
+            // 根据饱和度调整颜色强度
+            if (analysis.avgSaturation > 60) {
+              // 高饱和度背景，使用更柔和的文字
+              primary = this.adjustColorIntensity(primary, 0.8);
+              secondary = this.adjustColorIntensity(secondary, 0.7);
+              accent = this.adjustColorIntensity(accent, 0.6);
+            }
+            
+            return { primary, secondary, accent };
+          },
+          
+          // 生成互补色
+          generateComplementaryColor(hue, brightness) {
+            const complementaryHue = (hue + 180) % 360;
+            const adjustedBrightness = brightness > 50 ? 30 : 70;
+            const rgb = this.hslToRgb(complementaryHue, 50, adjustedBrightness);
+            return this.rgbToHex(rgb.r, rgb.g, rgb.b);
+          },
+          
+          // 调整颜色强度
+          adjustColorIntensity(hex, factor) {
+            const rgb = this.hexToRgb(hex);
+            const hsl = this.rgbToHsl(rgb.r, rgb.g, rgb.b);
+            hsl.l = Math.min(100, Math.max(0, hsl.l * factor));
+            const newRgb = this.hslToRgb(hsl.h, hsl.s, hsl.l);
+            return this.rgbToHex(newRgb.r, newRgb.g, newRgb.b);
+          },
+          
+          // 设置沉浸式界面的文字颜色CSS变量
+          setImmersiveTextColors(primary, secondary, accent) {
+            // 创建或更新CSS样式
+            let styleElement = document.getElementById('immersive-text-styles');
+            if (!styleElement) {
+              styleElement = document.createElement('style');
+              styleElement.id = 'immersive-text-styles';
+              document.head.appendChild(styleElement);
+            }
+            
+            const css = `
+              .immersive-player {
+                --immersive-text-primary: ${primary};
+                --immersive-text-secondary: ${secondary};
+                --immersive-text-accent: ${accent};
+              }
+              
+              .immersive-song-name,
+              .immersive-artist-name,
+              .immersive-album-name {
+                color: var(--immersive-text-primary) !important;
+              }
+              
+              .immersive-song-name {
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+              }
+              
+              .immersive-artist-name,
+              .immersive-album-name {
+                color: var(--immersive-text-secondary) !important;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+              }
+              
+              /* 歌词样式 - 使用更强的选择器覆盖 */
+              .immersive-player .lyric-line .lyric-text,
+              .immersive-player .lyric-line .lyric-translation {
+                transition: all 0.3s ease !important;
+              }
+              
+              .immersive-player .lyric-line.active .lyric-text {
+                color: ${primary} !important;
+                text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+                opacity: 1 !important;
+                transform: scale(1) !important;
+              }
+              
+              .immersive-player .lyric-line:not(.active) .lyric-text {
+                color: ${secondary} !important;
+                text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
+                opacity: 0.7 !important;
+                transform: scale(0.9) !important;
+              }
+              
+              .immersive-player .lyric-line.active .lyric-translation {
+                color: ${accent} !important;
+                text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+                opacity: 0.8 !important;
+              }
+              
+              .immersive-player .lyric-line:not(.active) .lyric-translation {
+                color: ${accent} !important;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+                opacity: 0.5 !important;
+              }
+              
+              /* 近似翻译标识 */
+              .immersive-player .lyric-translation.approximate {
+                border-left: 2px solid ${accent} !important;
+                opacity: 0.7 !important;
+              }
+              
+              /* 空行样式 */
+              .immersive-player .lyric-line.empty-line .lyric-text {
+                color: ${accent} !important;
+                font-style: italic !important;
+                opacity: 0.6 !important;
+              }
+              
+              /* 前一行和后一行 */
+              .immersive-player .lyric-line.prev .lyric-text,
+              .immersive-player .lyric-line.next .lyric-text {
+                color: ${secondary} !important;
+                opacity: 0.6 !important;
+                transform: scale(0.85) !important;
+              }
+              
+              .immersive-player .lyric-line.prev .lyric-translation,
+              .immersive-player .lyric-line.next .lyric-translation {
+                color: ${accent} !important;
+                opacity: 0.4 !important;
+              }
+              
+              .immersive-btn,
+              .exit-btn,
+              .lyrics-control-btn {
+                color: var(--immersive-text-primary) !important;
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+              }
+              
+              .immersive-btn:hover,
+              .exit-btn:hover,
+              .lyrics-control-btn:hover {
+                background: rgba(255, 255, 255, 0.2);
+                border-color: rgba(255, 255, 255, 0.3);
+              }
+              
+              .time-current,
+              .time-total {
+                color: var(--immersive-text-secondary) !important;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+              }
+            `;
+            
+            styleElement.textContent = css;
+            console.log('[Canvas Debug] 文字颜色CSS已更新，包括歌词样式');
+          },
+          
+          // 生成随机色块
+          generateRandomColorBlocks(width, height, colors, seed) {
+            const blocks = [];
+            const blockCount = 8 + Math.floor(Math.random() * 5); // 8-12个色块
+            
+            for (let i = 0; i < blockCount; i++) {
+              const randomX = (Math.sin(seed + i * 1.7) + 1) * width * 0.5;
+              const randomY = (Math.cos(seed + i * 2.3) + 1) * height * 0.5;
+              const randomSize = Math.min(width, height) * (0.3 + Math.random() * 0.4);
+              const colorIndex = i % colors.length;
+              
+              blocks.push({
+                x: randomX,
+                y: randomY,
+                size: randomSize,
+                color: colors[colorIndex],
+                type: Math.random() > 0.5 ? 'circle' : 'blob',
+                rotation: Math.random() * Math.PI * 2,
+                distortion: 0.7 + Math.random() * 0.3
+              });
+            }
+            
+            return blocks;
+          },
+          
+          // 绘制单个色块
+          drawColorBlock(ctx, block, canvasWidth, canvasHeight) {
+            ctx.save();
+            
+            // 设置混合模式
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.globalAlpha = 0.6;
+            
+            if (block.type === 'circle') {
+              // 绘制多层圆形色块，增强过渡效果
+              for (let layer = 0; layer < 3; layer++) {
+                const layerSize = block.size * (1 - layer * 0.2);
+                const layerAlpha = 0.4 - layer * 0.1;
+                
+                const gradient = ctx.createRadialGradient(
+                  block.x, block.y, 0,
+                  block.x, block.y, layerSize
+                );
+                
+                gradient.addColorStop(0, this.hexToRgba(block.color, layerAlpha));
+                gradient.addColorStop(0.3, this.hexToRgba(block.color, layerAlpha * 0.8));
+                gradient.addColorStop(0.6, this.hexToRgba(block.color, layerAlpha * 0.4));
+                gradient.addColorStop(0.9, this.hexToRgba(block.color, layerAlpha * 0.1));
+                gradient.addColorStop(1, this.hexToRgba(block.color, 0));
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(block.x, block.y, layerSize, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            } else {
+              // 绘制多层不规则色块
+              ctx.translate(block.x, block.y);
+              ctx.rotate(block.rotation);
+              
+              for (let layer = 0; layer < 3; layer++) {
+                const layerSize = block.size * (1 - layer * 0.15);
+                const layerAlpha = 0.4 - layer * 0.1;
+                
+                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, layerSize);
+                gradient.addColorStop(0, this.hexToRgba(block.color, layerAlpha));
+                gradient.addColorStop(0.4, this.hexToRgba(block.color, layerAlpha * 0.7));
+                gradient.addColorStop(0.7, this.hexToRgba(block.color, layerAlpha * 0.3));
+                gradient.addColorStop(1, this.hexToRgba(block.color, 0));
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                
+                // 创建更平滑的不规则形状
+                const points = 12; // 增加点数使形状更平滑
+                for (let i = 0; i <= points; i++) {
+                  const angle = (i / points) * Math.PI * 2;
+                  const radiusVariation = Math.sin(angle * 3 + layer) * 0.1; // 添加半径变化
+                  const radius = layerSize * (0.9 + radiusVariation + Math.random() * 0.2 * block.distortion);
+                  const x = Math.cos(angle) * radius;
+                  const y = Math.sin(angle) * radius;
+                  
+                  if (i === 0) {
+                    ctx.moveTo(x, y);
+                  } else {
+                    const prevAngle = ((i - 1) / points) * Math.PI * 2;
+                    const prevRadiusVariation = Math.sin(prevAngle * 3 + layer) * 0.1;
+                    const prevRadius = layerSize * (0.9 + prevRadiusVariation + Math.random() * 0.2 * block.distortion);
+                    const prevX = Math.cos(prevAngle) * prevRadius;
+                    const prevY = Math.sin(prevAngle) * prevRadius;
+                    
+                    // 使用更平滑的曲线控制点
+                    const cpAngle = (prevAngle + angle) / 2;
+                    const cpRadius = (prevRadius + radius) / 2 * 1.1;
+                    const cpX = Math.cos(cpAngle) * cpRadius;
+                    const cpY = Math.sin(cpAngle) * cpRadius;
+                    
+                    ctx.quadraticCurveTo(cpX, cpY, x, y);
+                  }
+                }
+                
+                ctx.closePath();
+                ctx.fill();
+              }
+            }
+            
+            ctx.restore();
+          },
+          
+          // 绘制色块交界处的过渡效果
+          drawTransitions(ctx, blocks, colors, width, height) {
+            ctx.save();
+            
+            // 创建多个过渡层
+            const layers = [
+              { operation: 'screen', alpha: 0.4 },
+              { operation: 'overlay', alpha: 0.3 },
+              { operation: 'soft-light', alpha: 0.2 }
+            ];
+            
+            layers.forEach(layer => {
+              ctx.globalCompositeOperation = layer.operation;
+              ctx.globalAlpha = layer.alpha;
+              
+              // 在色块之间创建过渡区域
+              for (let i = 0; i < blocks.length - 1; i++) {
+                for (let j = i + 1; j < blocks.length; j++) {
+                  const block1 = blocks[i];
+                  const block2 = blocks[j];
+                  
+                  // 计算两个色块之间的距离
+                  const distance = Math.sqrt(
+                    Math.pow(block2.x - block1.x, 2) + 
+                    Math.pow(block2.y - block1.y, 2)
+                  );
+                  
+                  // 增加过渡距离判断
+                  const maxTransitionDistance = (block1.size + block2.size) * 2;
+                  
+                  if (distance < maxTransitionDistance) {
+                    // 计算过渡参数
+                    const midX = (block1.x + block2.x) / 2;
+                    const midY = (block1.y + block2.y) / 2;
+                    const transitionSize = (block1.size + block2.size) / 2.5;
+                    
+                    // 创建更复杂的过渡渐变
+                    const gradient = ctx.createRadialGradient(
+                      midX, midY, 0,
+                      midX, midY, transitionSize
+                    );
+                    
+                    // 混合两个色块的颜色
+                    const mixedColor1 = this.mixColors(block1.color, block2.color, 0.6);
+                    const mixedColor2 = this.mixColors(block1.color, block2.color, 0.4);
+                    
+                    gradient.addColorStop(0, this.hexToRgba(mixedColor1, 0.6));
+                    gradient.addColorStop(0.3, this.hexToRgba(block1.color, 0.4));
+                    gradient.addColorStop(0.5, this.hexToRgba(mixedColor2, 0.5));
+                    gradient.addColorStop(0.7, this.hexToRgba(block2.color, 0.3));
+                    gradient.addColorStop(1, this.hexToRgba(block2.color, 0));
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(midX, midY, transitionSize, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 添加额外的扩散过渡
+                    const spreadGradient = ctx.createRadialGradient(
+                      midX, midY, transitionSize * 0.8,
+                      midX, midY, transitionSize * 1.5
+                    );
+                    
+                    spreadGradient.addColorStop(0, this.hexToRgba(mixedColor2, 0.2));
+                    spreadGradient.addColorStop(1, this.hexToRgba(mixedColor2, 0));
+                    
+                    ctx.fillStyle = spreadGradient;
+                    ctx.beginPath();
+                    ctx.arc(midX, midY, transitionSize * 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                  }
+                }
+              }
+            });
+            
+            ctx.restore();
+          },
+          
+          // 颜色混合工具方法
+          mixColors(color1, color2, ratio) {
+            const rgb1 = this.hexToRgb(color1);
+            const rgb2 = this.hexToRgb(color2);
+            
+            const r = Math.round(rgb1.r * (1 - ratio) + rgb2.r * ratio);
+            const g = Math.round(rgb1.g * (1 - ratio) + rgb2.g * ratio);
+            const b = Math.round(rgb1.b * (1 - ratio) + rgb2.b * ratio);
+            
+            return this.rgbToHex(r, g, b);
+          },
+          
+          // 十六进制转RGB
+          hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+              r: parseInt(result[1], 16),
+              g: parseInt(result[2], 16),
+              b: parseInt(result[3], 16)
+            } : { r: 0, g: 0, b: 0 };
+          },
+          
+          // 应用整体融合效果
+          applyBlendingEffect(ctx, width, height, colors) {
+            ctx.save();
+            
+            // 第一层：整体色彩平衡
+            ctx.globalCompositeOperation = 'overlay';
+            ctx.globalAlpha = 0.15;
+            
+            const balanceGradient = ctx.createLinearGradient(0, 0, width, height);
+            balanceGradient.addColorStop(0, colors[1]);
+            balanceGradient.addColorStop(0.3, colors[2]);
+            balanceGradient.addColorStop(0.7, colors[3]);
+            balanceGradient.addColorStop(1, colors[0]);
+            
+            ctx.fillStyle = balanceGradient;
+            ctx.fillRect(0, 0, width, height);
+            
+            // 第二层：柔化过渡
+            ctx.globalCompositeOperation = 'soft-light';
+            ctx.globalAlpha = 0.2;
+            
+            const softGradient = ctx.createRadialGradient(
               width / 2, height / 2, 0,
-              width / 2, height / 2, Math.max(width, height) / 1.5
+              width / 2, height / 2, Math.max(width, height) / 2
             );
             
-            // 添加颜色停止点
-            colors.forEach((color, index) => {
-              radialGradient.addColorStop(index / (colors.length - 1), color);
-            });
+            softGradient.addColorStop(0, this.hexToRgba(colors[0], 0.3));
+            softGradient.addColorStop(0.5, this.hexToRgba(colors[1], 0.2));
+            softGradient.addColorStop(1, this.hexToRgba(colors[2], 0.1));
             
-            // 填充径向渐变
-            ctx.fillStyle = radialGradient;
+            ctx.fillStyle = softGradient;
             ctx.fillRect(0, 0, width, height);
             
-            // 第二层：线性渐变，增加深度感
-            const linearGradient = ctx.createLinearGradient(0, 0, width, height);
-            colors.forEach((color, index) => {
-              const opacity = 0.3 - (index * 0.1); // 递减的透明度
-              linearGradient.addColorStop(index / (colors.length - 1), this.hexToRgba(color, opacity));
-            });
+            // 第三层：轻微模糊效果
+            ctx.filter = 'blur(8px)';
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.globalAlpha = 0.08;
             
-            // 填充线性渐变
-            ctx.fillStyle = linearGradient;
+            const blurGradient = ctx.createLinearGradient(width, 0, 0, height);
+            blurGradient.addColorStop(0, colors[3]);
+            blurGradient.addColorStop(1, colors[0]);
+            
+            ctx.fillStyle = blurGradient;
             ctx.fillRect(0, 0, width, height);
             
-            // 添加轻微模糊效果
-            ctx.filter = 'blur(20px)';
-            ctx.globalAlpha = 0.8;
-            ctx.fillRect(0, 0, width, height);
+            // 第四层：最终色彩调整
             ctx.filter = 'none';
-            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = 'screen';
+            ctx.globalAlpha = 0.1;
+            
+            const finalGradient = ctx.createRadialGradient(
+              width * 0.3, height * 0.3, 0,
+              width * 0.7, height * 0.7, Math.max(width, height) * 0.8
+            );
+            
+            finalGradient.addColorStop(0, colors[1]);
+            finalGradient.addColorStop(0.5, colors[2]);
+            finalGradient.addColorStop(1, colors[3]);
+            
+            ctx.fillStyle = finalGradient;
+            ctx.fillRect(0, 0, width, height);
+            
+            ctx.restore();
+          },
+          
+          // 添加噪声纹理
+          addNoiseTexture(ctx, width, height) {
+            const dpr = window.devicePixelRatio || 1;
+            const actualWidth = width * dpr;
+            const actualHeight = height * dpr;
+            const imageData = ctx.createImageData(actualWidth, actualHeight);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+              const noise = (Math.random() - 0.5) * 20; // -10 到 10 的噪声
+              data[i] = data[i] + noise;     // R
+              data[i + 1] = data[i] + noise; // G
+              data[i + 2] = data[i] + noise; // B
+              data[i + 3] = 15;              // A (低透明度)
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
           },
           
           // 辅助方法：将十六进制颜色转换为RGBA
@@ -6122,6 +6891,79 @@ mounted() {
             const g = parseInt(hex.slice(3, 5), 16);
             const b = parseInt(hex.slice(5, 7), 16);
             return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+          },
+          
+          // RGB转十六进制
+          rgbToHex(r, g, b) {
+            return '#' + [r, g, b].map(x => {
+              const hex = x.toString(16);
+              return hex.length === 1 ? '0' + hex : hex;
+            }).join('');
+          },
+          
+          // RGB转HSL
+          rgbToHsl(r, g, b) {
+            r /= 255;
+            g /= 255;
+            b /= 255;
+            
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            let h, s, l = (max + min) / 2;
+            
+            if (max === min) {
+              h = s = 0; // 灰度
+            } else {
+              const d = max - min;
+              s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+              
+              switch (max) {
+                case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+                case g: h = ((b - r) / d + 2) / 6; break;
+                case b: h = ((r - g) / d + 4) / 6; break;
+              }
+            }
+            
+            return {
+              h: Math.round(h * 360),
+              s: Math.round(s * 100),
+              l: Math.round(l * 100)
+            };
+          },
+          
+          // HSL转RGB
+          hslToRgb(h, s, l) {
+            h /= 360;
+            s /= 100;
+            l /= 100;
+            
+            let r, g, b;
+            
+            if (s === 0) {
+              r = g = b = l; // 灰度
+            } else {
+              const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1/6) return p + (q - p) * 6 * t;
+                if (t < 1/2) return q;
+                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                return p;
+              };
+              
+              const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+              const p = 2 * l - q;
+              
+              r = hue2rgb(p, q, h + 1/3);
+              g = hue2rgb(p, q, h);
+              b = hue2rgb(p, q, h - 1/3);
+            }
+            
+            return {
+              r: Math.round(r * 255),
+              g: Math.round(g * 255),
+              b: Math.round(b * 255)
+            };
           },
           
                     
@@ -6136,11 +6978,7 @@ mounted() {
             return `${mins}:${secs.toString().padStart(2, '0')}`;
           },
           
-          // 进度百分比
-          get progressPercentage() {
-            if (!this.duration) return 0;
-            return (this.currentTime / this.duration) * 100;
-          },
+          
           
           // 进度条跳转
           seekTo(event) {
@@ -6274,18 +7112,90 @@ mounted() {
           },
           
           // 更新歌词位置
+          // 处理歌词滚轮滚动
+          handleLyricsWheel(event) {
+            if (!this.isUserScrolling) {
+              // 用户开始滚动，暂停自动滚动
+              this.isUserScrolling = true;
+              this.userScrollOffset = this.currentScrollTop || 0;
+              
+              // 设置所有歌词行为active状态
+              this.setAllLyricsActive(true);
+              
+              // 清除之前的定时器
+              if (this.userScrollTimer) {
+                clearTimeout(this.userScrollTimer);
+              }
+            }
+            
+            // 阻止默认滚动行为
+            event.preventDefault();
+            
+            // 计算滚动量（取反以修复方向）
+            const delta = -event.deltaY;
+            this.userScrollOffset += delta;
+            
+            // 应用滚动
+            if (this.$refs.lyricsScroll) {
+              this.$refs.lyricsScroll.style.transform = `translateY(${this.userScrollOffset}px)`;
+              this.$refs.lyricsScroll.style.transition = 'none';
+            }
+            
+            // 重置3秒定时器
+            if (this.userScrollTimer) {
+              clearTimeout(this.userScrollTimer);
+            }
+            this.userScrollTimer = setTimeout(() => {
+              // 3秒后恢复自动滚动
+              this.isUserScrolling = false;
+              this.setAllLyricsActive(false);
+              
+              // 恢复过渡动画
+              if (this.$refs.lyricsScroll) {
+                this.$refs.lyricsScroll.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+              }
+              
+              // 立即更新到当前歌词位置
+              if (this.currentTime > 0 && this.lyrics.length > 0) {
+                this.updateLyricsPosition(this.currentTime);
+              }
+            }, 3000);
+          },
+          
+          // 设置所有歌词的active状态
+          setAllLyricsActive(isActive) {
+            if (!this.$refs.lyricsScroll) return;
+            
+            const lyricLines = this.$refs.lyricsScroll.querySelectorAll('.lyric-line');
+            lyricLines.forEach(line => {
+              if (isActive) {
+                line.classList.add('user-scrolling');
+              } else {
+                line.classList.remove('user-scrolling');
+              }
+            });
+          },
+          
           updateLyricsPosition(currentTime) {
+            // 如果用户正在滚动，不执行自动滚动
+            if (this.isUserScrolling) {
+              return;
+            }
+            
             if (!this.lyrics || this.lyrics.length === 0) {
               return;
             }
             
+            // 提前0.2秒进行滚动，以补偿动画过渡时间
+            const adjustedTime = currentTime + 0.2;
+            
             // 找到当前应该高亮的歌词
             let targetIndex = -1;
             
-            // 从后往前找，找到第一个时间小于等于当前时间的歌词
+            // 从后往前找，找到第一个时间小于等于调整后时间的歌词
             for (let i = this.lyrics.length - 1; i >= 0; i--) {
               const lyric = this.lyrics[i];
-              if (lyric.time <= currentTime && lyric.time !== -1) {
+              if (lyric.time <= adjustedTime && lyric.time !== -1) {
                 targetIndex = i;
                 break;
               }
@@ -6349,7 +7259,7 @@ mounted() {
               
               // 设置transform
               lyricsScroll.style.transform = `translateY(${transformValue}px)`;
-              lyricsScroll.style.transition = 'transform 0.3s ease';
+              lyricsScroll.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
               
               // 保存当前transform值
               this.currentScrollTop = transformValue;
@@ -6458,6 +7368,36 @@ mounted() {
   animation: immersiveFadeIn 0.5s ease;
 }
 
+/* 右上角关闭按钮 */
+.immersive-close-btn {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  width: 40px;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.immersive-player:hover .immersive-close-btn {
+  opacity: 1;
+}
+
+.immersive-close-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  transform: scale(1.1);
+}
+
 @keyframes immersiveFadeIn {
   from {
     opacity: 0;
@@ -6475,7 +7415,9 @@ mounted() {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: -1;
+  z-index: 1;
+  display: block;
+  object-fit: cover;
 }
 
 .immersive-content {
@@ -6487,6 +7429,8 @@ mounted() {
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
+  z-index: 10;
+  position: relative;
 }
 
 .immersive-left {
@@ -6498,6 +7442,7 @@ mounted() {
 }
 
 .immersive-cover-container {
+  position: relative;
   width: 320px;
   height: 320px;
   border-radius: 20px;
@@ -6507,7 +7452,7 @@ mounted() {
 }
 
 .immersive-cover-container:hover {
-  transform: scale(1.05);
+  transform: scale(1.02);
 }
 
 .immersive-cover {
@@ -6516,32 +7461,40 @@ mounted() {
   object-fit: cover;
 }
 
+/* 歌曲信息移动到封面左下角 */
 .immersive-song-info {
-  text-align: center;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 1.5rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
   color: white;
+  text-align: left;
 }
 
 .immersive-song-name {
-  font-size: 2rem;
-  font-weight: 700;
-  margin: 0 0 0.5rem 0;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  line-height: 1.3;
 }
 
 .immersive-artist-name {
-  font-size: 1.2rem;
-  font-weight: 500;
-  margin: 0 0 0.25rem 0;
-  opacity: 0.9;
-  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
+  font-size: 0.9rem;
+  font-weight: 400;
+  margin: 0 0 0.1rem 0;
+  opacity: 0.8;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .immersive-album-name {
-  font-size: 1rem;
-  font-weight: 400;
+  font-size: 0.8rem;
+  font-weight: 300;
   margin: 0;
-  opacity: 0.7;
-  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
+  opacity: 0.6;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .immersive-right {
@@ -6550,6 +7503,179 @@ mounted() {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+/* 垂直播放控件样式 */
+.immersive-controls-vertical {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1rem 0;
+}
+
+/* 操控按钮样式 */
+.control-buttons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2rem;
+}
+
+.control-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.control-btn:hover {
+  color: white;
+  transform: scale(1.1);
+}
+
+.control-btn:active {
+  transform: scale(0.95);
+}
+
+.control-btn.play-pause {
+  margin: 0 0.5rem;
+}
+
+.control-btn.play-pause:hover {
+  transform: scale(1.05);
+}
+
+.control-btn svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+/* ========== Apple Music 风格进度条 ========== */
+.progress-section {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem 0;
+  margin: 0 0.5rem;
+}
+
+.progress-time {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  min-width: 3.2rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.progress-track {
+  flex: 1;
+  position: relative;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.progress-track:hover {
+  height: 10px;
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.progress-track:active {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.progress-buffer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.progress-current {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 3px;
+  transition: width 0.12s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  min-width: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.progress-track:hover .progress-current {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+}
+
+.progress-track:active .progress-current {
+  background: white;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.6);
+}
+
+.progress-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.progress-track:hover .progress-thumb {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.progress-track:active .progress-thumb {
+  transform: translate(-50%, -50%) scale(1.15);
+  width: 16px;
+  height: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* 译文控制按钮 */
+.translation-control {
+  display: flex;
+  justify-content: center;
+}
+
+.translation-btn {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 0.5rem 1rem;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.translation-btn:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .lyrics-container {
@@ -6562,13 +7688,16 @@ mounted() {
 .lyrics-scroll {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 0 2rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
   /* 添加顶部padding，让第一行歌词显示在容器中心稍上方的位置 */
   padding-top: 15vh;
   padding-bottom: 85vh;
   transform: translateY(0);
-  transition: transform 0.3s ease;
+  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  /* 增加歌词区域宽度，仅在左侧与封面之间留有空隙 */
+  max-width: calc(100% - 2rem);
+  will-change: transform;
 }
 
 .lyric-line {
@@ -6580,11 +7709,13 @@ mounted() {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   padding: 0.8rem 1.2rem;
   border-radius: 8px;
-  max-width: 95%;
-  text-align: center;
+  /* 增加歌词行宽度 */
+  width: 100%;
+  max-width: 100%;
+  text-align: left;
   opacity: 0.5;
   transform: scale(0.9);
   /* 防止内容溢出 */
@@ -6654,6 +7785,58 @@ mounted() {
 
 .lyric-line.empty-line.active {
   opacity: 0.6;
+}
+
+/* 用户滚动时的歌词样式 */
+.lyric-line.user-scrolling {
+  opacity: 0.9 !important;
+  transform: scale(1) !important;
+  height: 5rem !important;
+  min-height: 5rem !important;
+  transition: all 0.2s ease !important;
+}
+
+.lyric-line.user-scrolling.has-translation {
+  height: 6rem !important;
+  min-height: 6rem !important;
+}
+
+/* 用户滚动时非当前歌词的样式 */
+.lyric-line.user-scrolling:not(.active) .lyric-text {
+  color: rgba(255, 255, 255, 0.7) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+.lyric-line.user-scrolling:not(.active) .lyric-translation {
+  color: rgba(255, 255, 255, 0.5) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 用户滚动时当前歌词保持高亮样式 */
+.lyric-line.user-scrolling.active .lyric-text {
+  color: rgba(255, 255, 255, 0.95) !important;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+  font-weight: 500 !important;
+}
+
+.lyric-line.user-scrolling.active .lyric-translation {
+  color: rgba(255, 255, 255, 0.75) !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 歌词行hover效果 */
+.lyric-line:hover {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.lyric-line.user-scrolling:hover {
+  background: rgba(0, 0, 0, 0.3) !important;
+}
+
+.lyric-line.active:hover {
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .lyric-line.empty-line .lyric-text {
@@ -6794,7 +7977,7 @@ mounted() {
   max-width: 100%;
   width: 100%;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-  z-index: 10;
+  z-index: 100;
 }
 
 /* 控件过渡动画 */
@@ -7929,7 +9112,7 @@ mounted() {
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px rgba(255, 255, 255, 0.08);
 }
 
 .control-btn:hover:not(:disabled) {
