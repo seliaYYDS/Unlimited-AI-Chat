@@ -67,10 +67,13 @@
                 <div class="progress-time progress-time-total">{{ formatTime(duration) }}</div>
               </div>
               
-              <!-- 显示译文按钮 -->
+              <!-- 显示译文/罗马音按钮 -->
               <div class="translation-control">
-                <button class="translation-btn" @click="toggleTranslation">
+                <button v-if="translationLyrics.length > 0" class="translation-btn" @click="toggleTranslation">
                   {{ showTranslation ? '隐藏译文' : '显示译文' }}
+                </button>
+                <button v-if="romaLyrics.length > 0" class="translation-btn" @click="toggleRoma">
+                  {{ showRoma ? '隐藏罗马音' : '显示罗马音' }}
                 </button>
               </div>
             </div>
@@ -87,16 +90,21 @@
                     'active': index === currentLyricIndex,
                     'prev': index === currentLyricIndex - 1,
                     'next': index === currentLyricIndex + 1,
-                    'has-translation': showTranslation && translationLyrics[index],
+                    'has-translation': (showTranslation && translationLyrics[index]) || (showRoma && romaLyrics[index]),
                     'empty-line': lyric.isEmpty
                   }]"
                   @click="seekToLyric(lyric.time)"
                 >
                   <div class="lyric-text">{{ lyric.text }}</div>
                   <!-- 翻译歌词 -->
-                  <div v-if="showTranslation && translationLyrics[index]" 
+                  <div v-if="showTranslation && !showRoma && translationLyrics[index]" 
                        :class="['lyric-translation', { 'approximate': translationLyrics[index].isApproximate }]">
                     {{ translationLyrics[index].text }}
+                  </div>
+                  <!-- 罗马音歌词 -->
+                  <div v-if="showRoma && !showTranslation && romaLyrics[index]" 
+                       :class="['lyric-translation lyric-roma', { 'approximate': romaLyrics[index].isApproximate }]">
+                    {{ romaLyrics[index].text }}
                   </div>
                 </div>
               </div>
@@ -1976,8 +1984,10 @@ export default {
       // 歌词相关
       lyrics: [],
       translationLyrics: [],
+      romaLyrics: [],
       currentLyricIndex: -1,
       showTranslation: false,
+      showRoma: false,
       currentScrollTop: 0,
       // 歌词滚轮滚动控制
       isUserScrolling: false,
@@ -5782,8 +5792,6 @@ mounted() {
 
     // 处理窗口大小变化
     handleWindowResize() {
-      console.log('[Canvas Debug] 窗口大小变化，新尺寸:', window.innerWidth, 'x', window.innerHeight);
-      
       // 如果右键菜单可见，重新调整位置
       if (this.contextMenu.visible) {
         this.adjustContextMenuPosition();
@@ -5791,12 +5799,7 @@ mounted() {
       
       // 如果沉浸式播放器可见，重新加载背景
       if (this.showImmersivePlayer && this.$refs.immersiveCanvas) {
-        console.log('[Canvas Debug] 沉浸式播放器可见，重新加载背景');
         this.loadImmersiveBackground();
-      } else {
-        console.log('[Canvas Debug] 沉浸式播放器不可见或Canvas未找到，跳过重载');
-        console.log('[Canvas Debug] showImmersivePlayer:', this.showImmersivePlayer);
-        console.log('[Canvas Debug] immersiveCanvas存在:', !!this.$refs.immersiveCanvas);
       }
     },
 
@@ -6046,19 +6049,15 @@ mounted() {
             console.log('[Canvas Debug] 打开沉浸式播放器');
             
             if (!this.currentSong) {
-              console.log('[Canvas Debug] 没有当前歌曲，显示警告');
               this.showNotification('请先选择一首歌曲', 'warning');
               return;
             }
-            
-            console.log('[Canvas Debug] 当前歌曲:', this.currentSong.name);
             
             this.showImmersivePlayer = true;
             this.showImmersiveControls = false; // 初始隐藏控件
             this.clearImmersiveControlsTimer(); // 清除可能存在的定时器
             
             this.$nextTick(() => {
-              console.log('[Canvas Debug] 在nextTick中加载背景');
               this.loadImmersiveBackground();
               this.loadLyrics().then(() => {
                 // 歌词加载完成后，根据当前播放时间滚动到正确位置
@@ -6089,103 +6088,82 @@ mounted() {
             }
           },
           
-          // 加载沉浸式背景
-              async loadImmersiveBackground() {
-                console.log('[Canvas Debug] 开始加载沉浸式背景');
-                
-                if (!this.$refs.immersiveCanvas) {
-                  console.error('[Canvas Debug] Canvas元素未找到');
-                  return;
-                }
-                
-                if (!this.currentSong) {
-                  console.error('[Canvas Debug] 当前没有歌曲');
-                  return;
-                }
-                
-                const canvas = this.$refs.immersiveCanvas;
-                const ctx = canvas.getContext('2d');
-                
-                console.log('[Canvas Debug] Canvas元素:', canvas);
-                console.log('[Canvas Debug] 2D上下文:', ctx);
-                
-                // 设置canvas尺寸
-                const dpr = window.devicePixelRatio || 1;
-                const displayWidth = window.innerWidth;
-                const displayHeight = window.innerHeight;
-                
-                // 设置显示尺寸
-                canvas.style.width = displayWidth + 'px';
-                canvas.style.height = displayHeight + 'px';
-                
-                // 设置实际像素尺寸
-                canvas.width = displayWidth * dpr;
-                canvas.height = displayHeight * dpr;
-                
-                console.log('[Canvas Debug] 窗口尺寸:', displayWidth, 'x', displayHeight);
-                console.log('[Canvas Debug] 设备像素比:', dpr);
-                console.log('[Canvas Debug] Canvas实际尺寸:', canvas.width, 'x', canvas.height);
-                console.log('[Canvas Debug] Canvas显示尺寸:', canvas.style.width, 'x', canvas.style.height);
-                
-                try {
-                  // 使用现有的音乐颜色提取器
-                  if (!this.musicColorExtractor) {
-                    this.musicColorExtractor = new MusicColorExtractor();
-                  }
-                  
-                  // 从歌曲封面提取主要颜色，尝试多个可能的URL
-                  let imageUrl = this.currentSong.picUrl || 
-                                 (this.currentSong.al && this.currentSong.al.picUrl) || 
-                                 (this.currentSong.album && this.currentSong.album.picUrl);
-                  
-                  // 如果还是没有URL，尝试其他可能的字段
-                  if (!imageUrl && this.currentSong.artists && this.currentSong.artists[0]) {
-                    imageUrl = this.currentSong.artists[0].img1v1Url;
-                  }
-                  
-                  if (imageUrl) {
-                    console.log('[Canvas Debug] 图像URL:', imageUrl);
-                    // 使用歌曲ID作为缓存键
-                    const songId = this.currentSong.id || this.currentSong.songId;
-                    console.log('[Canvas Debug] 歌曲ID:', songId);
-                    
-                    // 提取颜色和明暗度
-                    const colorResult = await this.musicColorExtractor.extractPrimaryColor(imageUrl, songId);
-                    console.log('[Canvas Debug] 提取的颜色和明暗度:', colorResult);
-                    
-                    // 根据明暗度设置文字颜色
-                    this.setImmersiveTextColor(colorResult.brightness);
-                    
-                    const colors = await this.musicColorExtractor.extractMultipleColors(imageUrl, songId, 4);
-                    console.log('[Canvas Debug] 提取的颜色:', colors);
-                    
-                    if (colors && colors.length > 0) {
-                      this.immersiveColors = colors;
-                      console.log('[Canvas Debug] 开始绘制渐变背景');
-                      // 绘制渐变背景
-                      this.drawGradientBackground(ctx, colors);
-                      console.log('[Canvas Debug] 渐变背景绘制完成');
-                    } else {
-                      console.log('[Canvas Debug] 使用默认颜色（提取失败）');
-                      // 使用默认颜色
-                      this.drawGradientBackground(ctx, ['#1a1a2e', '#16213e', '#0f3460']);
-                      // 设置默认文字颜色（深色背景）
-                      this.setImmersiveTextColor(50);
-                    }
-                  } else {
-                    console.log('[Canvas Debug] 使用默认颜色（无图像URL）');
-                    // 使用默认颜色
-                    this.drawGradientBackground(ctx, ['#1a1a2e', '#16213e', '#0f3460']);
-                    // 设置默认文字颜色（深色背景）
-                    this.setImmersiveTextColor(50);
-                  }
-                } catch (error) {
-                  console.error('加载背景失败:', error);
-                  // 使用默认颜色
-                  this.drawGradientBackground(ctx, ['#1a1a2e', '#16213e', '#0f3460']);
-                }
-              },
+                    // 加载沉浸式背景
+                    async loadImmersiveBackground() {
+                      if (!this.$refs.immersiveCanvas) {
+                        return;
+                      }
+                      
+                      if (!this.currentSong) {
+                        return;
+                      }
+                      
+                      const canvas = this.$refs.immersiveCanvas;
+                      const ctx = canvas.getContext('2d');
+                      
+                      // 设置canvas尺寸
+                      const dpr = window.devicePixelRatio || 1;
+                      const displayWidth = window.innerWidth;
+                      const displayHeight = window.innerHeight;
+                      
+                      // 设置显示尺寸
+                      canvas.style.width = displayWidth + 'px';
+                      canvas.style.height = displayHeight + 'px';
+                      
+                      // 设置实际像素尺寸
+                      canvas.width = displayWidth * dpr;
+                      canvas.height = displayHeight * dpr;
+                      
+                      try {
+                        // 使用现有的音乐颜色提取器
+                        if (!this.musicColorExtractor) {
+                          this.musicColorExtractor = new MusicColorExtractor();
+                        }
                         
+                        // 从歌曲封面提取主要颜色，尝试多个可能的URL
+                        let imageUrl = this.currentSong.picUrl || 
+                                       (this.currentSong.al && this.currentSong.al.picUrl) || 
+                                       (this.currentSong.album && this.currentSong.album.picUrl);
+                        
+                        // 如果还是没有URL，尝试其他可能的字段
+                        if (!imageUrl && this.currentSong.artists && this.currentSong.artists[0]) {
+                          imageUrl = this.currentSong.artists[0].img1v1Url;
+                        }
+                        
+                        if (imageUrl) {
+                          // 使用歌曲ID作为缓存键
+                          const songId = this.currentSong.id || this.currentSong.songId;
+                          
+                          // 提取颜色和明暗度
+                          const colorResult = await this.musicColorExtractor.extractPrimaryColor(imageUrl, songId);
+                          
+                          // 根据明暗度设置文字颜色
+                          this.setImmersiveTextColor(colorResult.brightness);
+                          
+                          const colors = await this.musicColorExtractor.extractMultipleColors(imageUrl, songId, 4);
+                          
+                          if (colors && colors.length > 0) {
+                            this.immersiveColors = colors;
+                            // 绘制渐变背景
+                            this.drawGradientBackground(ctx, colors);
+                          } else {
+                            // 使用默认颜色
+                            this.drawGradientBackground(ctx, ['#1a1a2e', '#16213e', '#0f3460']);
+                            // 设置默认文字颜色（深色背景）
+                            this.setImmersiveTextColor(50);
+                          }
+                        } else {
+                          // 使用默认颜色
+                          this.drawGradientBackground(ctx, ['#1a1a2e', '#16213e', '#0f3460']);
+                          // 设置默认文字颜色（深色背景）
+                          this.setImmersiveTextColor(50);
+                        }
+                      } catch (error) {
+                        console.error('加载背景失败:', error);
+                        // 使用默认颜色
+                        this.drawGradientBackground(ctx, ['#1a1a2e', '#16213e', '#0f3460']);
+                      }
+                    },                        
                         // 根据封面明暗度设置沉浸式播放器文字颜色
                         setImmersiveTextColor(brightness) {
                           // 移除之前的样式
@@ -6269,14 +6247,9 @@ mounted() {
                         
                         // 绘制渐变背景          
           drawGradientBackground(ctx, colors) {
-            console.log('[Canvas Debug] 开始绘制随机色块背景，颜色数量:', colors.length);
-            console.log('[Canvas Debug] 颜色值:', colors);
-            
             // 获取Canvas实际尺寸
             const width = ctx.canvas.width;
             const height = ctx.canvas.height;
-            
-            console.log('[Canvas Debug] Canvas尺寸:', width, 'x', height);
             
             // 重置所有状态
             ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -6289,30 +6262,23 @@ mounted() {
             // 填充基础背景色
             ctx.fillStyle = colors[0] || '#1a1a2e';
             ctx.fillRect(0, 0, width, height);
-            console.log('[Canvas Debug] 填充基础背景色');
             
             // 生成随机种子
             const seed = Date.now() / 1000;
             
             // 创建随机色块
             const blocks = this.generateRandomColorBlocks(width, height, colors, seed);
-            console.log('[Canvas Debug] 生成了', blocks.length, '个色块');
             
             // 绘制色块
             blocks.forEach((block, index) => {
               this.drawColorBlock(ctx, block, width, height);
-              console.log('[Canvas Debug] 绘制色块', index + 1, '位置:', block.x, block.y, '尺寸:', block.size);
             });
             
             // 在色块交界处绘制过渡效果
             this.drawTransitions(ctx, blocks, colors, width, height);
-            console.log('[Canvas Debug] 绘制过渡效果完成');
             
             // 添加整体融合效果
             this.applyBlendingEffect(ctx, width, height, colors);
-            console.log('[Canvas Debug] 应用融合效果完成');
-            
-            console.log('[Canvas Debug] 随机色块背景绘制完成');
             
             // 计算背景平均亮度并设置字体颜色
             this.calculateAndSetTextColor(colors);
@@ -6320,15 +6286,11 @@ mounted() {
           
           // 计算背景平均亮度并设置字体颜色
           calculateAndSetTextColor(colors) {
-            console.log('[Canvas Debug] 开始智能计算背景颜色特征');
-            
             // 分析颜色特征
             const colorAnalysis = this.analyzeColorPalette(colors);
-            console.log('[Canvas Debug] 颜色分析结果:', colorAnalysis);
             
             // 智能计算最佳字体颜色
             const textColors = this.calculateOptimalTextColors(colorAnalysis);
-            console.log('[Canvas Debug] 计算出的字体颜色:', textColors);
             
             // 设置CSS变量
             this.setImmersiveTextColors(textColors.primary, textColors.secondary, textColors.accent);
@@ -6589,7 +6551,6 @@ mounted() {
             `;
             
             styleElement.textContent = css;
-            console.log('[Canvas Debug] 文字颜色CSS已更新，包括歌词样式');
           },
           
           // 生成随机色块
@@ -7016,11 +6977,19 @@ mounted() {
                 this.lyrics = parsedLyrics;
                 
                 // 解析翻译歌词并与原歌词时间对齐
-                if (response.tlyric) {
+                if (response.tlyric && response.tlyric.lyric) {
                   const parsedTranslations = this.parseLyrics(response.tlyric.lyric);
                   this.translationLyrics = this.alignTranslations(parsedLyrics, parsedTranslations);
                 } else {
                   this.translationLyrics = [];
+                }
+                
+                // 解析罗马音歌词并与原歌词时间对齐
+                if (response.romalrc && response.romalrc.lyric) {
+                  const parsedRoma = this.parseLyrics(response.romalrc.lyric);
+                  this.romaLyrics = this.alignTranslations(parsedLyrics, parsedRoma);
+                } else {
+                  this.romaLyrics = [];
                 }
                 
                 // 根据当前播放时间设置初始歌词位置
@@ -7053,7 +7022,9 @@ mounted() {
             
             const lines = lrcText.split('\n');
             const lyrics = [];
-            const timeRegex = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)/;
+            // 支持两种格式：[00:00.00] 和 [00:00:00]（第三段是秒的小数部分）
+            const timeRegex1 = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/; // 标准格式 [mm:ss.ms]
+            const timeRegex2 = /\[(\d{2}):(\d{2}):(\d{2,3})\](.*)/; // 冒号格式 [mm:ss:ms]
             
             for (let i = 0; i < lines.length; i++) {
               const line = lines[i];
@@ -7070,8 +7041,13 @@ mounted() {
                 continue;
               }
               
-              // 匹配时间标签和歌词文本
-              const match = trimmedLine.match(timeRegex);
+              // 尝试匹配标准格式
+              let match = trimmedLine.match(timeRegex1);
+              if (!match) {
+                // 尝试匹配冒号格式
+                match = trimmedLine.match(timeRegex2);
+              }
+              
               if (match) {
                 const minutes = parseInt(match[1]);
                 const seconds = parseInt(match[2]);
@@ -7229,21 +7205,22 @@ mounted() {
               let totalHeight = 0;
               let lineHeight = 80; // 5 * 16
               
-              // 计算到当前行的总高度，考虑是否有译文
+              // 计算到当前行的总高度，考虑是否有译文或罗马音
               for (let i = 0; i <= newIndex; i++) {
-                // 检查当前行是否有译文（确保translationLyrics[i]不为null）
+                // 检查当前行是否有译文或罗马音（确保不为null）
                 const hasTranslation = this.showTranslation && this.translationLyrics[i] != null;
+                const hasRoma = this.showRoma && this.romaLyrics[i] != null;
                 
                 if (i === newIndex) {
-                  // 当前行：如果有译文，使用更高的高度
-                  if (hasTranslation) {
+                  // 当前行：如果有译文或罗马音，使用更高的高度
+                  if (hasTranslation || hasRoma) {
                     lineHeight = 104; // 6.5rem * 16px
                   } else {
                     lineHeight = 88; // 5.5rem * 16px
                   }
                 } else {
-                  // 其他行：如果有译文，使用更高的高度
-                  if (hasTranslation) {
+                  // 其他行：如果有译文或罗马音，使用更高的高度
+                  if (hasTranslation || hasRoma) {
                     totalHeight += 96; // 6rem * 16px
                   } else {
                     totalHeight += 80; // 5rem * 16px
@@ -7343,6 +7320,19 @@ mounted() {
           // 切换翻译显示
           toggleTranslation() {
             this.showTranslation = !this.showTranslation;
+            // 如果打开译文，关闭罗马音
+            if (this.showTranslation) {
+              this.showRoma = false;
+            }
+          },
+          
+          // 切换罗马音显示
+          toggleRoma() {
+            this.showRoma = !this.showRoma;
+            // 如果打开罗马音，关闭译文
+            if (this.showRoma) {
+              this.showTranslation = false;
+            }
           },
           
           // 处理图片加载错误
@@ -7468,7 +7458,7 @@ mounted() {
   left: 0;
   right: 0;
   padding: 1.5rem;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+  background: transparent;
   color: white;
   text-align: left;
 }
@@ -7756,6 +7746,13 @@ mounted() {
   /* 确保译文不会影响原歌词的布局 */
   position: relative;
   z-index: 1;
+}
+
+/* 罗马音歌词样式 */
+.lyric-roma {
+  font-style: normal;
+  font-family: 'Arial', 'Helvetica', sans-serif;
+  letter-spacing: 0.05em;
 }
 
 /* 当前活跃歌词 */
