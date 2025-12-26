@@ -104,28 +104,65 @@ export class AIService {
             const startTime = Date.now()
             let thinkingTime = 0
 
+            console.log(`[AI Service] 开始处理请求 - 智能体: ${request.agent.name}, ID: ${request.agent.id}`)
+
+            // 获取智能体记忆并添加到对话历史中
+            let enhancedConversationHistory = [...request.conversationHistory]
+            
+            // 获取智能体记忆
+            const agentMemory = this.storageManager.getAgentMemory(request.agent.id)
+            console.log(`[AI Service] 获取智能体记忆:`, {
+                agentId: request.agent.id,
+                hasMemory: !!agentMemory,
+                memoryLength: agentMemory?.content?.length || 0,
+                conversationHistoryLength: enhancedConversationHistory.length
+            })
+
+            // 检查对话历史中是否已经包含记忆系统消息
+            const hasMemoryMessage = enhancedConversationHistory.some(
+                msg => msg.role === 'system' && msg.content && msg.content.includes('智能体记忆')
+            )
+            console.log(`[AI Service] 对话历史中是否已包含记忆消息:`, hasMemoryMessage)
+
+            // 如果智能体有记忆且对话历史中还没有记忆消息，则注入记忆
+            if (agentMemory && agentMemory.content && agentMemory.content.trim() && !hasMemoryMessage) {
+                const memorySystemMessage = {
+                    role: 'system',
+                    content: `智能体记忆（用于提供上下文信息）:\n${agentMemory.content}\n\n请基于以上记忆内容与用户进行自然的对话，不要明确提及这些记忆信息。`
+                }
+                enhancedConversationHistory.unshift(memorySystemMessage)
+                console.log(`[AI Service] 已注入智能体记忆到对话历史开头`, {
+                    memoryContentLength: agentMemory.content.length,
+                    newHistoryLength: enhancedConversationHistory.length
+                })
+            } else if (hasMemoryMessage) {
+                console.log(`[AI Service] 对话历史中已存在记忆消息，跳过注入`)
+            } else if (!agentMemory || !agentMemory.content) {
+                console.log(`[AI Service] 智能体无记忆内容，跳过注入`)
+            }
+
             let response
             if (settings.apiType === 'network') {
                 if (settings.wordByWordOutput && request.onProgress) {
                     // 流式输出模式
-                    response = await this.sendToNetworkAPIStream(request.agent, request.message, request.conversationHistory, settings, request.onProgress)
+                    response = await this.sendToNetworkAPIStream(request.agent, request.message, enhancedConversationHistory, settings, request.onProgress)
                     thinkingTime = Date.now() - startTime
                     response = this.addResponseMetadata(response, settings, thinkingTime)
                 } else {
                     // 普通模式
-                    response = await this.sendToNetworkAPI(request.agent, request.message, request.conversationHistory, settings)
+                    response = await this.sendToNetworkAPI(request.agent, request.message, enhancedConversationHistory, settings)
                     thinkingTime = Date.now() - startTime
                     response = this.addResponseMetadata(response, settings, thinkingTime)
                 }
             } else {
                 if (settings.wordByWordOutput && request.onProgress) {
                     // 本地模型的流式输出
-                    response = await this.sendToLocalModelStream(request.agent, request.message, request.conversationHistory, settings, request.onProgress)
+                    response = await this.sendToLocalModelStream(request.agent, request.message, enhancedConversationHistory, settings, request.onProgress)
                     thinkingTime = Date.now() - startTime
                     response = this.addResponseMetadata(response, settings, thinkingTime)
                 } else {
                     // 普通模式
-                    response = await this.sendToLocalModel(request.agent, request.message, request.conversationHistory, settings)
+                    response = await this.sendToLocalModel(request.agent, request.message, enhancedConversationHistory, settings)
                     thinkingTime = Date.now() - startTime
                     response = this.addResponseMetadata(response, settings, thinkingTime)
                 }

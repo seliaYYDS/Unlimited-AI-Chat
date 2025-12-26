@@ -99,6 +99,73 @@ export class StorageManager {
         }
     }
 
+    // 智能体记忆管理
+    getAgentMemory(agentId) {
+        try {
+            const memories = localStorage.getItem('ai_agent_memories')
+            const allMemories = memories ? JSON.parse(memories) : {}
+            return allMemories[agentId] || null
+        } catch (error) {
+            console.error('获取智能体记忆失败:', error)
+            return null
+        }
+    }
+
+    saveAgentMemory(agentId, memoryContent) {
+        try {
+            const memories = JSON.parse(localStorage.getItem('ai_agent_memories') || '{}')
+            memories[agentId] = {
+                content: memoryContent,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }
+            localStorage.setItem('ai_agent_memories', JSON.stringify(memories))
+            return true
+        } catch (error) {
+            console.error('保存智能体记忆失败:', error)
+            return false
+        }
+    }
+
+    updateAgentMemory(agentId, memoryContent) {
+        try {
+            const memories = JSON.parse(localStorage.getItem('ai_agent_memories') || '{}')
+            if (memories[agentId]) {
+                memories[agentId].content = memoryContent
+                memories[agentId].updatedAt = new Date().toISOString()
+                localStorage.setItem('ai_agent_memories', JSON.stringify(memories))
+                return true
+            }
+            return false
+        } catch (error) {
+            console.error('更新智能体记忆失败:', error)
+            return false
+        }
+    }
+
+    clearAgentMemory(agentId) {
+        try {
+            const memories = JSON.parse(localStorage.getItem('ai_agent_memories') || '{}')
+            delete memories[agentId]
+            localStorage.setItem('ai_agent_memories', JSON.stringify(memories))
+            return true
+        } catch (error) {
+            console.error('清除智能体记忆失败:', error)
+            return false
+        }
+    }
+
+    // 获取所有智能体记忆（用于管理界面）
+    getAllAgentMemories() {
+        try {
+            const memories = localStorage.getItem('ai_agent_memories')
+            return memories ? JSON.parse(memories) : {}
+        } catch (error) {
+            console.error('获取所有智能体记忆失败:', error)
+            return {}
+        }
+    }
+
     saveConversations(agentId, conversations) {
         try {
             const allConversations = JSON.parse(localStorage.getItem(this.conversationsKey) || '{}')
@@ -400,6 +467,7 @@ export class StorageManager {
             agents: this.getAgents(),
             conversations: JSON.parse(localStorage.getItem(this.conversationsKey) || '{}'),
             agentContexts: JSON.parse(localStorage.getItem('ai_agent_contexts') || '{}'),
+            agentMemories: this.getAllAgentMemories(),
             settings: this.getSettings(),
             exportTime: new Date().toISOString(),
             exportType: 'full_backup'
@@ -490,6 +558,10 @@ export class StorageManager {
 
             if (data.agentContexts) {
                 localStorage.setItem('ai_agent_contexts', JSON.stringify(data.agentContexts))
+            }
+
+            if (data.agentMemories) {
+                localStorage.setItem('ai_agent_memories', JSON.stringify(data.agentMemories))
             }
 
             if (data.settings) {

@@ -84,34 +84,33 @@
 
 
 
-      <!-- 全局导入导出按钮 -->
+      <!-- 全局按钮 2x2 网格 -->
 
-      <div v-show="sidebarExpanded" class="global-import-export">
-
-        <button class="import-export-btn" @click="importData">
-
+      <div v-show="sidebarExpanded" class="global-buttons-grid">
+        <button class="global-btn" @click="showStyleSettingsModal = true" title="样式设置">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+          </svg>
+          样式设置
+        </button>
+        <button class="global-btn" @click="showSettingsModal = true" title="AI设置">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+          </svg>
+          AI设置
+        </button>
+        <button class="global-btn" @click="importData" title="导入数据">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
-
           </svg>
-
           导入数据
-
         </button>
-
-        <button class="import-export-btn" @click="exportData">
-
+        <button class="global-btn" @click="exportData" title="导出数据">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-
             <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-
           </svg>
-
           导出数据
-
         </button>
-
       </div>
 
     </div>
@@ -148,18 +147,6 @@
           </div>
           
           <div class="dynamic-island-controls" :class="{ 'show-text': showDynamicIslandContent }">
-            <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="showStyleSettingsModal = true" title="样式设置">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
-              </svg>
-              <span v-if="showDynamicIslandContent" class="btn-text">样式</span>
-            </button>
-            <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="showSettingsModal = true" title="AI设置">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-              </svg>
-              <span v-if="showDynamicIslandContent" class="btn-text">AI设置</span>
-            </button>
             <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="exportCurrentAgent" :disabled="!currentAgent" title="导出智能体">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -171,6 +158,12 @@
                 <path d="M15 16h4v2h-4zm0-8h7v2h-6zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zM14 5h-3l-1-1H6L5 5H2v2h12z"/>
               </svg>
               <span v-if="showDynamicIslandContent" class="btn-text">清理</span>
+            </button>
+            <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="summarizeConversation" :disabled="!currentAgent || conversations.length === 0 || isSummarizing" title="总结对话并添加到记忆">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 4v1.38c-.83-.33-1.72-.5-2.61-.5-1.79 0-3.58.68-4.95 2.05l3.33 3.33h1.11v1.11c.86.86 1.98 1.31 3.11 1.36V15H6v3c0 1.1.9 2 2 2h10c1.66 0 3-1.34 3-3V4H9zm-1.11 6.41V8.26H5.61L4.57 7.22a5.07 5.07 0 0 1 1.82-.34c1.34 0 2.59.52 3.54 1.46l1.41 1.41-.2.2a2.7 2.7 0 0 0-.79 2.31H7.89zM12 11.39c0-.67.26-1.3.73-1.77l1.41-1.41a2.5 2.5 0 0 1 3.54 0l1.41 1.41c.47.47.73 1.1.73 1.77v2.22h-8.82v-2.22z"/>
+              </svg>
+              <span v-if="showDynamicIslandContent" class="btn-text">总结</span>
             </button>
           </div>
         </div>
@@ -438,7 +431,23 @@
 
     </Modal>
 
-
+    <!-- 智能体记忆弹窗 -->
+    <Modal
+      v-model:visible="showAgentMemoryModal"
+      title="智能体记忆"
+      size="auto"
+      @close="showAgentMemoryModal = false"
+      :show-footer="false"
+    >
+      <AgentMemory
+        v-if="showAgentMemoryModal && currentMemoryAgent"
+        :agent="currentMemoryAgent"
+        :storage-manager="storageManager"
+        @close="showAgentMemoryModal = false"
+        @notify="showNotification"
+        @memory-updated="onMemoryUpdated"
+      />
+    </Modal>
 
     <!-- 悬浮球组件 -->
 
@@ -1489,6 +1498,12 @@
           </svg>
           编辑
         </div>
+        <div class="context-menu-item" @click="openAgentMemoryModal(contextMenuAgent); closeContextMenu();">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          </svg>
+          智能体记忆
+        </div>
         <div class="context-menu-item" @click="showDeleteConfirm(contextMenuAgent); closeContextMenu();">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -1589,6 +1604,7 @@ import StyleSettings from './components/StyleSettings.vue'
 
 import FloatingBall from './components/FloatingBall.vue'
 import MusicPlayer from './components/MusicPlayer.vue'
+import AgentMemory from './components/AgentMemory.vue'
 
 export default {
   name: 'App',
@@ -1606,10 +1622,11 @@ export default {
 
     FloatingBall,
     
-    MusicPlayer
-
-  },
-  data() {
+        MusicPlayer,
+    
+        AgentMemory
+    
+      },  data() {
     return {
       storageManager: null,
       aiService: null,
@@ -1638,6 +1655,12 @@ export default {
       showSettingsModal: false,
 
       showStyleSettingsModal: false,
+
+      showAgentMemoryModal: false,
+
+      currentMemoryAgent: null,
+
+      isSummarizing: false,
 
       showConfirmModal: false,
 
@@ -2549,6 +2572,91 @@ export default {
       this.agentForm = { ...agent }
       this.showCreateModal = true
       this.showEditModal = true
+    },
+
+    openAgentMemoryModal(agent) {
+      this.currentMemoryAgent = agent
+      this.showAgentMemoryModal = true
+    },
+
+    onMemoryUpdated(agentId) {
+      // 如果是当前智能体的记忆更新，可以在这里处理相关逻辑
+      if (this.currentAgent && this.currentAgent.id === agentId) {
+        // 可以在这里更新当前智能体的记忆状态显示
+        console.log('当前智能体记忆已更新')
+      }
+    },
+
+    async summarizeConversation() {
+      if (!this.currentAgent || this.conversations.length === 0) {
+        this.showNotification('没有对话内容可以总结', 'warning')
+        return
+      }
+
+      this.isSummarizing = true
+      
+      try {
+        // 收集对话内容
+        const conversationText = this.conversations
+          .map(msg => `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`)
+          .join('\n\n')
+
+        // 构建总结提示词
+        const summaryPrompt = `请总结以下对话内容，提取关键信息、重要结论和用户偏好，生成简洁的智能体记忆。记忆内容应该便于AI在后续对话中参考。
+
+对话内容：
+${conversationText}
+
+请生成一段简洁、结构化的记忆内容，包含：
+1. 重要信息和结论
+2. 用户偏好和特点
+3. 需要记住的上下文信息
+
+记忆内容：`
+
+        // 发送给AI进行总结
+        const response = await this.aiService.sendMessage(
+          { ...this.currentAgent, prompt: this.currentAgent.prompt + '\n\n' + summaryPrompt },
+          summaryPrompt,
+          []
+        )
+
+        if (response && (response.content || response.response)) {
+          // 获取AI返回的内容（兼容不同的响应格式）
+          const content = response.content || response.response
+          
+          // 保存到智能体记忆
+          const success = this.storageManager.saveAgentMemory(
+            this.currentAgent.id, 
+            content.trim()
+          )
+
+          if (success) {
+            // 清空对话记录
+            this.storageManager.saveConversations(this.currentAgent.id, [])
+            this.conversations = []
+            
+            this.showNotification('对话已总结并保存到智能体记忆', 'success')
+            
+            // 如果当前智能体有记忆弹窗打开，更新记忆内容
+            if (this.showAgentMemoryModal && this.currentMemoryAgent && this.currentMemoryAgent.id === this.currentAgent.id) {
+              // 重新加载记忆内容
+              this.$nextTick(() => {
+                this.currentMemoryAgent = { ...this.currentAgent }
+              })
+            }
+          } else {
+            this.showNotification('保存记忆失败', 'error')
+          }
+        } else {
+          this.showNotification('总结对话失败', 'error')
+        }
+      } catch (error) {
+        console.error('总结对话失败:', error)
+        this.showNotification('总结对话失败，请重试', 'error')
+      } finally {
+        this.isSummarizing = false
+      }
     },
 
     async saveAgent() {
@@ -5718,13 +5826,13 @@ export default {
 
 
 
-/* 全局导入导出按钮样式 */
+/* 全局按钮 2x2 网格样式 */
 
-.global-import-export {
+.global-buttons-grid {
 
-  display: flex;
+  display: grid;
 
-  flex-direction: column;
+  grid-template-columns: 1fr 1fr;
 
   gap: 8px;
 
@@ -5736,7 +5844,7 @@ export default {
 
 
 
-.import-export-btn {
+.global-btn {
 
   display: flex;
 
@@ -5746,7 +5854,7 @@ export default {
 
   gap: 6px;
 
-  padding: 8px 12px;
+  padding: 10px 12px;
 
   border: 1px solid var(--border-color);
 
@@ -5760,13 +5868,15 @@ export default {
 
   transition: all 0.2s ease;
 
-  font-size: 14px;
+  font-size: 13px;
+
+  white-space: nowrap;
 
 }
 
 
 
-.import-export-btn:hover {
+.global-btn:hover {
 
   background: var(--bg-hover);
 
@@ -5774,13 +5884,17 @@ export default {
 
   color: var(--primary-color);
 
+  transform: translateY(-1px);
+
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+
 }
 
 
 
-.import-export-btn svg {
+.global-btn svg {
 
-  margin-right: 4px;
+  flex-shrink: 0;
 
 }
 
@@ -5960,7 +6074,7 @@ export default {
 
 
 
-.sidebar.collapsed .global-import-export {
+.sidebar.collapsed .global-buttons-grid {
 
   display: none;
 
