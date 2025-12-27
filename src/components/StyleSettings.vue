@@ -1115,7 +1115,7 @@ export default {
         this.systemFonts = fonts
       } catch (error) {
         console.error('加载系统字体失败:', error)
-        this.showNotification('加载系统字体失败', 'error')
+        this.showNotification('加载系统字体失败', 'danger')
       } finally {
         this.loadingSystemFonts = false
       }
@@ -1143,7 +1143,7 @@ export default {
     // AI生成配色
     async generateAIColors() {
       if (!this.aiColorPrompt.trim()) {
-        this.showNotification('请输入配色意象', 'error')
+        this.showNotification('请输入配色意象', 'warning')
         return
       }
 
@@ -1166,7 +1166,7 @@ export default {
         this.showNotification('配色生成成功', 'success')
       } catch (error) {
         console.error('生成配色失败:', error)
-        this.showNotification(`生成配色失败: ${error.message}`, 'error')
+        this.showNotification(`生成配色失败: ${error.message}`, 'danger')
       } finally {
         this.generatingColors = false
       }
@@ -1331,7 +1331,7 @@ export default {
     // 生成高级渐变配色
     async generateAdvancedGradientColors() {
       if (!this.aiColorPrompt.trim()) {
-        this.showNotification('请输入配色意象', 'error')
+        this.showNotification('请输入配色意象', 'warning')
         return
       }
 
@@ -1356,7 +1356,7 @@ export default {
         this.showNotification('配色生成成功', 'success')
       } catch (error) {
         console.error('生成高级配色失败:', error)
-        this.showNotification(`生成配色失败: ${error.message}`, 'error')
+        this.showNotification(`生成配色失败: ${error.message}`, 'danger')
       } finally {
         this.generatingColors = false
       }

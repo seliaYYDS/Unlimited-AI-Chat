@@ -2586,7 +2586,7 @@ mounted() {
         this.searchResults = [];
         this.currentPlaylist = [];
         this.totalResults = 0;
-        this.showNotification('搜索歌曲失败，请稍后重试', 'error');
+        this.showNotification('搜索歌曲失败，请稍后重试', 'danger');
       }
     },
 
@@ -2637,7 +2637,7 @@ mounted() {
         this.playlistResults = [];
         this.currentPlaylist = [];
         this.totalResults = 0;
-        this.showNotification('搜索歌单失败，请稍后重试', 'error');
+        this.showNotification('搜索歌单失败，请稍后重试', 'danger');
       }
     },
 
@@ -2686,7 +2686,7 @@ mounted() {
         this.artistSearchResults = [];
         this.currentPlaylist = [];
         this.totalResults = 0;
-        this.showNotification('搜索歌手失败，请稍后重试', 'error');
+        this.showNotification('搜索歌手失败，请稍后重试', 'danger');
       }
     },
 
@@ -3190,7 +3190,7 @@ mounted() {
         
       } catch (error) {
         console.error('加载歌曲失败:', error);
-        this.showNotification('加载歌曲失败', 'error');
+        this.showNotification('加载歌曲失败', 'danger');
       } finally {
         this.isLoadingSong = false;
       }
@@ -4722,7 +4722,7 @@ mounted() {
         this.loadHomePageData();
       } catch (error) {
         console.error('goToHomePage: 错误', error);
-        this.showNotification('返回主页失败', 'error');
+        this.showNotification('返回主页失败', 'danger');
       }
     },
 
@@ -4974,7 +4974,7 @@ mounted() {
         this.getPlaylistDetail(playlist.id);
       } catch (error) {
         console.error('openPlaylist: 错误', error);
-        this.showNotification('打开歌单失败', 'error');
+        this.showNotification('打开歌单失败', 'danger');
       }
     },
 
@@ -5334,7 +5334,7 @@ mounted() {
       }
       
       if (!song || !song.id) {
-        this.showNotification('无效的歌曲信息', 'error');
+        this.showNotification('无效的歌曲信息', 'danger');
         return;
       }
       
@@ -5375,12 +5375,12 @@ mounted() {
             console.log('收藏状态更新成功');
           } else {
             console.error('API返回错误:', data);
-            this.showNotification(data.message || '操作失败', 'error');
+            this.showNotification(data.message || '操作失败', 'danger');
           }
         })
         .catch(error => {
           console.error('请求失败:', error);
-          this.showNotification('网络错误，请稍后重试', 'error');
+          this.showNotification('网络错误，请稍后重试', 'danger');
         });
     },
 
@@ -5447,14 +5447,14 @@ mounted() {
             // 重新加载用户歌单
             await this.loadUserPlaylists();
           } else {
-            this.showNotification(data.message || '创建失败', 'error');
+            this.showNotification(data.message || '创建失败', 'danger');
           }
         } else {
-          this.showNotification('网络错误，请稍后重试', 'error');
+          this.showNotification('网络错误，请稍后重试', 'danger');
         }
       } catch (error) {
         console.error('createPlaylist: 创建失败', error);
-        this.showNotification('创建失败，请稍后重试', 'error');
+        this.showNotification('创建失败，请稍后重试', 'danger');
       } finally {
         this.isCreatingPlaylist = false;
       }
@@ -5508,14 +5508,14 @@ mounted() {
             // 重新加载用户歌单
             await this.loadUserPlaylists();
           } else {
-            this.showNotification(data.message || '更新失败', 'error');
+            this.showNotification(data.message || '更新失败', 'danger');
           }
         } else {
-          this.showNotification('网络错误，请稍后重试', 'error');
+          this.showNotification('网络错误，请稍后重试', 'danger');
         }
       } catch (error) {
         console.error('updatePlaylist: 更新失败', error);
-        this.showNotification('更新失败，请稍后重试', 'error');
+        this.showNotification('更新失败，请稍后重试', 'danger');
       } finally {
         this.isUpdatingPlaylist = false;
       }
@@ -5543,14 +5543,14 @@ mounted() {
             // 重新加载用户歌单
             await this.loadUserPlaylists();
           } else {
-            this.showNotification(data.message || '删除失败', 'error');
+            this.showNotification(data.message || '删除失败', 'danger');
           }
         } else {
-          this.showNotification('网络错误，请稍后重试', 'error');
+          this.showNotification('网络错误，请稍后重试', 'danger');
         }
       } catch (error) {
         console.error('deletePlaylist: 删除失败', error);
-        this.showNotification('删除失败，请稍后重试', 'error');
+        this.showNotification('删除失败，请稍后重试', 'danger');
       }
     },
 
@@ -5562,7 +5562,7 @@ mounted() {
       }
 
       if (!playlist || !playlist.id) {
-        this.showNotification('无效的歌单信息', 'error');
+        this.showNotification('无效的歌单信息', 'danger');
         return;
       }
 
@@ -5585,14 +5585,14 @@ mounted() {
             // 重新加载用户歌单
             await this.loadUserPlaylists();
           } else {
-            this.showNotification(data.message || '操作失败', 'error');
+            this.showNotification(data.message || '操作失败', 'danger');
           }
         } else {
-          this.showNotification('网络错误，请稍后重试', 'error');
+          this.showNotification('网络错误，请稍后重试', 'danger');
         }
       } catch (error) {
         console.error('toggleSubscribePlaylist: 操作失败', error);
-        this.showNotification('操作失败，请稍后重试', 'error');
+        this.showNotification('操作失败，请稍后重试', 'danger');
       }
     },
 
@@ -5750,14 +5750,14 @@ mounted() {
             // 重新加载用户歌单
             await this.loadUserPlaylists();
           } else {
-            this.showNotification(data.message || '删除失败', 'error');
+            this.showNotification(data.message || '删除失败', 'danger');
           }
         } else {
-          this.showNotification('网络错误，请稍后重试', 'error');
+          this.showNotification('网络错误，请稍后重试', 'danger');
         }
       } catch (error) {
         console.error('删除歌单失败:', error);
-        this.showNotification('删除失败，请稍后重试', 'error');
+        this.showNotification('删除失败，请稍后重试', 'danger');
       } finally {
         this.closeDeletePlaylistConfirm();
       }
@@ -5898,13 +5898,13 @@ mounted() {
               this.showNotification(`已收藏《${song.name}》`, 'success');
             }
           } else {
-            this.showNotification(data.message || '操作失败', 'error');
+            this.showNotification(data.message || '操作失败', 'danger');
             console.error('收藏/取消收藏失败:', data);
           }
         })
         .catch(error => {
           console.error('收藏/取消收藏歌曲出错:', error);
-          this.showNotification('操作失败，请稍后重试', 'error');
+          this.showNotification('操作失败，请稍后重试', 'danger');
         })
         .finally(() => {
           // 延迟关闭菜单，确保操作完成

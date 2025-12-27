@@ -40,10 +40,10 @@
     @dragend="onDragEnd($event)"
   >
           <div class="agent-avatar">
-            <div v-if="agent.avatar && agent.avatar.startsWith('data:image')" class="avatar-image">
-              <img :src="agent.avatar" alt="智能体头像" />
+            <div v-if="getAgentAvatar(agent) && getAgentAvatar(agent).type === 'image'" class="avatar-image">
+              <img :src="getAgentAvatar(agent).data" alt="智能体头像" />
             </div>
-            <div v-else class="avatar-icon">{{ agent.avatar || '🤖' }}</div>
+            <div v-else class="avatar-icon">{{ getAgentAvatar(agent)?.data || agent.avatar || '🤖' }}</div>
           </div>
           <div class="agent-info">
             <div class="agent-name">{{ agent.name }}</div>
@@ -121,10 +121,10 @@
       <div class="dynamic-island" :class="{ 'has-music': isMusicPlaying && currentMusic && settings.enableDynamicIslandMusicInfo }" v-if="currentAgent" @mouseenter="showDynamicIslandContent = true" @mouseleave="showDynamicIslandContent = false">
         <div class="dynamic-island-content">
           <div class="dynamic-island-avatar">
-            <div v-if="currentAgent.avatar && currentAgent.avatar.startsWith('data:image')" class="avatar-image">
-              <img :src="currentAgent.avatar" alt="智能体头像" />
+            <div v-if="getAgentAvatar(currentAgent) && getAgentAvatar(currentAgent).type === 'image'" class="avatar-image">
+              <img :src="getAgentAvatar(currentAgent).data" alt="智能体头像" />
             </div>
-            <div v-else class="avatar-icon">{{ currentAgent.avatar || '🤖' }}</div>
+            <div v-else class="avatar-icon">{{ getAgentAvatar(currentAgent)?.data || currentAgent.avatar || '🤖' }}</div>
           </div>
           
           <div class="dynamic-island-main-content">
@@ -158,6 +158,12 @@
                 <path d="M15 16h4v2h-4zm0-8h7v2h-6zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zM14 5h-3l-1-1H6L5 5H2v2h12z"/>
               </svg>
               <span v-if="showDynamicIslandContent" class="btn-text">清理</span>
+            </button>
+            <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="openAgentMemoryModal(currentAgent)" :disabled="!currentAgent" title="智能体记忆">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+              </svg>
+              <span v-if="showDynamicIslandContent" class="btn-text">记忆</span>
             </button>
             <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="summarizeConversation" :disabled="!currentAgent || conversations.length === 0 || isSummarizing" title="总结对话并添加到记忆">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -497,35 +503,8 @@
       </div>
 
       <div class="form-group">
-
         <label>智能体头像</label>
-
-        <div class="avatar-selection-hint">
-
-          <p>从预设头像中选择：</p>
-
-          <div class="avatar-selection">
-
-            <div
-
-              v-for="avatar in availableAvatars"
-
-              :key="avatar"
-
-              :class="['avatar-option', { active: agentForm.avatar === avatar }]"
-
-              @click="agentForm.avatar = avatar"
-
-            >
-
-              <div class="avatar-preview">{{ avatar }}</div>
-
-            </div>
-
-          </div>
-
-        </div>
-
+        <AvatarUpload v-model="agentForm.avatar" />
       </div>
 
       <div class="form-group">
@@ -1308,155 +1287,329 @@
 
     <!-- 草稿纸界面 -->
 
-    <div v-if="showNotepadModal" class="notepad-modal-overlay show" @click="closeNotepadModal">
+        <div v-if="showNotepadModal" class="notepad-modal-overlay show" @click="closeNotepadModal">
 
-      <div class="notepad-modal-content" @click.stop>
+    
 
-        <div class="notepad-tools">
+          <div class="notepad-modal-content" @click.stop>
 
-          <button 
+    
 
-            class="tool-btn" 
+            <!-- 弱化的工具栏 -->
 
-            :class="{ 'active': currentTool === 'pen' }" 
+            <div class="notepad-tools minimal">
 
-            @click="selectTool('pen')"
+    
 
-            title="画笔工具 (P)"
+              <div class="tools-group">
 
-            data-tooltip="画笔工具 (P)"
+    
 
-          >
+                <button
 
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    
 
-              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                  class="tool-btn"
 
-            </svg>
+    
 
-            <span class="tool-indicator" v-if="currentTool === 'pen'"></span>
+                  :class="{ 'active': currentTool === 'pen' }"
 
-          </button>
+    
 
-          <button 
+                  @click="selectTool('pen')"
 
-            class="tool-btn" 
+    
 
-            :class="{ 'active': currentTool === 'eraser' }" 
+                  title="画笔工具 (P)"
 
-            @click="selectTool('eraser')"
+    
 
-            title="橡皮擦 (E)"
+                >
 
-            data-tooltip="橡皮擦 (E)"
+    
 
-          >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
 
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    
 
-              <path d="M21.99 4c0-1.1-.89-2-2-2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4zm-10 10.5v2h-2v-2h2zm6 0v2h-2v-2h2zm-6-3v2h-2v-2h2zm6 0v2h-2v-2h2zm-6-3v2h-2v-2h2zm6 0v2h-2v-2h2z"/>
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
 
-            </svg>
+    
 
-            <span class="tool-indicator" v-if="currentTool === 'eraser'"></span>
+                  </svg>
 
-          </button>
+    
 
-          <div class="color-picker-wrapper">
+                </button>
 
-            <input 
+    
 
-              type="color" 
+                <button
 
-              v-model="penColor" 
+    
 
-              class="color-picker"
+                
 
-              title="选择颜色 (C)"
+    
 
-              data-tooltip="选择颜色 (C)"
+                              class="tool-btn"
 
-              @change="onColorChange"
+    
 
-            >
+                
 
-            <span class="color-preview" :style="{ backgroundColor: penColor }"></span>
+    
 
-          </div>
+                              :class="{ 'active': currentTool === 'eraser' }"
 
-          <div class="size-slider-wrapper">
+    
 
-            <input 
+                
 
-              type="range" 
+    
 
-              v-model="penSize" 
+                              @click="selectTool('eraser')"
 
-              min="1" 
+    
 
-              max="20" 
+                
 
-              class="size-slider"
+    
 
-              title="画笔大小 (S)"
+                              title="橡皮擦 (E)"
 
-              data-tooltip="画笔大小 (S)"
+    
 
-              @input="onSizeChange"
+                
 
-            >
+    
 
-            <span 
+                            >
 
-              class="size-value" 
+    
 
-              :class="{ 'updated': sizeUpdated }"
+                
 
-              ref="sizeValue"
+    
 
-            >{{ penSize }}</span>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
 
-          </div>
+    
 
-          <button 
+                
 
-            class="tool-btn clear-btn" 
+    
 
-            @click="clearCanvas"
+                                <path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l10.6-10.6c.79-.78 2.05-.78 2.83 0zM4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l8.48-8.48-6.37-6.37L4.22 15.58z"/>
 
-            title="清空画布 (Delete)"
+    
 
-            data-tooltip="清空画布 (Delete)"
+                
 
-          >
+    
 
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                              </svg>
 
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+    
 
-            </svg>
+                
 
-          </button>
+    
 
-          <!-- 添加状态指示器 -->
+                            </button>
 
-          <div class="status-indicator" v-if="showStatus">
+    
 
-            <span class="status-text">{{ statusText }}</span>
+              </div>
 
-          </div>
+    
 
-        </div>
+              <div class="tools-divider"></div>
 
-        <canvas 
+    
 
-          ref="notepadCanvas" 
+              <div class="tools-group">
 
-          class="notepad-canvas"
+    
 
-          @mousedown="startDrawing"
+                <div class="color-picker-wrapper">
 
-          @mousemove="draw"
+    
+
+                  <input
+
+    
+
+                    type="color"
+
+    
+
+                    v-model="penColor"
+
+    
+
+                    class="color-picker"
+
+    
+
+                    title="选择颜色 (C)"
+
+    
+
+                    @change="onColorChange"
+
+    
+
+                  >
+
+    
+
+                  <span class="color-preview" :style="{ backgroundColor: penColor }"></span>
+
+    
+
+                </div>
+
+    
+
+                <div class="size-slider-wrapper">
+
+    
+
+                  <input
+
+    
+
+                    type="range"
+
+    
+
+                    v-model="penSize"
+
+    
+
+                    min="1"
+
+    
+
+                    max="20"
+
+    
+
+                    class="size-slider"
+
+    
+
+                    title="画笔大小 (S)"
+
+    
+
+                    @input="onSizeChange"
+
+    
+
+                  >
+
+    
+
+                  <span
+
+    
+
+                    class="size-value"
+
+    
+
+                    :class="{ 'updated': sizeUpdated }"
+
+    
+
+                    ref="sizeValue"
+
+    
+
+                  >{{ penSize }}</span>
+
+    
+
+                </div>
+
+    
+
+              </div>
+
+    
+
+              <div class="tools-divider"></div>
+
+    
+
+              <div class="tools-group">
+
+    
+
+                <button
+
+    
+
+                  class="tool-btn clear-btn"
+
+    
+
+                  @click="clearCanvas"
+
+    
+
+                  title="清空画布 (Delete)"
+
+    
+
+                >
+
+    
+
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+
+    
+
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+
+    
+
+                  </svg>
+
+    
+
+                </button>
+
+    
+
+              </div>
+
+    
+
+            </div>
+
+    
+
+            <canvas
+
+    
+
+              ref="notepadCanvas"
+
+    
+
+              class="notepad-canvas"
+
+    
+
+              @mousedown="startDrawing"
+
+    
+
+              @mousemove="draw"
 
           @mouseup="stopDrawing"
 
@@ -1573,6 +1726,7 @@
 
 <script>
 import { StorageManager } from './storage.js'
+import { conversationDB } from './indexedDB.js'
 
 import { ThemeManager } from './utils/theme.js'
 
@@ -1583,24 +1737,15 @@ import { MusicColorExtractor } from './utils/musicColorExtractor.js'
 import { AIService } from './aiService.js'
 
 import Modal from './components/Modal.vue'
-
-
+import AvatarUpload from './components/AvatarUpload.vue'
 
 import CustomSelect from './components/CustomSelect.vue'
 
-
-
 import CustomSlider from './components/CustomSlider.vue'
-
-
 
 import CustomCheckbox from './components/CustomCheckbox.vue'
 
-
-
 import StyleSettings from './components/StyleSettings.vue'
-
-
 
 import FloatingBall from './components/FloatingBall.vue'
 import MusicPlayer from './components/MusicPlayer.vue'
@@ -1624,7 +1769,9 @@ export default {
     
         MusicPlayer,
     
-        AgentMemory
+        AgentMemory,
+    
+        AvatarUpload
     
       },  data() {
     return {
@@ -1913,9 +2060,6 @@ export default {
       notifications: [],
       notificationId: 0,
 
-      // 可用头像列表
-      availableAvatars: ['🤖', '👤', '👩', '👨', '🧠', '💡', '🌟', '🎭', '🎨', '🔮', '📚', '⚡', '🔥', '💎', '🎯', '🚀', '🌈', '🌙', '🌞', '🌺', '🐶', '🐱', '🦊', '🐻', '🐼', '🦁', '🐯', '🦄', '🐢', '🐙', '🦋', '🐝', '🍎'],
-
       // 推荐回复相关状态
 
       showSuggestionsModal: false,
@@ -2111,13 +2255,13 @@ export default {
 
   },
 
-  beforeUnmount() {
+  async beforeUnmount() {
 
     // 在组件卸载前保存当前智能体的对话（如果存在）
 
     if (this.currentAgent && this.conversations) {
 
-      this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+      await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
 
     }
 
@@ -2214,6 +2358,19 @@ export default {
     }
   },
   methods: {
+    // 获取智能体头像
+    getAgentAvatar(agent) {
+      if (!agent.avatar) {
+        return null
+      }
+      // 如果是 URL，显示为图片
+      if (agent.avatar.startsWith('http://') || agent.avatar.startsWith('https://')) {
+        return { data: agent.avatar, type: 'image' }
+      }
+      // 如果是表情符号或文本，直接返回
+      return { data: agent.avatar, type: 'text' }
+    },
+
     // 主题切换
 
     toggleTheme() {
@@ -2382,22 +2539,39 @@ export default {
 
     // 智能体管理
 
-    selectAgent(agent) {
+    async selectAgent(agent) {
 
       // 在切换智能体前保存当前智能体的对话（如果存在）
 
       if (this.currentAgent && this.conversations) {
 
-        this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+        await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
 
       }
 
-      
-
       this.currentAgent = agent
 
-      this.conversations = this.storageManager.getConversations(agent.id)
+      this.conversations = await this.storageManager.getConversations(agent.id)
 
+      // 加载图片数据
+      await this.loadImagesForConversations()
+    },
+
+    // 加载对话中的图片数据
+    async loadImagesForConversations() {
+      for (const message of this.conversations) {
+        // 如果消息有图片标记但没有图片数据，则从 IndexedDB 加载
+        if (message.hasImage && !message.imageData) {
+          try {
+            const imageData = await conversationDB.getImage(message.id)
+            if (imageData) {
+              message.imageData = imageData
+            }
+          } catch (error) {
+            console.error('加载图片失败:', error)
+          }
+        }
+      }
     },
 
     // AI填写智能体信息
@@ -2633,7 +2807,7 @@ ${conversationText}
 
           if (success) {
             // 清空对话记录
-            this.storageManager.saveConversations(this.currentAgent.id, [])
+            await this.storageManager.saveConversations(this.currentAgent.id, [])
             this.conversations = []
             
             this.showNotification('对话已总结并保存到智能体记忆', 'success')
@@ -2646,14 +2820,14 @@ ${conversationText}
               })
             }
           } else {
-            this.showNotification('保存记忆失败', 'error')
+            this.showNotification('保存记忆失败', 'danger')
           }
         } else {
-          this.showNotification('总结对话失败', 'error')
+          this.showNotification('总结对话失败', 'danger')
         }
       } catch (error) {
         console.error('总结对话失败:', error)
-        this.showNotification('总结对话失败，请重试', 'error')
+        this.showNotification('总结对话失败，请重试', 'danger')
       } finally {
         this.isSummarizing = false
       }
@@ -2664,9 +2838,6 @@ ${conversationText}
         this.showNotification('请输入智能体名称', 'warning')
         return
       }
-
-      // 调试：检查头像数据
-      console.log('App: Saving agent with avatar:', this.agentForm.avatar ? this.agentForm.avatar.substring(0, 50) + '...' : 'No avatar')
 
       if (this.showEditModal) {
         // 编辑现有智能体
@@ -2752,17 +2923,22 @@ ${conversationText}
     },
 
     // 导出单个智能体
-    exportSingleAgent(agent) {
-      const data = this.storageManager.exportSingleAgent(agent.id)
-      const blob = new Blob([data], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `ai-agent-${agent.name}-${new Date().toISOString().split('T')[0]}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-      this.showNotification(`智能体 "${agent.name}" 导出成功`, 'success')
-      this.closeContextMenu()
+    async exportSingleAgent(agent) {
+      try {
+        const data = await this.storageManager.exportSingleAgent(agent.id)
+        const blob = new Blob([data], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `ai-agent-${agent.name}-${new Date().toISOString().split('T')[0]}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+        this.showNotification(`智能体 "${agent.name}" 导出成功`, 'success')
+        this.closeContextMenu()
+      } catch (error) {
+        console.error('导出智能体失败:', error)
+        this.showNotification('导出失败', 'danger')
+      }
     },
 
     // 复制智能体
@@ -2795,7 +2971,7 @@ ${conversationText}
       this.inputMessage = ''
 
       // 添加用户消息
-      const userMessage = this.storageManager.addMessage(this.currentAgent.id, {
+      const userMessage = await this.storageManager.addMessage(this.currentAgent.id, {
         role: 'user',
         content: message
       })
@@ -2819,10 +2995,10 @@ ${conversationText}
             this.currentAgent,
             message,
             this.conversations,
-            (progressText) => {
+            async (progressText) => {
               // 更新或创建AI消息
               if (!aiMessage) {
-                aiMessage = this.storageManager.addMessage(this.currentAgent.id, {
+                aiMessage = await this.storageManager.addMessage(this.currentAgent.id, {
                   role: 'assistant',
                   content: progressText.response || progressText
                 })
@@ -2835,10 +3011,10 @@ ${conversationText}
                 if (messageIndex !== -1) {
                   this.conversations[messageIndex].content = progressText.response || progressText
 
-                  // 节流存储操作，避免频繁写入localStorage
+                  // 节流存储操作，避免频繁写入IndexedDB
                   const now = Date.now()
                   if (now - lastSaveTime >= SAVE_INTERVAL) {
-                    this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+                    await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
                     lastSaveTime = now
                   }
                 }
@@ -2855,12 +3031,12 @@ ${conversationText}
                 tokens: response.tokens,
                 thinkingTime: response.thinkingTime
               }
-              // 最终保存到localStorage
-              this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+              // 最终保存到IndexedDB
+              await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
             }
           } else {
             // 如果没有逐字输出，添加最终消息
-            const finalMessage = this.storageManager.addMessage(this.currentAgent.id, {
+            const finalMessage = await this.storageManager.addMessage(this.currentAgent.id, {
               role: 'assistant',
               content: response.response || response,
               metadata: {
@@ -2881,7 +3057,7 @@ ${conversationText}
           )
 
           // 添加AI回复
-          const aiMessage = this.storageManager.addMessage(this.currentAgent.id, {
+          const aiMessage = await this.storageManager.addMessage(this.currentAgent.id, {
             role: 'assistant',
             content: response.response || response,
             metadata: {
@@ -2894,9 +3070,8 @@ ${conversationText}
 
             this.conversations.push(aiMessage)
 
-            // 保存到localStorage
-
-            this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+            // 保存到IndexedDB
+            await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
 
           }
 
@@ -2924,9 +3099,9 @@ ${conversationText}
       this.showConfirmModal = true
     },
 
-    clearCurrentConversation() {
+    async clearCurrentConversation() {
       if (this.currentAgent) {
-        const success = this.storageManager.clearConversation(this.currentAgent.id)
+        const success = await this.storageManager.clearConversation(this.currentAgent.id)
         if (success) {
           this.conversations = []
           this.showNotification('对话已清除', 'success')
@@ -2954,13 +3129,13 @@ ${conversationText}
     },
 
     // 手动清理当前智能体的聊天记录
-    manualCleanupCurrentAgentConversation() {
+    async manualCleanupCurrentAgentConversation() {
       if (!this.currentAgent) {
         this.showNotification('请先选择一个智能体', 'warning')
         return
       }
-      
-      const success = this.storageManager.clearConversation(this.currentAgent.id)
+
+      const success = await this.storageManager.clearConversation(this.currentAgent.id)
       if (success) {
         this.conversations = []
         this.showNotification(`已清理智能体 "${this.currentAgent.name}" 的聊天记录`, 'success')
@@ -2984,21 +3159,26 @@ ${conversationText}
     },
 
     // 导出当前智能体
-    exportCurrentAgent() {
+    async exportCurrentAgent() {
       if (!this.currentAgent) {
         this.showNotification('请先选择一个智能体', 'warning')
         return
       }
-      
-      const data = this.storageManager.exportSingleAgent(this.currentAgent.id)
-      const blob = new Blob([data], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `ai-agent-${this.currentAgent.name}-${new Date().toISOString().split('T')[0]}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-      this.showNotification(`智能体 "${this.currentAgent.name}" 导出成功`, 'success')
+
+      try {
+        const data = await this.storageManager.exportSingleAgent(this.currentAgent.id)
+        const blob = new Blob([data], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `ai-agent-${this.currentAgent.name}-${new Date().toISOString().split('T')[0]}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+        this.showNotification(`智能体 "${this.currentAgent.name}" 导出成功`, 'success')
+      } catch (error) {
+        console.error('导出智能体失败:', error)
+        this.showNotification('导出失败', 'danger')
+      }
     },
 
     // 拖拽功能相关方法
@@ -3202,37 +3382,42 @@ ${conversationText}
     },
 
     // 数据导入导出
-    exportData() {
-      const data = this.storageManager.exportData()
-      const blob = new Blob([data], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `ai-chat-backup-${new Date().toISOString().split('T')[0]}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-      this.showNotification('数据导出成功', 'success')
+    async exportData() {
+      try {
+        const data = await this.storageManager.exportData()
+        const blob = new Blob([data], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `ai-chat-backup-${new Date().toISOString().split('T')[0]}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+        this.showNotification('数据导出成功', 'success')
+      } catch (error) {
+        console.error('导出数据失败:', error)
+        this.showNotification('数据导出失败', 'danger')
+      }
     },
 
     importData() {
       const input = document.createElement('input')
       input.type = 'file'
       input.accept = '.json'
-      input.onchange = (e) => {
+      input.onchange = async (e) => {
         const file = e.target.files[0]
         if (file) {
           const reader = new FileReader()
-          reader.onload = (event) => {
+          reader.onload = async (event) => {
             try {
               const data = JSON.parse(event.target.result)
 
               // 检测导入数据类型
               if (data.exportType === 'single_agent') {
                 // 导入单个智能体
-                this.importSingleAgent(event.target.result)
+                await this.importSingleAgent(event.target.result)
               } else {
                 // 导入完整备份数据
-                const success = this.storageManager.importData(event.target.result)
+                const success = await this.storageManager.importData(event.target.result)
                 if (success) {
                   this.agents = this.storageManager.getAgents()
                   this.showNotification('数据导入成功', 'success')
@@ -3252,9 +3437,9 @@ ${conversationText}
     },
 
     // 导入单个智能体
-    importSingleAgent(jsonData) {
+    async importSingleAgent(jsonData) {
       try {
-        const newAgent = this.storageManager.importSingleAgent(jsonData)
+        const newAgent = await this.storageManager.importSingleAgent(jsonData)
         if (newAgent) {
           this.agents = this.storageManager.getAgents()
           this.showNotification(`智能体 "${newAgent.name}" 导入成功`, 'success')
@@ -3344,11 +3529,11 @@ ${conversationText}
 
     // 处理页面卸载事件，确保保存数据
 
-    handlePageUnload() {
+    async handlePageUnload() {
 
       if (this.currentAgent && this.conversations) {
 
-        this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+        await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
 
       }
 
@@ -3519,7 +3704,7 @@ ${conversationText}
 
 
 
-    saveEditedMessage() {
+    async saveEditedMessage() {
 
       if (!this.editingMessage || !this.editingMessageContent.trim()) {
 
@@ -3547,7 +3732,7 @@ ${conversationText}
 
         // 保存到本地存储
 
-        this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+        await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
 
         this.showNotification('消息已更新', 'success')
 
@@ -3610,7 +3795,7 @@ ${conversationText}
             this.currentAgent,
             inputMessage,
             context,
-            (progressText) => {
+            async (progressText) => {
               if (!aiMessage) {
                 // 创建新消息
                 aiMessage = {
@@ -3627,7 +3812,7 @@ ${conversationText}
 
                 const now = Date.now()
                 if (now - lastSaveTime >= SAVE_INTERVAL) {
-                  this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+                  await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
                   lastSaveTime = now
                 }
               }
@@ -3640,7 +3825,7 @@ ${conversationText}
             tokens: response.tokens,
             thinkingTime: response.thinkingTime
           }
-          this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+          await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
         } else {
           // 普通模式
           const response = await this.aiService.sendMessage(
@@ -3650,14 +3835,24 @@ ${conversationText}
           )
 
           // 更新消息内容
-          this.conversations[messageIndex].content = response.response || response
-          this.conversations[messageIndex].metadata = {
-            tokens: response.tokens,
-            thinkingTime: response.thinkingTime
-          }
-          this.conversations[messageIndex].timestamp = Date.now()
-          this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
-        }
+
+                    this.conversations[messageIndex].content = response.response || response
+
+                    this.conversations[messageIndex].metadata = {
+
+                      tokens: response.tokens,
+
+                      thinkingTime: response.thinkingTime
+
+                    }
+
+          
+
+                    this.conversations[messageIndex].timestamp = Date.now()
+
+                    await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+
+                  }
 
         this.showNotification('消息已重新生成', 'success')
       } catch (error) {
@@ -3736,13 +3931,17 @@ ${conversationText}
         // 保存生成的图片
         if (messageIndex !== -1) {
           this.conversations[messageIndex].isGeneratingImage = false
+          this.conversations[messageIndex].hasImage = true
           this.conversations[messageIndex].imageData = imageData
           this.conversations[messageIndex].imageProgress = 100
           this.conversations[messageIndex].imageExpanded = true
           this.conversations = [...this.conversations]
 
-          // 保存到本地存储
-          this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+          // 保存图片到 IndexedDB
+          await conversationDB.saveImage(message.id, this.currentAgent.id, imageData)
+
+          // 保存对话状态（不包含图片数据）
+          await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
         }
 
         this.showNotification('图片生成成功', 'success')
@@ -3978,7 +4177,7 @@ ${conversationText}
 
 
 
-    toggleImageVisibility(message) {
+    async toggleImageVisibility(message) {
 
       const messageIndex = this.conversations.findIndex(msg => msg.id === message.id)
 
@@ -3992,7 +4191,7 @@ ${conversationText}
 
         // 保存到本地存储
 
-        this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+        await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
 
       }
 
@@ -4416,7 +4615,7 @@ ${conversationText}
 
         console.error('图片生成失败:', error);
 
-        this.showNotification('图片生成失败: ' + error.message, 'error');
+        this.showNotification('图片生成失败: ' + error.message, 'danger');
 
         
 
@@ -4590,7 +4789,7 @@ ${conversationText}
 
       }).catch(() => {
 
-        this.showNotification('复制失败', 'error');
+        this.showNotification('复制失败', 'danger');
 
       });
 
@@ -6093,8 +6292,9 @@ ${conversationText}
   padding: 5px 15px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   /* 添加基础transition，增强平滑度 */
-  transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
-              transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+              max-width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   background: var(--primary-color, #ec4899);
   color: white;
   position: absolute;
@@ -6103,14 +6303,19 @@ ${conversationText}
   transform: translateX(-50%);
   z-index: 1000;
   overflow: hidden;
-  max-width: 600px;
+  max-width: calc(100vw - 320px - 32px); /* 最大宽度为聊天界面宽度（总宽度减去侧边栏320px和左右边距32px） */
   min-width: 0;
-  width: auto; /* 确保宽度自适应 */
+  width: auto; /* 确保宽度自适应内容 */
   white-space: nowrap; /* 防止内容换行影响宽度计算 */
   border: var(--dynamic-island-border-width, 0px) solid var(--dynamic-island-border-color, transparent); /* 添加边框支持 */
   /* 优化渲染性能 */
   backface-visibility: hidden;
   transform: translateX(-50%) translateZ(0); /* 开启硬件加速 */
+}
+
+/* 侧边栏收起时的动态岛样式 */
+.sidebar.collapsed ~ .main-content .dynamic-island {
+  max-width: calc(100vw - 80px - 32px); /* 侧边栏收起时，最大宽度增大（总宽度减去收起后的侧边栏80px和左右边距32px） */
 }
 
 /* 根据不同颜色模式调整动态岛样式 */
@@ -6156,7 +6361,7 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 .dynamic-island-content {
   display: flex;
   align-items: center;
-  width: 100%;
+  width: auto; /* 改为auto，让内容撑开宽度 */
   min-width: 0;
 }
 
@@ -6196,14 +6401,13 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+  width: auto; /* 改为auto，让内容撑开宽度 */
 }
 
 .dynamic-island-name {
   font-weight: 600;
   font-size: 14px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   margin-bottom: 2px;
 }
 
@@ -6211,11 +6415,8 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   font-size: 12px;
   opacity: 0;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   line-height: 1.3;
-  max-height: 32px; /* 默认显示2行的高度 */
   transition: opacity var(--dynamic-island-animation-speed, 0.5s) cubic-bezier(0.25, 0.8, 0.25, 1);
   margin-top: 4px;
   transform: none; /* 移除缩放变换 */
@@ -6226,25 +6427,10 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   transition: opacity var(--dynamic-island-animation-speed, 0.5s) cubic-bezier(0.25, 0.8, 0.25, 1) 0.3s; /* 延迟0.3秒执行，等待灵动岛完全展开 */
 }
 
-/* 长描述文本滚动效果 */
+/* 长描述文本样式（宽度自适应，不需要滚动） */
 .dynamic-island-description.long-text {
   white-space: nowrap;
   text-overflow: ellipsis;
-  animation: textScroll 10s linear infinite;
-  animation-play-state: paused;
-}
-
-.dynamic-island:hover .dynamic-island-description.long-text {
-  animation-play-state: running;
-}
-
-@keyframes textScroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-100%);
-  }
 }
 
 .dynamic-island-controls {
@@ -7314,13 +7500,13 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   align-items: center;
 
-  padding: 16px 20px;
+  padding: 12px 16px;
 
-  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+  background: var(--bg-secondary);
 
   border-bottom: 1px solid var(--border-color);
 
-  gap: 12px;
+  gap: 8px;
 
   border-radius: 20px 20px 0 0;
 
@@ -7328,9 +7514,16 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   overflow: hidden;
 
-  /* 添加工具栏背景动画 */
+  opacity: 0.85;
 
-  animation: toolbarShine 3s ease-in-out infinite;
+  transition: opacity 0.3s ease;
+
+}
+
+
+.notepad-tools:hover {
+
+  opacity: 1;
 
 }
 
@@ -7339,22 +7532,55 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   background: var(--bg-tertiary);
 
+  opacity: 0.75;
+
+}
+
+
+.theme-dark .notepad-tools:hover {
+
+  opacity: 0.9;
+
+}
+
+
+.tools-group {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 6px;
+
+}
+
+
+.tools-divider {
+
+  width: 1px;
+
+  height: 24px;
+
+  background: var(--border-color);
+
+  opacity: 0.5;
+
 }
 
 
 .tool-btn {
 
-  width: 44px;
+  width: 36px;
 
-  height: 44px;
+  height: 36px;
 
-  border-radius: 12px;
+  border-radius: 8px;
 
-  border: 1px solid var(--border-color);
+  border: 1px solid transparent;
 
-  background: var(--bg-primary);
+  background: transparent;
 
-  color: var(--text-primary);
+  color: var(--text-secondary);
 
   cursor: pointer;
 
@@ -7364,72 +7590,27 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   justify-content: center;
 
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
 
   position: relative;
-
-  overflow: hidden;
-
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-
-  /* 添加阴影效果 */
-
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
-}
-
-
-/* 添加涟漪效果 */
-
-.tool-btn::after {
-
-  content: '';
-
-  position: absolute;
-
-  top: 50%;
-
-  left: 50%;
-
-  width: 0;
-
-  height: 0;
-
-  border-radius: 50%;
-
-  background: rgba(255, 255, 255, 0.5);
-
-  transform: translate(-50%, -50%);
-
-  transition: width 0.6s, height 0.6s;
-
-}
-
-
-.tool-btn:active::after {
-
-  width: 100px;
-
-  height: 100px;
 
 }
 
 
 .tool-btn:hover {
 
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  background: var(--bg-tertiary);
 
-  color: white;
+  color: var(--text-primary);
 
-  transform: translateY(-2px) scale(1.05);
+  transform: translateY(-1px);
 
-  box-shadow: 0 4px 16px rgba(var(--primary-color-rgb, 236, 72, 153), 0.3);
+}
 
-  border-color: var(--primary-color);
 
-  transform: translateY(-2px) scale(1.05);
+.tool-btn:active {
 
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  transform: translateY(0);
 
 }
 
@@ -7440,63 +7621,27 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   color: white;
 
-  border-color: var(--primary-color);
-
-  transform: scale(1.1);
-
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(var(--primary-color-rgb, 236, 72, 153), 0.3);
 
 }
 
 
-/* 添加点击动画 */
+.tool-btn.clear-btn:hover {
 
-.tool-btn:active {
+  background: var(--danger-color, #ef4444);
 
-  transform: scale(0.95);
+  color: white;
 
-  transition: transform 0.1s;
-
-}
-
-
-/* 添加工具切换动画 */
-
-.tool-btn.active {
-
-  animation: toolActivate 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-
-}
-
-
-@keyframes toolActivate {
-
-  0% {
-
-    transform: scale(1);
-
-  }
-
-  50% {
-
-    transform: scale(1.2);
-
-  }
-
-  100% {
-
-    transform: scale(1.1);
-
-  }
+  border-color: transparent;
 
 }
 
 
 .color-picker {
 
-  width: 40px;
+  width: 32px;
 
-  height: 40px;
+  height: 32px;
 
   border: 2px solid var(--border-color);
 
@@ -7506,9 +7651,7 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   background: none;
 
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   position: relative;
 
@@ -7519,7 +7662,7 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
 .color-picker:hover {
 
-  transform: scale(1.1);
+  transform: scale(1.05);
 
   border-color: var(--primary-color);
 
@@ -7581,9 +7724,9 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
 .size-slider {
 
-  width: 100px;
+  width: 80px;
 
-  height: 6px;
+  height: 4px;
 
   -webkit-appearance: none;
 
@@ -7591,11 +7734,11 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   background: var(--bg-tertiary);
 
-  border-radius: 3px;
+  border-radius: 2px;
 
   outline: none;
 
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 
 }
 
@@ -7613,9 +7756,9 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   appearance: none;
 
-  width: 18px;
+  width: 14px;
 
-  height: 18px;
+  height: 14px;
 
   border-radius: 50%;
 
@@ -7623,34 +7766,34 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   cursor: pointer;
 
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 
 }
 
 
 .size-slider::-webkit-slider-thumb:hover {
 
-  transform: scale(1.2);
+  transform: scale(1.15);
 
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
 
 }
 
 
 .size-slider::-webkit-slider-thumb:active {
 
-  transform: scale(0.9);
+  transform: scale(1);
 
 }
 
 
 .size-slider::-moz-range-thumb {
 
-  width: 18px;
+  width: 14px;
 
-  height: 18px;
+  height: 14px;
 
   border-radius: 50%;
 
@@ -7660,41 +7803,41 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   border: none;
 
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 
 }
 
 
 .size-slider::-moz-range-thumb:hover {
 
-  transform: scale(1.2);
+  transform: scale(1.15);
 
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
 
 }
 
 
 .size-value {
 
-  min-width: 20px;
+  min-width: 18px;
 
   text-align: center;
 
-  font-size: 0.9em;
+  font-size: 0.8em;
 
-  font-weight: 600;
+  font-weight: 500;
 
-  color: var(--primary-color);
+  color: var(--text-secondary);
 
-  padding: 4px 8px;
+  padding: 2px 6px;
 
-  border-radius: 12px;
+  border-radius: 6px;
 
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
 
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 
 }
 
@@ -7716,9 +7859,9 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   50% {
 
-    transform: scale(1.2);
+    transform: scale(1.15);
 
-    color: var(--primary-hover);
+    color: var(--primary-color);
 
   }
 
@@ -7937,15 +8080,15 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   transform: translate(-50%, -50%);
 
-  width: 24px;
+  width: 20px;
 
-  height: 24px;
+  height: 20px;
 
   border-radius: 50%;
 
-  border: 2px solid white;
+  border: 2px solid var(--bg-primary);
 
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 
   pointer-events: none;
 
@@ -7960,7 +8103,7 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   align-items: center;
 
-  gap: 8px;
+  gap: 6px;
 
 }
 
@@ -7969,9 +8112,9 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
 .clear-btn:hover {
 
-  background: var(--danger-color) !important;
+  background: var(--danger-color, #ef4444) !important;
 
-  border-color: var(--danger-color) !important;
+  border-color: transparent !important;
 
   color: white !important;
 
@@ -7984,13 +8127,13 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
   margin-left: auto;
 
-  padding: 6px 12px;
+  padding: 4px 10px;
 
   background: var(--bg-tertiary);
 
-  border-radius: 16px;
+  border-radius: 12px;
 
-  font-size: 12px;
+  font-size: 11px;
 
   color: var(--text-secondary);
 

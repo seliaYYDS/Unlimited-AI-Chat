@@ -21,7 +21,7 @@
 - **构建工具**: Vite 5.0.0
 - **UI**: 原生CSS + SVG 图标
 - **状态管理**: 原生JavaScript类
-- **本地存储**: localStorage
+- **本地存储**: IndexedDB + localStorage（自动降级）
 - **项目类型**: ES Module (type: "module")
 - **依赖管理**: npm
 
@@ -69,6 +69,13 @@ npm run preview
 - 右键菜单快速操作
 - 拖拽排序功能
 - 侧边栏收起/展开
+- **智能体头像功能**：
+  - 支持三种头像类型：表情符号、自定义文字、URL图片
+  - **表情符号头像**：从内置表情网格中选择或输入自定义表情
+  - **自定义文字头像**：支持1-2个字符的个性化文字头像
+  - **URL图片头像**：通过图片URL链接设置头像，支持实时预览和加载状态显示
+  - 自动URL验证，支持带查询参数的图片链接
+  - 头像数据随智能体数据一起导入导出
 - **智能体记忆功能**：
   - 为每个智能体添加长期记忆内容
   - 记忆内容会在每次对话开始时自动作为上下文提供给AI
@@ -207,6 +214,7 @@ npm run preview
     ├── main.js            # Vue应用入口
     ├── App.vue            # 主应用组件
     ├── storage.js         # 本地存储管理模块
+    ├── indexedDB.js       # IndexedDB 数据库管理模块
     ├── aiService.js       # AI模型服务兼容层
     ├── components/        # 可复用组件
     │   ├── AgentMemory.vue         # 智能体记忆管理组件
@@ -241,9 +249,28 @@ npm run preview
 - JavaScript使用ES6+特性
 - 组件和文件命名使用PascalCase或kebab-case
 - 严格遵循Vue 3最佳实践
-- 使用localStorage进行数据持久化
+- 使用 IndexedDB + localStorage 进行数据持久化（自动降级）
+- 所有异步操作使用 async/await 模式
+- 确保代码在各种浏览器环境中的兼容性
 
 ## 最新更新
+
+### v2.7.0 新增功能
+- 💾 **存储系统全面升级**：
+  - 聊天历史和图片数据迁移到 IndexedDB 存储，支持更大的存储空间
+  - 实现 localStorage 自动降级机制，确保最大兼容性
+  - 当浏览器不支持或 IndexedDB 初始化失败时，自动切换到 localStorage
+  - 优化数据清理逻辑，删除智能体时同时清理相关对话和图片数据
+  - 支持隐私模式和旧版浏览器环境
+- 🎨 **草稿纸工具界面优化**：
+  - 重写草稿纸工具界面，采用弱化 header 设计
+  - 工具栏更加简洁，与项目整体风格统一
+  - 优化按钮、颜色选择器和滑块的样式
+  - 更新橡皮擦图标，更加直观
+- 🐛 **Bug 修复**：
+  - 修复 notification 调用中使用了不存在的 'error' 类型的问题
+  - 修复 musicApiRequestManager.js 中 cache 初始化位置错误的问题
+  - 修复删除智能体时未清理相关对话记录的问题
 
 ### v2.6.0 新增功能
 - 🧠 **智能体记忆系统优化**：
@@ -382,7 +409,7 @@ npm run preview
 
 ## 注意事项
 
-- 项目为纯前端应用，所有数据存储在浏览器localStorage中
+- 项目为纯前端应用，所有数据存储在浏览器中
 - 使用网络API需要用户自行配置端点和密钥
 - Stable Diffusion图像生成功能需要本地运行SD WebUI
 - 音乐播放器功能需要配置并运行网易云音乐API后端服务
@@ -390,3 +417,18 @@ npm run preview
 - 图像生成功能依赖SD WebUI的本地部署，需要正确配置代理
 - 长对话可能会影响性能，建议适时清理对话历史
 - 弹窗背景模糊效果需要浏览器支持 `backdrop-filter` CSS属性
+
+### 数据存储说明
+
+- **对话历史和图片数据**：优先使用 IndexedDB 存储，当浏览器不支持或初始化失败时自动降级到 localStorage
+- **智能体信息**：存储在 localStorage 中
+- **应用设置**：存储在 localStorage 中
+- **智能体记忆**：存储在 localStorage 中
+- **数据导入导出**：支持将所有数据导出为 JSON 文件，或从 JSON 文件导入
+
+### 存储兼容性
+
+- IndexedDB 支持更大的存储空间（通常数百MB到数GB），适合存储大量对话和图片数据
+- localStorage 存储空间较小（通常5-10MB），在降级模式下建议定期清理对话历史
+- 在隐私模式下，IndexedDB 可能不可用，应用会自动使用 localStorage
+- 应用会自动检测存储方式并在控制台显示提示信息

@@ -13,8 +13,29 @@ class MusicApiRequestManager {
       cacheTimeout: 5 * 60 * 1000, // 5分钟缓存
       ...defaultOptions
     };
+
+    // 请求缓存
+    this.cache = new Map();
+
+    // 批量请求队列
+    this.batchQueue = {
+      songDetails: [],
+      songUrls: [],
+      playlistDetails: [],
+      artistDetails: []
+    };
+
+    // 批量请求定时器
+    this.batchTimers = {};
+
+    // 并发控制器
+    this.concurrentCount = 0;
+    this.pendingQueue = [];
+
+    // 请求去重
+    this.pendingRequests = new Map();
   }
-  
+
   // 更新基础URL
   updateBaseUrl(newUrl) {
     if (this.baseUrl !== newUrl) {
@@ -25,28 +46,6 @@ class MusicApiRequestManager {
         this.cache.clear();
       }
     }
-
-    
-    // 请求缓存
-    this.cache = new Map();
-    
-    // 批量请求队列
-    this.batchQueue = {
-      songDetails: [],
-      songUrls: [],
-      playlistDetails: [],
-      artistDetails: []
-    };
-    
-    // 批量请求定时器
-    this.batchTimers = {};
-    
-    // 并发控制器
-    this.concurrentCount = 0;
-    this.pendingQueue = [];
-    
-    // 请求去重
-    this.pendingRequests = new Map();
   }
 
   /**

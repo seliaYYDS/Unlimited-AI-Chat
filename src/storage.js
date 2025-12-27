@@ -1,9 +1,23 @@
 // 本地存储管理模块
+import { conversationDB } from './indexedDB.js'
+
 export class StorageManager {
     constructor() {
         this.agentsKey = 'ai_agents'
         this.conversationsKey = 'ai_conversations'
         this.settingsKey = 'ai_settings'
+        // 初始化 IndexedDB
+        this.initIndexedDB()
+    }
+
+    // 初始化 IndexedDB
+    async initIndexedDB() {
+        try {
+            await conversationDB.init()
+            console.log('IndexedDB 初始化成功')
+        } catch (error) {
+            console.error('IndexedDB 初始化失败:', error)
+        }
     }
 
     // 智能体管理
@@ -46,13 +60,48 @@ export class StorageManager {
         return false
     }
 
-    deleteAgent(agentId) {
+    async deleteAgent(agentId) {
+        // 删除智能体
         const agents = this.getAgents().filter(a => a.id !== agentId)
-        return this.saveAgents(agents)
+        const success = this.saveAgents(agents)
+
+        if (success) {
+            // 同时清理该智能体的对话记录（使用 IndexedDB）
+            try {
+                await conversationDB.deleteAgentConversations(agentId)
+            } catch (error) {
+                console.error('删除智能体对话记录失败:', error)
+            }
+
+            // 清理该智能体的图片数据
+            try {
+                await conversationDB.deleteAgentImages(agentId)
+            } catch (error) {
+                console.error('删除智能体图片数据失败:', error)
+            }
+
+            // 清理该智能体的上下文
+            this.clearAgentContext(agentId)
+
+            // 清理该智能体的记忆
+            this.clearAgentMemory(agentId)
+        }
+
+        return success
     }
 
-    // 对话管理
-    getConversations(agentId) {
+    // 对话管理 - 使用 IndexedDB
+    async getConversations(agentId) {
+        try {
+            return await conversationDB.getConversations(agentId)
+        } catch (error) {
+            console.error('获取对话历史失败:', error)
+            return []
+        }
+    }
+
+    // 同步版本的获取对话方法（用于兼容旧代码）
+    getConversationsSync(agentId) {
         try {
             const conversations = localStorage.getItem(this.conversationsKey)
             const allConversations = conversations ? JSON.parse(conversations) : {}
@@ -166,75 +215,33 @@ export class StorageManager {
         }
     }
 
-    saveConversations(agentId, conversations) {
+    async saveConversations(agentId, conversations) {
         try {
-            const allConversations = JSON.parse(localStorage.getItem(this.conversationsKey) || '{}')
-            allConversations[agentId] = conversations
-            localStorage.setItem(this.conversationsKey, JSON.stringify(allConversations))
-            return true
+            return await conversationDB.saveConversations(agentId, conversations)
         } catch (error) {
             console.error('保存对话历史失败:', error)
             return false
         }
     }
 
-    addMessage(agentId, message) {
-        const conversations = this.getConversations(agentId)
-        message.id = this.generateId()
-        message.timestamp = new Date().toISOString()
-        // 确保消息有图像相关字段
-        if (!message.imageData) {
-            message.imageData = null
-        }
-        if (!message.isGeneratingImage) {
-            message.isGeneratingImage = false
-        }
-        if (!message.imageProgress) {
-            message.imageProgress = 0
-        }
-        conversations.push(message)
-        
-        // 限制对话历史长度，防止localStorage溢出
-        // 保留最近的200条消息（可根据需要调整）
-        const MAX_CONVERSATIONS = 200
-        if (conversations.length > MAX_CONVERSATIONS) {
-            // 保留最新的消息
-            conversations.splice(0, conversations.length - MAX_CONVERSATIONS)
-        }
-        
-        const success = this.saveConversations(agentId, conversations)
-        
-        // 如果保存失败（可能是因为localStorage配额超了），尝试进一步减少历史记录
-        if (!success) {
-            // 进一步减少到100条消息
-            const reducedConversations = conversations.slice(-100)
-            const reducedSuccess = this.saveConversations(agentId, reducedConversations)
-            
-            if (!reducedSuccess) {
-                // 如果仍然失败，尝试只保留最近的50条
-                const minimalConversations = conversations.slice(-50)
-                const minimalSuccess = this.saveConversations(agentId, minimalConversations)
-                
-                if (!minimalSuccess) {
-                    console.error('保存对话历史失败，localStorage已满')
-                    return null
-                }
-            }
-        }
-        
-        // 成功保存后，返回消息
-        if (success) {
-            return message
-        } else {
-            // 如果原始保存失败但减少后成功，返回消息
-            return conversations[conversations.length - 1]
+    async addMessage(agentId, message) {
+        try {
+            return await conversationDB.addMessage(agentId, message)
+        } catch (error) {
+            console.error('添加消息失败:', error)
+            return null
         }
     }
 
-    clearConversation(agentId) {
-        const success1 = this.saveConversations(agentId, [])
-        const success2 = this.clearAgentContext(agentId)
-        return success1 && success2
+    async clearConversation(agentId) {
+        try {
+            const success1 = await conversationDB.clearConversation(agentId)
+            const success2 = this.clearAgentContext(agentId)
+            return success1 && success2
+        } catch (error) {
+            console.error('清空对话历史失败:', error)
+            return false
+        }
     }
 
     // 设置管理
@@ -358,7 +365,7 @@ export class StorageManager {
     }
 
     // 自动清理过期的对话记录
-    autoCleanupConversations() {
+    async autoCleanupConversations() {
         try {
             const settings = this.getSettings()
             // 如果未启用自动清理，直接返回
@@ -366,60 +373,18 @@ export class StorageManager {
                 return
             }
 
-            // 获取过期时间（毫秒）
-            const expireTime = Date.now() - (settings.autoClearDays * 24 * 60 * 60 * 1000)
-            const allConversations = JSON.parse(localStorage.getItem(this.conversationsKey) || '{}')
-            let hasChanges = false
-
-            // 遍历所有智能体的对话记录
-            for (const agentId in allConversations) {
-                const conversations = allConversations[agentId]
-                // 过滤掉过期的对话记录
-                const filteredConversations = conversations.filter(conversation => {
-                    // 如果消息有时间戳，检查是否过期
-                    if (conversation.timestamp) {
-                        const messageTime = new Date(conversation.timestamp).getTime()
-                        return messageTime > expireTime
-                    }
-                    // 如果没有时间戳，默认保留
-                    return true
-                })
-
-                // 如果有过期记录被清理
-                if (filteredConversations.length !== conversations.length) {
-                    allConversations[agentId] = filteredConversations
-                    hasChanges = true
-                }
-            }
-
-            // 如果有变化，保存更新后的对话记录
-            if (hasChanges) {
-                localStorage.setItem(this.conversationsKey, JSON.stringify(allConversations))
-                console.log('自动清理过期对话记录完成')
-            }
+            await conversationDB.autoCleanupConversations(settings.autoClearDays)
         } catch (error) {
             console.error('自动清理对话记录失败:', error)
         }
     }
 
     // 手动清理所有对话记录
-    manualCleanupAllConversations() {
+    async manualCleanupAllConversations() {
         try {
-            const allConversations = JSON.parse(localStorage.getItem(this.conversationsKey) || '{}')
             const agents = this.getAgents()
-            let cleanedCount = 0
-
-            // 遍历所有智能体
-            for (const agent of agents) {
-                if (allConversations[agent.id] && allConversations[agent.id].length > 0) {
-                    // 清空该智能体的对话记录
-                    allConversations[agent.id] = []
-                    cleanedCount++
-                }
-            }
-
-            // 保存更新后的对话记录
-            localStorage.setItem(this.conversationsKey, JSON.stringify(allConversations))
+            const agentIds = agents.map(agent => agent.id)
+            const cleanedCount = await conversationDB.manualCleanupAllConversations(agentIds)
             console.log(`手动清理了 ${cleanedCount} 个智能体的对话记录`)
             return cleanedCount
         } catch (error) {
@@ -429,13 +394,24 @@ export class StorageManager {
     }
 
     // 获取当前存储使用量
-    getStorageSize() {
+    async getStorageSize() {
         let total = 0
+
+        // 计算 localStorage 使用量
         for (const key in localStorage) {
             if (localStorage.hasOwnProperty(key)) {
                 total += (localStorage[key].length + key.length) * 2
             }
         }
+
+        // 计算 IndexedDB 使用量
+        try {
+            const indexedDBSize = await conversationDB.getStorageSize()
+            total += indexedDBSize
+        } catch (error) {
+            console.error('获取 IndexedDB 存储大小失败:', error)
+        }
+
         return total
     }
 
@@ -462,21 +438,28 @@ export class StorageManager {
     }
 
     // 导出所有数据（全局设置）
-    exportData() {
-        const data = {
-            agents: this.getAgents(),
-            conversations: JSON.parse(localStorage.getItem(this.conversationsKey) || '{}'),
-            agentContexts: JSON.parse(localStorage.getItem('ai_agent_contexts') || '{}'),
-            agentMemories: this.getAllAgentMemories(),
-            settings: this.getSettings(),
-            exportTime: new Date().toISOString(),
-            exportType: 'full_backup'
+    async exportData() {
+        try {
+            const conversations = await conversationDB.getAllConversations()
+
+            const data = {
+                agents: this.getAgents(),
+                conversations: conversations,
+                agentContexts: JSON.parse(localStorage.getItem('ai_agent_contexts') || '{}'),
+                agentMemories: this.getAllAgentMemories(),
+                settings: this.getSettings(),
+                exportTime: new Date().toISOString(),
+                exportType: 'full_backup'
+            }
+            return JSON.stringify(data, null, 2)
+        } catch (error) {
+            console.error('导出数据失败:', error)
+            throw error
         }
-        return JSON.stringify(data, null, 2)
     }
 
     // 导出单个智能体（仅基本信息）
-    exportSingleAgent(agentId) {
+    async exportSingleAgent(agentId) {
         try {
             const agents = this.getAgents()
             const agent = agents.find(a => a.id === agentId)
@@ -486,6 +469,8 @@ export class StorageManager {
             }
 
             // 仅导出智能体的基本信息和聊天记录
+            const conversations = await conversationDB.getConversations(agentId)
+
             const data = {
                 agent: {
                     id: agent.id,
@@ -497,7 +482,7 @@ export class StorageManager {
                     createdAt: agent.createdAt,
                     updatedAt: agent.updatedAt
                 },
-                conversations: this.getConversations(agentId),
+                conversations: conversations,
                 exportTime: new Date().toISOString(),
                 exportType: 'single_agent'
             }
@@ -510,7 +495,7 @@ export class StorageManager {
     }
 
     // 导入单个智能体
-    importSingleAgent(jsonData) {
+    async importSingleAgent(jsonData) {
         try {
             const data = JSON.parse(jsonData)
 
@@ -531,9 +516,9 @@ export class StorageManager {
             agents.push(newAgent)
             this.saveAgents(agents)
 
-            // 保存对话历史
+            // 保存对话历史（使用 IndexedDB）
             if (data.conversations && data.conversations.length > 0) {
-                this.saveConversations(newAgent.id, data.conversations)
+                await conversationDB.saveConversations(newAgent.id, data.conversations)
             }
 
             return newAgent
@@ -544,7 +529,7 @@ export class StorageManager {
     }
 
     // 导入数据
-    importData(jsonData) {
+    async importData(jsonData) {
         try {
             const data = JSON.parse(jsonData)
 
@@ -553,7 +538,7 @@ export class StorageManager {
             }
 
             if (data.conversations) {
-                localStorage.setItem(this.conversationsKey, JSON.stringify(data.conversations))
+                await conversationDB.saveAllConversations(data.conversations)
             }
 
             if (data.agentContexts) {
@@ -573,5 +558,79 @@ export class StorageManager {
             console.error('导入数据失败:', error)
             return false
         }
+    }
+
+    // 头像管理
+    async saveAvatar(agentId, imageData, avatarType = 'image') {
+        try {
+            return await conversationDB.saveAvatar(agentId, imageData, avatarType)
+        } catch (error) {
+            console.error('保存头像失败:', error)
+            return false
+        }
+    }
+
+    async getAvatar(agentId) {
+        try {
+            return await conversationDB.getAvatar(agentId)
+        } catch (error) {
+            console.error('获取头像失败:', error)
+            return null
+        }
+    }
+
+    async deleteAvatar(agentId) {
+        try {
+            return await conversationDB.deleteAvatar(agentId)
+        } catch (error) {
+            console.error('删除头像失败:', error)
+            return false
+        }
+    }
+
+    // 压缩图片
+    async compressImage(file, maxWidth = 200, maxHeight = 200, quality = 0.8) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            
+            reader.onload = (e) => {
+                const img = new Image()
+                
+                img.onload = () => {
+                    const canvas = document.createElement('canvas')
+                    let width = img.width
+                    let height = img.height
+                    
+                    // 计算缩放比例
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height)
+                        width *= ratio
+                        height *= ratio
+                    }
+                    
+                    canvas.width = width
+                    canvas.height = height
+                    
+                    const ctx = canvas.getContext('2d')
+                    ctx.drawImage(img, 0, 0, width, height)
+                    
+                    // 压缩并转换为 base64
+                    canvas.toBlob((blob) => {
+                        const reader = new FileReader()
+                        reader.onload = (e) => {
+                            resolve(e.target.result)
+                        }
+                        reader.onerror = reject
+                        reader.readAsDataURL(blob)
+                    }, 'image/jpeg', quality)
+                }
+                
+                img.onerror = reject
+                img.src = e.target.result
+            }
+            
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+        })
     }
 }
