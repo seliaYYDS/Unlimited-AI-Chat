@@ -2368,5 +2368,73 @@ body {
 .shine-animation {
   animation: shimmer 2s infinite linear;
   background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0) 100%);
+}
+
+/* 模式切换过渡动画 */
+.mode-transition-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.wave-mask {
+  position: absolute;
+  top: 0;
+  right: -100vw;
+  width: 100vw;
+  height: 100vh;
+  background: var(--gradient-primary, linear-gradient(135deg, var(--primary-color), var(--secondary-color)));
+  animation: waveSlideIn 0.5s ease-out forwards;
+}
+
+.wave-mask.exiting {
+  animation: waveSlideOut 0.5s ease-in forwards;
+}
+
+@keyframes waveSlideIn {
+  0% {
+    right: -100vw;
+  }
+  100% {
+    right: 0;
+  }
+}
+
+@keyframes waveSlideOut {
+  0% {
+    left: 0;
+  }
+  100% {
+    left: -100vw;
+  }
+}
+
+/* 酒馆模式样式 */
+.app-title {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.app-title:hover {
+  opacity: 0.8;
+}
+
+.app-title:active {
+  transform: scale(0.98);
+}
+
+/* 酒馆模式下的危险颜色变量 */
+:root {
+  --danger-color: #dc3545;
+}
+
+[data-theme="dark"] {
+  --danger-color: #ef4444;
   background-size: 1000px 100%;
 }

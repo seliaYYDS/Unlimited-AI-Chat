@@ -15,7 +15,7 @@
 
     <div :class="['sidebar', { 'collapsed': !sidebarExpanded }]">
       <div class="sidebar-header neon-glow">
-        <h1 class="app-title">
+        <h1 class="app-title" @click="toggleTavernMode">
           <span class="title-text">Unlimited</span>
           <span class="title-dot"></span>
         </h1>
@@ -116,7 +116,7 @@
     </div>
 
     <!-- 主内容区域 -->
-    <div class="main-content">
+    <div class="main-content" :class="{ 'mode-transitioning': isTransitioning }" v-if="!isTavernMode">
       
       <div class="dynamic-island" :class="{ 'has-music': isMusicPlaying && currentMusic && settings.enableDynamicIslandMusicInfo }" v-if="currentAgent" @mouseenter="showDynamicIslandContent = true" @mouseleave="showDynamicIslandContent = false">
         <div class="dynamic-island-content">
@@ -417,27 +417,49 @@
       </div>
     </div>
 
-    <!-- 样式设置弹窗 -->
-    <Modal
-      v-model:visible="showStyleSettingsModal"
-      title="样式设置"
-      size="auto"
-      @confirm="saveStyleSettings"
-      @close="showStyleSettingsModal = false"
-    >
-      <StyleSettings
-
-        :settings="styleSettings"
-
-        @update:settings="updateStyleSettings"
-
-        @notify="showNotification"
-
+    <!-- 酒馆模式 - 独立全屏界面 -->
+    <Teleport to="body">
+      <Tavern
+        v-if="isTavernMode"
+        :style-settings="styleSettings"
+        :ai-settings="aiSettings"
+        @exit="exitTavernMode"
+        @show-style-settings="showStyleSettingsModal = true"
+        @show-ai-settings="showSettingsModal = true"
       />
+    </Teleport>
 
-    </Modal>
+    <!-- 切换过渡动画 -->
+    <Teleport to="body">
+      <div v-if="isTransitioning" class="mode-transition-overlay">
+        <div class="wave-mask" :class="{ 'exiting': shouldExitMask }"></div>
+      </div>
+    </Teleport>
+
+    <!-- 样式设置弹窗 -->
+    <Teleport to="body">
+      <Modal
+        v-model:visible="showStyleSettingsModal"
+        title="样式设置"
+        size="auto"
+        @confirm="saveStyleSettings"
+        @close="showStyleSettingsModal = false"
+      >
+        <StyleSettings
+
+          :settings="styleSettings"
+
+          @update:settings="updateStyleSettings"
+
+          @notify="showNotification"
+
+        />
+
+      </Modal>
+    </Teleport>
 
     <!-- 智能体记忆弹窗 -->
+    <Teleport to="body">
     <Modal
       v-model:visible="showAgentMemoryModal"
       title="智能体记忆"
@@ -454,6 +476,7 @@
         @memory-updated="onMemoryUpdated"
       />
     </Modal>
+    </Teleport>
 
     <!-- 悬浮球组件 -->
 
@@ -539,13 +562,14 @@
       </div>
     </Modal>
 
-    <Modal
-      v-model:visible="showSettingsModal"
-      title="AI设置"
-      size="medium"
-      @confirm="saveSettings"
-      @close="showSettingsModal = false"
-    >
+    <Teleport to="body">
+      <Modal
+        v-model:visible="showSettingsModal"
+        title="AI设置"
+        size="medium"
+        @confirm="saveSettings"
+        @close="showSettingsModal = false"
+      >
       <div class="form-group">
         <label>API类型</label>
         <CustomSelect
@@ -869,7 +893,8 @@
           ]"
         />
       </div>
-    </Modal>
+      </Modal>
+    </Teleport>
 
     <!-- 确认弹窗 -->
     <Modal
@@ -1737,42 +1762,85 @@ import { MusicColorExtractor } from './utils/musicColorExtractor.js'
 import { AIService } from './aiService.js'
 
 import Modal from './components/Modal.vue'
+
 import AvatarUpload from './components/AvatarUpload.vue'
+
+
 
 import CustomSelect from './components/CustomSelect.vue'
 
+
+
 import CustomSlider from './components/CustomSlider.vue'
+
+
 
 import CustomCheckbox from './components/CustomCheckbox.vue'
 
+
+
 import StyleSettings from './components/StyleSettings.vue'
 
+
+
 import FloatingBall from './components/FloatingBall.vue'
+
 import MusicPlayer from './components/MusicPlayer.vue'
+
 import AgentMemory from './components/AgentMemory.vue'
 
+import Tavern from './components/Tavern.vue'
+
+
+
 export default {
+
   name: 'App',
+
   components: {
+
+
 
     Modal,
 
+
+
     CustomSelect,
+
+
 
     CustomSlider,
 
+
+
     CustomCheckbox,
+
+
 
     StyleSettings,
 
+
+
     FloatingBall,
-    
+
+
+
         MusicPlayer,
-    
+
+
+
         AgentMemory,
-    
-        AvatarUpload
-    
+
+
+
+        AvatarUpload,
+
+
+
+        Tavern
+
+
+
       },  data() {
     return {
       storageManager: null,
@@ -1815,6 +1883,11 @@ export default {
     showNotepadModal: false,
     showImageGeneratorModal: false,
       showMusicPlayer: false,
+
+      // 酒馆模式
+      isTavernMode: false,
+      isTransitioning: false,
+      shouldExitMask: false,
       currentTool: 'pen',
       penColor: '#000000',
       penSize: 5,
@@ -2044,6 +2117,16 @@ export default {
         enableMusicColorSync: false
       },
 
+      // AI 设置
+      aiSettings: {
+        provider: 'openai',
+        model: 'gpt-4',
+        apiKey: '',
+        baseUrl: '',
+        temperature: 0.7,
+        maxTokens: 2000
+      },
+
       // API相关状态
       supportedModels: [],
       apiProviderInfo: { name: '本地模型' },
@@ -2195,6 +2278,10 @@ export default {
     this.settings = this.storageManager.getSettings()
     console.log('App mounted, settings.musicApiUrl:', this.settings.musicApiUrl)
     console.log('App mounted, full settings object:', this.settings)
+
+    // 强制从 settings 同步 AI 设置（优先使用最新的 settings）
+    this.syncAiSettingsFromSettings()
+    console.log('App mounted, synced aiSettings:', this.aiSettings)
 
     // 确保数值设置正确类型
 
@@ -2379,6 +2466,39 @@ export default {
 
       this.isDarkTheme = newTheme === 'dark'
 
+    },
+
+    // 酒馆模式切换
+    toggleTavernMode() {
+      this.isTransitioning = true
+      this.shouldExitMask = false
+      
+      // 0-0.5s: 遮罩滑入
+      setTimeout(() => {
+        // 0.5s: 切换界面
+        this.isTavernMode = !this.isTavernMode
+        // 0.5-1.0s: 遮罩滑出
+        this.shouldExitMask = true
+        setTimeout(() => {
+          this.isTransitioning = false
+          this.shouldExitMask = false
+        }, 500)
+      }, 500)
+    },
+
+    // 退出酒馆模式
+    exitTavernMode() {
+      this.isTransitioning = true
+      this.shouldExitMask = false
+      
+      setTimeout(() => {
+        this.isTavernMode = false
+        this.shouldExitMask = true
+        setTimeout(() => {
+          this.isTransitioning = false
+          this.shouldExitMask = false
+        }, 500)
+      }, 500)
     },
 
     // 样式设置相关方法
@@ -3151,10 +3271,52 @@ ${conversationText}
       console.log('Saving settings, musicApiUrl:', this.settings.musicApiUrl)
       const success = this.storageManager.saveSettings(this.settings)
       if (success) {
+        // 同步并保存 AI 设置
+        this.syncAiSettingsFromSettings()
+        this.saveAiSettings()
         this.showSettingsModal = false
         this.showNotification('设置已保存', 'success')
       } else {
         this.showNotification('保存设置失败', 'danger')
+      }
+    },
+
+    // 从 settings 同步到 aiSettings
+    syncAiSettingsFromSettings() {
+      // 映射 settings 中的字段到 aiSettings
+      const providerMap = {
+        'openai': 'openai',
+        'deepseek': 'deepseek',
+        'anthropic': 'anthropic',
+        'azure': 'azure',
+        'google': 'google',
+        'local': 'local',
+        'network': 'openai' // network 类型映射到 openai，使用自定义 baseUrl
+      }
+
+      const provider = providerMap[this.settings.apiType] || 'openai'
+      
+      this.aiSettings = {
+        provider: provider,
+        model: this.settings.modelName || 'gpt-4',
+        apiKey: this.settings.apiKey || '',
+        baseUrl: this.settings.apiEndpoint || '',
+        temperature: Number(this.settings.temperature) || 0.7,
+        maxTokens: Number(this.settings.maxTokens) || 2000
+      }
+
+      console.log('Synced aiSettings from settings:', this.aiSettings)
+      console.log('Original apiType:', this.settings.apiType)
+      console.log('Mapped provider:', provider)
+    },
+
+    // 保存 AI 设置到 localStorage
+    saveAiSettings() {
+      try {
+        localStorage.setItem('aiSettings', JSON.stringify(this.aiSettings))
+        console.log('AI settings saved:', this.aiSettings)
+      } catch (error) {
+        console.error('保存 AI 设置失败:', error)
       }
     },
 
