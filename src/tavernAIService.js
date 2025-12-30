@@ -232,7 +232,7 @@ export class TavernAIService {
     // ==================== 角色对话相关方法 ====================
 
     // 生成角色系统提示词
-    generateCharacterSystemPrompt(character, worldSettings, memories, recentMessages) {
+    generateCharacterSystemPrompt(character, worldSettings, memories, recentMessages, config = null) {
         let prompt = `你必须完全代入角色【${character.name}】，以第一人称视角进行角色扮演和对话，全程不得脱离人设（OOC）、不得跳出世界观。以下是你的核心设定，需严格遵守：\n\n`
 
         // 基础信息
@@ -265,6 +265,46 @@ export class TavernAIService {
             })
         }
 
+        // 在场角色信息
+        if (config && config.characters && config.characters.length > 0) {
+            const otherCharacters = config.characters.filter(c => c.id !== character.id)
+            if (otherCharacters.length > 0) {
+                prompt += `\n【在场角色】\n`
+                prompt += `注意：只有在满足特定条件时才与这些角色互动（详见"对话与表达规则"）\n`
+                otherCharacters.forEach(char => {
+                    let info = `- ${char.name}：${char.role || '未设定'}`
+                    if (character.relationships && character.relationships[char.name]) {
+                        const relation = character.relationships[char.name]
+                        info += `（${relation}）`
+                        // 标记密切关系
+                        if (['上级', '下级', '亲密朋友', '家人', '夫妻', '父子', '母女', '兄弟', '姐妹'].includes(relation)) {
+                            info += ` [密切关系]`
+                        }
+                    }
+                    prompt += info + '\n'
+                })
+            }
+        }
+
+        // 用户人设信息
+        if (config && config.userPersona) {
+            const userPersona = config.userPersona
+            prompt += `\n【用户人设】\n`
+            if (userPersona.identity) {
+                prompt += `用户身份：${userPersona.identity}\n`
+            }
+            if (userPersona.personality) {
+                prompt += `用户性格：${userPersona.personality}\n`
+            }
+            if (userPersona.relationships) {
+                prompt += `与角色的关系：${userPersona.relationships}\n`
+            }
+            if (userPersona.other) {
+                prompt += `其他设定：${userPersona.other}\n`
+            }
+            prompt += `⚠️ 重要：你需要根据用户的身份、性格和与角色的关系来调整你的回复方式和语气。\n`
+        }
+
         // 对话与表达规则
         prompt += `\n【对话与表达规则】\n`
         prompt += `1. 动作表情：必须用圆括号「（）」插入自然动作/微表情，贴合当前对话情绪，每轮回复0-2个动作；\n`
@@ -272,7 +312,16 @@ export class TavernAIService {
         prompt += `   - 长度控制：单轮回复1-3句话，每句不超过15字，避免冗长叙述；\n`
         prompt += `   - 语气匹配：开心时语气轻快、愤怒时语气急促、失落时语气低沉；\n`
         prompt += `   - 用词适配：优先使用符合身份的词汇；\n`
-        prompt += `3. 上下文衔接：必须呼应最近3轮对话中的关键信息。\n`
+        prompt += `3. 上下文衔接：必须呼应最近3轮对话中的关键信息；\n`
+        prompt += `4. 角色间互动（克制原则）：\n`
+        prompt += `   - 不要主动与其他角色互动，除非满足以下条件之一：\n`
+        prompt += `     a) 用户明确要求你与某个角色互动；\n`
+        prompt += `     b) 你与某个角色关系密切（上级/下级/亲密朋友/家人）；\n`
+        prompt += `     c) 当前对话中提到了与某个角色密切相关的话题；\n`
+        prompt += `     d) 某个角色直接向你提问；\n`
+        prompt += `     e) 某个角色在发言中提到你；\n`
+        prompt += `   - 如果不满足上述条件，只回应用户，不要与其他角色互动；\n`
+        prompt += `   - 优先回应用户，保持对话的连贯性。\n`
 
         // 最近的对话上下文
         if (recentMessages && recentMessages.length > 0) {
@@ -335,6 +384,24 @@ export class TavernAIService {
             }
         }
 
+        // 添加用户人设信息
+        if (config.userPersona) {
+            prompt += `\n【用户人设】\n`
+            if (config.userPersona.identity) {
+                prompt += `用户身份：${config.userPersona.identity}\n`
+            }
+            if (config.userPersona.personality) {
+                prompt += `用户性格：${config.userPersona.personality}\n`
+            }
+            if (config.userPersona.relationships) {
+                prompt += `与角色的关系：${config.userPersona.relationships}\n`
+            }
+            if (config.userPersona.other) {
+                prompt += `其他设定：${config.userPersona.other}\n`
+            }
+            prompt += `⚠️ 重要：你需要根据用户的身份、性格和与角色的关系来调整发言判定。\n`
+        }
+
         if (recentMessages && recentMessages.length > 0) {
             prompt += `最近3轮对话摘要：\n`
             recentMessages.slice(-3).forEach(msg => {
@@ -351,14 +418,16 @@ export class TavernAIService {
         prompt += `1. 直接关联：触发消息中提到角色名称、角色身份，或直接向该角色提问；\n`
         prompt += `2. 领域关联：触发消息涉及角色的关注领域（如调酒师被问酒品、安全员被提安全问题）；\n`
         prompt += `3. 场景关联：当前场景下角色有义务/习惯回应（如调酒师在点单场景需回应客人）；\n`
-        prompt += `4. 关系关联：触发消息来自角色的亲密/需要关注的对象（如发小、需要照顾的学徒）；\n`
-        prompt += `5. 人设关联：角色人设决定其会主动介入该话题（如热心人设会回应客人的困扰）。\n\n`
+        prompt += `4. 关系关联：触发消息来自角色的亲密/需要关注的对象（如发小、需要照顾的学徒），或与用户关系密切；\n`
+        prompt += `5. 人设关联：角色人设决定其会主动介入该话题（如热心人设会回应客人的困扰）；\n`
+        prompt += `6. 用户关联：用户人设与角色关系密切，角色应该主动回应或关注。\n\n`
 
         prompt += `【排除条件（满足任意1项即判定为"不应该发言"）】\n`
         prompt += `1. 话题无关：触发消息与角色身份、关注领域、人际关系均无关联；\n`
         prompt += `2. 场景不适：当前场景下角色无互动义务（如客人在角落私聊时，调酒师不主动介入）；\n`
         prompt += `3. 人设冲突：主动发言会违背角色人设（如内向人设不会主动搭话陌生话题）；\n`
-        prompt += `4. 重复冗余：已有其他角色完全回应该话题，角色再发言无新增信息。\n\n`
+        prompt += `4. 重复冗余：已有其他角色完全回应该话题，角色再发言无新增信息；\n`
+        prompt += `5. 关系疏远：与用户关系疏远，且话题与角色职责无关。\n\n`
 
         prompt += `【输出格式】\n`
         prompt += `仅输出以下二者之一，不添加任何额外字符：\n`
@@ -443,7 +512,7 @@ export class TavernAIService {
 
     // 生成批量发言判定提示词
     generateBatchShouldSpeakPrompt(characters, config, recentMessages) {
-        let prompt = `你是对话判定器，负责判断多个角色是否需要参与当前对话。\n\n`
+        let prompt = `你是对话判定器，负责判断多个角色是否需要参与当前对话，并智能选择最合适的角色发言。\n\n`
 
         prompt += `【在场角色列表】\n`
         characters.forEach(char => {
@@ -457,6 +526,10 @@ export class TavernAIService {
             // 添加角色特定的限制条件
             if (char.rules) {
                 prompt += `  限制条件：${char.rules}\n`
+            }
+            // 添加角色关系（如果有）
+            if (char.relationships && Object.keys(char.relationships).length > 0) {
+                prompt += `  角色关系：${Object.entries(char.relationships).map(([name, rel]) => `${name}(${rel})`).join('、')}\n`
             }
         })
 
@@ -491,9 +564,27 @@ export class TavernAIService {
             }
         }
 
+        // 添加用户人设信息
+        if (config.userPersona) {
+            prompt += `\n【用户人设】\n`
+            if (config.userPersona.identity) {
+                prompt += `用户身份：${config.userPersona.identity}\n`
+            }
+            if (config.userPersona.personality) {
+                prompt += `用户性格：${config.userPersona.personality}\n`
+            }
+            if (config.userPersona.relationships) {
+                prompt += `与角色的关系：${config.userPersona.relationships}\n`
+            }
+            if (config.userPersona.other) {
+                prompt += `其他设定：${config.userPersona.other}\n`
+            }
+            prompt += `⚠️ 重要：你需要根据用户的身份、性格和与角色的关系来调整发言判定和选择。\n`
+        }
+
         if (recentMessages && recentMessages.length > 0) {
-            prompt += `\n最近3轮对话摘要：\n`
-            recentMessages.slice(-3).forEach(msg => {
+            prompt += `\n【完整对话上下文】\n`
+            recentMessages.slice(-5).forEach((msg, index) => {
                 if (msg.type === 'user') {
                     prompt += `用户：${msg.content}\n`
                 } else if (msg.type === 'character') {
@@ -503,35 +594,215 @@ export class TavernAIService {
             prompt += '\n'
         }
 
+        prompt += `【智能选择原则】\n`
+        prompt += `1. 最优匹配：当多个角色都能回应时，选择最符合触发消息意图的角色\n`
+        prompt += `2. 角色分工：考虑角色的职责分工，避免职责重叠（如：服务员负责迎宾，老板负责管理）\n`
+        prompt += `3. 上下文连贯：如果之前已有角色在回应，其他角色除非有新信息补充，否则不应打断\n`
+        prompt += `4. 优先级考虑：优先级高的角色在职责重叠时优先发言\n`
+        prompt += `5. 关系影响：考虑角色间关系，如上级/下级、亲密/疏远会影响发言顺序\n`
+        prompt += `6. 用户关系：考虑与用户的关系，如熟人、陌生人、常客等会影响发言倾向\n\n`
+
         prompt += `【判定维度（满足任意1项即可判定为"应该发言"）】\n`
         prompt += `1. 直接关联：触发消息中提到角色名称、角色身份，或直接向该角色提问；\n`
         prompt += `2. 领域关联：触发消息涉及角色的关注领域（如调酒师被问酒品、安全员被提安全问题）；\n`
-        prompt += `3. 场景关联：当前场景下角色有义务/习惯回应（如调酒师在点单场景需回应客人）；\n`
-        prompt += `4. 关系关联：触发消息来自角色的亲密/需要关注的对象（如发小、需要照顾的学徒）；\n`
-        prompt += `5. 人设关联：角色人设决定其会主动介入该话题（如热心人设会回应客人的困扰）。\n\n`
+        prompt += `3. 场景关联：当前场景下角色有义务/习惯回应（如服务员在顾客进门时需欢迎）；\n`
+        prompt += `4. 关系关联：触发消息来自角色的亲密/需要关注的对象（如发小、需要照顾的学徒），或与用户关系密切；\n`
+        prompt += `5. 人设关联：角色人设决定其会主动介入该话题（如热心人设会回应客人的困扰）；\n`
+        prompt += `6. 用户关联：用户人设与角色关系密切，角色应该主动回应或关注。\n\n`
 
         prompt += `【排除条件（满足任意1项即判定为"不应该发言"）】\n`
         prompt += `1. 话题无关：触发消息与角色身份、关注领域、人际关系均无关联；\n`
-        prompt += `2. 场景不适：当前场景下角色无互动义务（如客人在角落私聊时，调酒师不主动介入）；\n`
+        prompt += `2. 场景不适：当前场景下角色无互动义务（如客人在角落私聊时，服务员不主动介入）；\n`
         prompt += `3. 人设冲突：主动发言会违背角色人设（如内向人设不会主动搭话陌生话题）；\n`
-        prompt += `4. 重复冗余：已有其他角色完全回应该话题，角色再发言无新增信息；\n`
-        prompt += `5. 设定冲突：角色的限制条件与全局记忆冲突（如角色仅周六出现，但今天是周一）；\n`
-        prompt += `6. 时间冲突：角色的出现时间与当前时间不符（如角色仅在晚上出现，但现在是白天）。\n\n`
+        prompt += `4. 重复冗余：已有其他角色完全回应该话题，且该角色无法提供新信息；\n`
+        prompt += `5. 职责重叠：其他角色更适合回应（如顾客说"有人吗"，服务员比老板更适合回应）；\n`
+        prompt += `6. 设定冲突：角色的限制条件与全局记忆冲突（如角色仅周六出现，但今天是周一）；\n`
+        prompt += `7. 时间冲突：角色的出现时间与当前时间不符（如角色仅在晚上出现，但现在是白天）；\n`
+        prompt += `8. 简单附和：角色只能表达简单的赞同、确认等，无法提供实质性内容；\n`
+        prompt += `9. 对话完整：当前对话已经自然结束，没有未完成的问题、请求或话题；\n`
+        prompt += `10. 无需补充：最近的发言已经完整回应了用户的问题或需求，没有遗漏；\n`
+        prompt += `11. 关系疏远：与用户关系疏远，且话题与角色职责无关。\n\n`
 
-        prompt += `⚠️ 重要：必须严格检查角色的限制条件是否与全局记忆冲突，冲突则该角色不应该发言。\n\n`
+        prompt += `【补充对话的严格标准】\n`
+        prompt += `只有在以下情况之一时，角色才应该补充发言：\n`
+        prompt += `1. 有未回答的问题：上一条消息中包含问题，但未被回应；\n`
+        prompt += `2. 有未完成的请求：上一条消息中包含请求，但未被满足；\n`
+        prompt += `3. 有需要澄清的信息：对话中存在模糊或需要进一步说明的内容；\n`
+        prompt += `4. 有新的重要信息：角色掌握其他角色不知道的重要信息，需要补充；\n`
+        prompt += `5. 有需要回应的反问：上一条消息包含反问，需要回应。\n\n`
+        prompt += `以下情况绝对不应该补充发言：\n`
+        prompt += `1. 简单的"是"、"好的"、"明白"等附和性发言；\n`
+        prompt += `2. 重复之前已经说过的内容；\n`
+        prompt += `3. 与当前话题无关的闲聊；\n`
+        prompt += `4. 对话已经自然结束，没有继续的必要。\n\n`
+
+        prompt += `⚠️ 重要：\n`
+        prompt += `- 必须严格检查角色的限制条件是否与全局记忆冲突，冲突则该角色不应该发言\n`
+        prompt += `- 当多个角色都能回应时，只选择最合适的1-2个角色发言，避免全体刷屏\n`
+        prompt += `- 优先选择职责最匹配、优先级最高、关系最相关的角色\n`
+        prompt += `- 补充对话必须严格遵循"补充对话的严格标准"，避免不必要的发言\n`
+        prompt += `- 宁可不补充，也不要让角色进行无意义的附和发言\n\n`
 
         prompt += `【输出格式】\n`
-        prompt += `仅输出应该发言的角色名称列表，用逗号分隔，不要输出其他内容。\n`
+        prompt += `仅输出应该发言的角色名称列表（按优先级排序），用逗号分隔，不要输出其他内容。\n`
         prompt += `如果没有角色应该发言，输出 NONE\n`
-        prompt += `示例：调酒师阿哲,客人小雅`
+        prompt += `示例1：服务员小美\n`
+        prompt += `示例2：服务员小美,老板张三\n`
+        prompt += `示例3：NONE`
+
+        return prompt
+    }
+
+    // 生成补充对话判定提示词（更严格的判断标准，但鼓励角色间互动）
+    generateSupplementPrompt(characters, config, recentMessages) {
+        let prompt = `你是补充对话判定器，负责判断在当前对话结束后，是否有角色需要补充发言。\n\n`
+
+        prompt += `【在场角色列表】\n`
+        characters.forEach(char => {
+            prompt += `- ${char.name}（${char.role || '未设定'}）\n`
+            prompt += `  人设：${char.personality || '未设定'}\n`
+            if (char.relationships && Object.keys(char.relationships).length > 0) {
+                prompt += `  角色关系：${Object.entries(char.relationships).map(([name, rel]) => `${name}(${rel})`).join('、')}\n`
+            }
+        })
+
+        // 添加用户人设信息
+        if (config.userPersona) {
+            prompt += `\n【用户人设】\n`
+            if (config.userPersona.identity) {
+                prompt += `用户身份：${config.userPersona.identity}\n`
+            }
+            if (config.userPersona.personality) {
+                prompt += `用户性格：${config.userPersona.personality}\n`
+            }
+            if (config.userPersona.relationships) {
+                prompt += `与角色的关系：${config.userPersona.relationships}\n`
+            }
+            if (config.userPersona.other) {
+                prompt += `其他设定：${config.userPersona.other}\n`
+            }
+            prompt += `⚠️ 重要：你需要根据用户的身份、性格和与角色的关系来调整补充发言判定。\n`
+        }
+
+        prompt += `\n【最近对话上下文】\n`
+        if (recentMessages && recentMessages.length > 0) {
+            recentMessages.slice(-5).forEach((msg, index) => {
+                if (msg.type === 'user') {
+                    prompt += `用户：${msg.content}\n`
+                } else if (msg.type === 'character') {
+                    prompt += `${msg.senderName || '角色'}：${msg.content}\n`
+                }
+            })
+        } else {
+            prompt += `（暂无对话记录）\n`
+        }
+        prompt += '\n'
+
+        prompt += `【核心判定原则】\n`
+        prompt += `优先级排序：回答用户问题 > 回答角色问题 > 提供补充信息 > 保持对话连贯性\n`
+        prompt += `补充发言应该以服务用户对话为核心，同时积极回应其他角色的明确提问\n`
+        prompt += `考虑与用户的关系亲密度，关系密切的角色应更积极地回应\n\n`
+
+        prompt += `【应该补充发言的情况（按优先级排序）】\n`
+        prompt += `【高优先级 - 必须回应】\n`
+        prompt += `1. 回答用户问题：用户提出的问题未被完全回答，需要补充说明或提供更多细节\n`
+        prompt += `2. 回答角色问题：其他角色明确向该角色提问，必须回应（优先级仅次于回答用户问题）\n`
+        prompt += `3. 用户请求未完成：用户的请求需要多个角色配合完成，该角色需要补充行动\n\n`
+
+        prompt += `【中优先级 - 可以补充】\n`
+        prompt += `4. 角色间直接互动：上一条消息中明确提到某个角色（如"角色B有人找你"），该角色应该回应\n`
+        prompt += `5. 有未回答的问题：上一条消息中包含问题，但未被回应\n`
+        prompt += `6. 有未完成的请求：上一条消息中包含请求，但未被满足\n`
+        prompt += `7. 有需要澄清的信息：对话中存在模糊或需要进一步说明的内容\n`
+        prompt += `8. 有新的重要信息：角色掌握其他角色不知道的重要信息，需要补充\n`
+        prompt += `9. 有需要回应的反问：上一条消息包含反问，需要回应\n\n`
+
+        prompt += `【低优先级 - 谨慎补充】\n`
+        prompt += `10. 对话延续：当前对话可以自然延续，该角色有相关话题可以补充\n`
+        prompt += `11. 场景互动：当前场景下该角色有义务/习惯进行互动（如服务员主动询问客人需求）\n\n`
+
+        prompt += `【绝对不应该补充发言的情况】\n`
+        prompt += `1. 简单的"是"、"好的"、"明白"等附和性发言\n`
+        prompt += `2. 重复之前已经说过的内容\n`
+        prompt += `3. 与当前话题无关的闲聊\n`
+        prompt += `4. 对话已经自然结束，没有继续的必要\n`
+        prompt += `5. 只是表达赞同或确认，没有新信息补充\n`
+        prompt += `6. 只是打招呼或客套话\n`
+        prompt += `7. 只是表达情绪或感想，没有实质性内容\n`
+        prompt += `8. 只是泛泛地提到某个角色，但没有明确的互动意图（如"今天大家都很好"）\n`
+        prompt += `9. 只是描述场景或状态，没有需要回应的内容\n`
+        prompt += `10. 用户问题已被完整回答，无需补充\n`
+        prompt += `11. 与用户关系疏远，且话题与角色职责无关\n\n`
+
+        prompt += `【角色间互动的判定标准】\n`
+        prompt += `以下情况算作"角色明确提问"，必须回应：\n`
+        prompt += `- 直接提问："服务员，你知道...吗？" "厨师，这道菜怎么做？"\n`
+        prompt += `- 询问意见："大家觉得这个提议怎么样？" "老板，您怎么看？"\n`
+        prompt += `- 请求确认："这个可以吗？" "这样处理对吗？"\n`
+        prompt += `- 请求帮助："能帮我一下吗？" "需要你的配合"\n\n`
+
+        prompt += `以下情况不算"明确提问"，可以不回应：\n`
+        prompt += `- 泛泛提及："今天大家都很好"\n`
+        prompt += `- 场景描述："客人们都在用餐"\n`
+        prompt += `- 一般陈述："我们这里服务很好"\n`
+        prompt += `- 简单问候："大家好"\n`
+        prompt += `- 自言自语或感叹："真不错啊"\n\n`
+
+        prompt += `【判定原则】\n`
+        prompt += `1. 用户优先：回答用户问题永远是最高优先级\n`
+        prompt += `2. 积极互动：当其他角色明确提问时，应该积极回应，保持对话生动\n`
+        prompt += `3. 关系考虑：考虑与用户的关系亲密度，关系密切的角色应更积极地回应\n`
+        prompt += `4. 必须有实质内容：补充内容必须对对话有实质性的推进或澄清作用\n`
+        prompt += `5. 最多选择1-2个角色补充发言\n`
+        prompt += `6. 如果对话已经自然结束，必须输出NONE\n`
+        prompt += `7. 宁可不补充，也不要让角色进行无意义的附和发言\n\n`
+
+        prompt += `【输出格式】\n`
+        prompt += `仅输出应该补充发言的角色名称，不要输出其他内容。\n`
+        prompt += `如果没有角色需要补充发言，输出 NONE\n\n`
+
+        prompt += `【示例说明】\n`
+        prompt += `示例1（角色间互动）\n`
+        prompt += `角色A：老板，客人说今天账单有问题\n`
+        prompt += `→ 应该补充：老板（因为被直接提到且有具体事由）\n\n`
+
+        prompt += `示例2（角色间提问）\n`
+        prompt += `角色A：服务员，你知道客人点的菜是什么吗？\n`
+        prompt += `→ 应该补充：服务员（因为被直接提问）\n\n`
+
+        prompt += `示例3（不应该补充）\n`
+        prompt += `角色A：今天大家都很好\n`
+        prompt += `→ 不应该补充：NONE（只是泛泛提到，没有明确互动意图）\n\n`
+
+        prompt += `示例4（不应该补充）\n`
+        prompt += `角色A：好的，我明白了\n`
+        prompt += `→ 不应该补充：NONE（只是简单的附和）\n\n`
+
+        prompt += `示例5（不应该补充）\n`
+        prompt += `角色A：今天天气真不错\n`
+        prompt += `→ 不应该补充：NONE（对话已经自然结束）\n\n`
+
+        prompt += `示例6（应该补充）\n`
+        prompt += `角色A：服务员小美，客人说菜太咸了\n`
+        prompt += `→ 应该补充：服务员小美（被明确提到且有具体问题需要回应）\n\n`
+
+        prompt += `最终输出示例：\n`
+        prompt += `服务员小美\n`
+        prompt += `或：NONE`
 
         return prompt
     }
 
     // 批量判断角色是否应该发言
-    async batchShouldSpeak(characters, config, recentMessages, aiSettings) {
+    async batchShouldSpeak(characters, config, recentMessages, aiSettings, isSupplement = false) {
         try {
-            const prompt = this.generateBatchShouldSpeakPrompt(characters, config, recentMessages)
+            // 根据是否为补充对话模式选择不同的提示词
+            let prompt;
+            if (isSupplement) {
+                prompt = this.generateSupplementPrompt(characters, config, recentMessages)
+            } else {
+                prompt = this.generateBatchShouldSpeakPrompt(characters, config, recentMessages)
+            }
 
             const response = await this.callAI(
                 aiSettings,
@@ -561,7 +832,22 @@ export class TavernAIService {
                 }
             })
 
-            console.log('[批量发言判断] 应该发言的角色:', responsiveCharacters.map(c => c.name).join(', '))
+            // 补充对话模式：最多返回1个角色
+            if (isSupplement) {
+                if (responsiveCharacters.length > 1) {
+                    console.log(`[补充对话] 限制为1个角色`)
+                    responsiveCharacters.length = 1
+                }
+                console.log('[补充对话] 应该补充发言的角色:', responsiveCharacters.map(c => c.name).join(', '))
+            } else {
+                // 普通模式：最多返回2个角色
+                const maxSpeakers = 2
+                if (responsiveCharacters.length > maxSpeakers) {
+                    console.log(`[批量发言判断] 限制发言角色数从 ${responsiveCharacters.length} 到 ${maxSpeakers}`)
+                    responsiveCharacters.length = maxSpeakers
+                }
+                console.log('[批量发言判断] 应该发言的角色:', responsiveCharacters.map(c => c.name).join(', '))
+            }
             
             return responsiveCharacters
         } catch (error) {
@@ -582,7 +868,8 @@ export class TavernAIService {
                 character,
                 config.worldSettings,
                 config.memories,
-                recentMessages
+                recentMessages,
+                config
             )
 
             // 构建消息列表
@@ -646,6 +933,25 @@ export class TavernAIService {
                 prompt += `世界与场景设定：${config.worldSettings}\n`
             }
 
+            // 用户人设信息
+            if (config && config.userPersona) {
+                const userPersona = config.userPersona
+                prompt += `\n【用户人设】\n`
+                if (userPersona.identity) {
+                    prompt += `用户身份：${userPersona.identity}\n`
+                }
+                if (userPersona.personality) {
+                    prompt += `用户性格：${userPersona.personality}\n`
+                }
+                if (userPersona.relationships) {
+                    prompt += `与角色的关系：${userPersona.relationships}\n`
+                }
+                if (userPersona.other) {
+                    prompt += `其他设定：${userPersona.other}\n`
+                }
+                prompt += `⚠️ 重要：你需要根据用户的身份、性格和与角色的关系来调整你的回复方式和语气。\n`
+            }
+
             // 近期记忆
             // 收集所有记忆：角色记忆 + 全局记忆 + 公共事件
             const allMemories = {}
@@ -705,20 +1011,51 @@ export class TavernAIService {
 
             // 自主发言规则
             prompt += `\n【自主发言规则】\n`
-            prompt += `1. 目的明确：发言需围绕"推进短期目标""回应自身状态""与其他角色互动"展开，如：向角色2追问细节·吐槽当前状态·邀请空闲的客人互动；\n`
-            prompt += `2. 表达规范：\n`
+            prompt += `1. 互动克制：不要主动与其他角色互动，除非满足以下条件之一：\n`
+            prompt += `   - 用户明确要求你与某个角色互动（如："你去叫一下服务员"）；\n`
+            prompt += `   - 你与某个角色关系密切（如：上级/下级、亲密朋友、家人）；\n`
+            prompt += `   - 当前对话中提到了与某个角色密切相关的话题；\n`
+            prompt += `   - 某个角色直接向你提问或提到你；\n`
+            prompt += `2. 优先回应用户：如果没有满足上述条件，优先回应用户，不要主动与其他角色互动；\n`
+            prompt += `3. 目的明确：发言需围绕"回应用户""推进短期目标""回应自身状态"展开；\n`
+            prompt += `4. 表达规范：\n`
             prompt += `   - 长度：1-2句话，每句不超过12字，简洁自然；\n`
-            prompt += `   - 动作表情：搭配1个符合当前状态的微动作/表情（用圆括号标注），如：（停下擦拭酒杯的手，看向角色2）；\n`
+            prompt += `   - 动作表情：搭配1个符合当前状态的微动作/表情（用圆括号标注），如：（看向服务员）；\n`
             prompt += `   - 语气：匹配当前情绪，如：焦虑时语气急促·无聊时语气慵懒；\n`
-            prompt += `3. 互动指向：明确对话对象（如对某角色/全场客人），避免无指向性发言；\n`
-            prompt += `4. 场景适配：发言内容贴合当前场景，如：酒馆起雾时可聊雾天相关话题·空闲时可聊调酒相关内容。\n\n`
+            prompt += `5. 互动指向：明确对话对象，优先回应用户，避免无指向性发言；\n`
+            prompt += `6. 场景适配：发言内容贴合当前场景，如：酒馆起雾时可聊雾天相关话题·空闲时可聊调酒相关内容。\n\n`
+
+            prompt += `【角色间互动条件（必须满足之一）】\n`
+            prompt += `1. 用户明确要求：用户说"你去叫一下服务员"→ 可以与服务员互动；\n`
+            prompt += `2. 关系密切：与某个角色是上级/下级/亲密朋友/家人→ 可以主动互动；\n`
+            prompt += `3. 话题相关：对话中提到了某个角色的专业领域或职责→ 可以互动；\n`
+            prompt += `4. 直接提问：某个角色直接向你提问→ 必须回应；\n`
+            prompt += `5. 被提到：某个角色在发言中提到你→ 应该回应。\n\n`
+
+            prompt += `【角色间互动示例】\n`
+            prompt += `示例1（用户要求）：用户说"你去叫一下服务员"→ （看向服务员）老板叫你过去一下。\n`
+            prompt += `示例2（关系密切）：与老板是上下级关系→ （看向老板）老板，今天的菜卖得怎么样？\n`
+            prompt += `示例3（话题相关）：对话中提到厨师→ （看向厨师）厨师，这道菜需要重新做吗？\n`
+            prompt += `示例4（直接提问）：服务员问你今天的菜卖得怎么样→ 还不错，比昨天好。\n`
+            prompt += `示例5（被提到）：老板提到你→ （看向老板）老板，我在。\n`
+            prompt += `示例6（回复用户）：用户说"我要点菜"→ 好的，请稍等。\n\n`
 
             // 在场角色状态
             if (config.characters && config.characters.length > 0) {
                 prompt += `【当前在场角色状态】\n`
+                prompt += `注意：只有在满足特定条件时才与这些角色互动（详见"自主发言规则"）\n`
                 config.characters.forEach(char => {
                     if (char.id !== character.id) {
-                        prompt += `- ${char.name}：空闲·在场\n`
+                        let status = '空闲·在场'
+                        if (char.relationships && character.relationships && char.relationships[character.name]) {
+                            const relation = char.relationships[character.name]
+                            status += `（${relation}）`
+                            // 标记密切关系
+                            if (['上级', '下级', '亲密朋友', '家人', '夫妻', '父子', '母女', '兄弟', '姐妹'].includes(relation)) {
+                                status += ` [密切关系]`
+                            }
+                        }
+                        prompt += `- ${char.name}：${status}·身份：${char.role || '未设定'}\n`
                     }
                 })
             }
@@ -738,7 +1075,17 @@ export class TavernAIService {
 
             // 输出要求
             prompt += `\n【输出要求】\n`
-            prompt += `直接生成角色的主动发言内容，无需任何前缀/后缀，示例：（抬眼看向发呆的客人）今天的雾比平时大啊。`
+            prompt += `1. 直接生成角色的发言内容，无需任何前缀/后缀；\n`
+            prompt += `2. 优先与其他角色互动，不要只关注用户；\n`
+            prompt += `3. 如果对话中其他角色提到你，必须回应；\n`
+            prompt += `4. 发言内容要自然流畅，符合人设和场景。\n\n`
+
+            prompt += `【发言示例】\n`
+            prompt += `示例1（向其他角色提问）：（看向服务员）小美，今天的菜卖得怎么样？\n`
+            prompt += `示例2（回应其他角色）：老板说得对，确实如此。\n`
+            prompt += `示例3（回复用户）：好的，我这就去处理。\n`
+            prompt += `示例4（主动发起）：今天天气不错，要不要去外面透透气？\n`
+            prompt += `示例5（分享信息）：刚才有个客人说菜太咸了。\n\n`
 
             // 构建消息列表
             const messages = [
@@ -1109,6 +1456,462 @@ export class TavernAIService {
                 interval: 3,
                 reason: '判定失败，使用默认值'
             }
+        }
+    }
+
+    // 生成对话总结提示词
+    generateSummaryPrompt(config, messages, memoryType, character = null) {
+        let prompt = `你是对话记忆总结员，从对话中提取关键信息点生成简洁记忆。\n\n`
+
+        if (memoryType === 'character' && character) {
+            prompt += `【角色】${character.name}\n`
+        }
+
+        prompt += `【对话内容】\n`
+        messages.forEach(msg => {
+            if (msg.type === 'user') {
+                prompt += `用户：${msg.content}\n`
+            } else if (msg.type === 'character') {
+                const sender = msg.senderName || '角色'
+                prompt += `${sender}：${msg.content}\n`
+            }
+        })
+
+        prompt += `\n【总结要求】\n`
+        prompt += `1. 仅提取对话中的具体信息点（事件、事实、决策、关系等）\n`
+        prompt += `2. 不要重复角色的人设、性格、语言风格等固有属性\n`
+        prompt += `3. 不要添加任何描述性文字或解释\n`
+        prompt += `4. 使用简洁的陈述句，每条信息用分号分隔\n`
+        prompt += `5. 总字数控制在80字以内\n\n`
+
+        prompt += `【示例】\n`
+        prompt += `输入：角色A说"我今天去了市场，买了些苹果，还遇到了老朋友B"\n`
+        prompt += `输出：去过市场买苹果；遇到老朋友B\n\n`
+
+        prompt += `【输出】\n`
+        prompt += `直接输出总结内容，不要任何前缀后缀。`
+
+        return prompt
+    }
+
+    // 总结对话生成记忆
+    async summarizeConversation(config, messages, aiSettings, memoryType = 'global', character = null) {
+        try {
+            if (!messages || messages.length === 0) {
+                console.warn('[对话总结] 没有可总结的对话记录')
+                return null
+            }
+
+            const prompt = this.generateSummaryPrompt(config, messages, memoryType, character)
+
+            const response = await this.callAI(
+                aiSettings,
+                [{ role: 'user', content: prompt }],
+                null,
+                null,
+                null,
+                null
+            )
+
+            const summary = response.choices?.[0]?.message?.content || response.content || ''
+
+            if (!summary || summary.trim().length === 0) {
+                console.warn('[对话总结] AI 返回空内容')
+                return null
+            }
+
+            console.log(`[对话总结] ${memoryType === 'global' ? '全局' : character?.name} 记忆已生成:`, summary)
+            
+            return summary.trim()
+        } catch (error) {
+            console.error('总结对话失败:', error)
+            throw error
+        }
+    }
+
+    // ==================== AI内容生成方法 ====================
+
+    // 生成世界设定提示词
+    generateWorldSettingsPrompt(existingSettings = '', userHint = '') {
+        let prompt = `你是世界设定创作专家，负责创建或优化酒馆场景的世界观设定。\n\n`
+
+        if (existingSettings && existingSettings.trim()) {
+            prompt += `【现有世界设定】\n${existingSettings}\n\n`
+            prompt += `【任务】\n请对上述现有世界设定进行补充和优化，使其更加丰富和完整。优化时应：\n`
+            prompt += `1. 保留原有的核心设定和特色元素\n`
+            prompt += `2. 补充缺失的细节，如地理环境、社会结构、文化特色等\n`
+            prompt += `3. 深化设定内涵，使世界观更加立体\n`
+            prompt += `4. 保持原设定的风格和基调\n\n`
+        } else {
+            prompt += `【任务】\n请为酒馆场景创建一个完整的、富有想象力的世界设定。设定应包括：\n`
+            prompt += `1. 场景名称和地理位置\n`
+            prompt += `2. 历史背景和文化特色\n`
+            prompt += `3. 社会体系和权力结构\n`
+            prompt += `4. 物理法则和特殊规则（如有）\n`
+            prompt += `5. 重要地点或地标\n`
+            prompt += `6. 潜在的冲突和矛盾\n\n`
+        }
+
+        if (userHint && userHint.trim()) {
+            prompt += `【用户提供的参考信息】\n${userHint}\n\n`
+            prompt += `请在生成设定时参考上述用户提供的参考信息。\n\n`
+        }
+
+        prompt += `【输出要求】\n`
+        prompt += `1. 直接输出世界设定内容，不要任何前缀或后缀\n`
+        prompt += `2. 使用清晰的结构和分段\n`
+        prompt += `3. 设定要具体、生动，有画面感\n`
+        prompt += `4. 避免过于抽象或空泛的描述\n`
+        prompt += `5. 总字数控制在200-500字之间\n\n`
+
+        prompt += `【示例】\n`
+        prompt += `落风镇位于魔兽森林边缘，是被遗忘之地最后的文明据点。镇上只有一家酒馆"避风港"，来往客人多是猎人、佣兵和逃犯。小镇实行松散的自治制度，由几位资深冒险者组成的"长老会"维持秩序。这里没有明确的法律，只有一条不成文的规矩：在酒馆内不得动武。落风镇的特殊之处在于，每当满月之夜，森林深处会传来神秘的歌声，据说那是上古精灵的呼唤，吸引着无数冒险者深入探索。`
+
+        return prompt
+    }
+
+    // 生成世界设定
+    async generateWorldSettings(existingSettings = '', userHint = '', aiSettings) {
+        try {
+            const prompt = this.generateWorldSettingsPrompt(existingSettings, userHint)
+
+            const response = await this.callAI(
+                aiSettings,
+                [{ role: 'user', content: prompt }],
+                null,
+                null,
+                null,
+                null
+            )
+
+            const result = response.choices?.[0]?.message?.content || response.content || ''
+
+            if (!result || result.trim().length === 0) {
+                console.warn('[世界设定生成] AI 返回空内容')
+                return null
+            }
+
+            console.log('[世界设定生成] 生成成功:', result.trim())
+            
+            return result.trim()
+        } catch (error) {
+            console.error('生成世界设定失败:', error)
+            throw error
+        }
+    }
+
+    // 生成角色信息提示词
+    generateCharacterInfoPrompt(characterInfo = {}, worldSettings = '', hint = '') {
+        let prompt = `你是角色设定创作专家，负责创建或优化角色的详细人设信息。\n\n`
+
+        if (worldSettings && worldSettings.trim()) {
+            prompt += `【世界设定】\n${worldSettings}\n\n`
+        }
+
+        const hasExistingInfo = characterInfo.name || characterInfo.role || characterInfo.personality || 
+                               characterInfo.style || characterInfo.rules || characterInfo.goal || 
+                               characterInfo.relationships
+
+        if (hasExistingInfo) {
+            prompt += `【现有角色信息】\n`
+            if (characterInfo.name) prompt += `角色名称：${characterInfo.name}\n`
+            if (characterInfo.role) prompt += `角色身份：${characterInfo.role}\n`
+            if (characterInfo.personality) prompt += `核心人设：${characterInfo.personality}\n`
+            if (characterInfo.style) prompt += `语言风格：${characterInfo.style}\n`
+            if (characterInfo.rules) prompt += `行为准则：${characterInfo.rules}\n`
+            if (characterInfo.goal) prompt += `个人目标：${characterInfo.goal}\n`
+            if (characterInfo.relationships) prompt += `角色关系：${characterInfo.relationships}\n\n`
+            
+            prompt += `【任务】\n请基于上述现有角色信息和世界设定，对角色设定进行补充和优化。优化时应：\n`
+            prompt += `1. 保留原有的核心人设和特色\n`
+            prompt += `2. 补充缺失的设定细节\n`
+            prompt += `3. 深化角色个性，使其更加立体\n`
+            prompt += `4. 确保角色设定符合世界观\n\n`
+        } else {
+            prompt += `【任务】\n请基于世界设定创建一个全新的、富有特色的角色设定。设定应包括：\n`
+            prompt += `1. 角色名称（有特色的姓名）\n`
+            prompt += `2. 角色身份（符合世界观的职业或社会地位）\n`
+            prompt += `3. 核心人设（性格特点、价值观、信念）\n`
+            prompt += `4. 语言风格（说话方式、口头禅、语气）\n`
+            prompt += `5. 行为准则（做事的原则和底线）\n`
+            prompt += `6. 个人目标（短期或长期目标）\n`
+            prompt += `7. 角色关系（与其他角色的关系）\n\n`
+        }
+
+        if (hint && hint.trim()) {
+            prompt += `【用户提供的参考信息】\n${hint}\n\n`
+            prompt += `请在创建或优化角色时参考上述用户提供的参考信息。\n\n`
+        }
+
+        prompt += `【输出要求】\n`
+        prompt += `请按照以下JSON格式输出角色信息，不要添加任何其他文字：\n\n`
+        prompt += `{\n`
+        prompt += `  "name": "角色名称",\n`
+        prompt += `  "role": "角色身份",\n`
+        prompt += `  "personality": "核心人设",\n`
+        prompt += `  "style": "语言风格",\n`
+        prompt += `  "rules": "行为准则",\n`
+        prompt += `  "goal": "个人目标",\n`
+        prompt += `  "relationships": "角色关系"\n`
+        prompt += `}\n\n`
+
+        return prompt
+    }
+
+    // 生成/优化角色信息
+    async generateCharacterInfo(characterInfo = {}, worldSettings = '', aiSettings, hint = '') {
+        try {
+            const prompt = this.generateCharacterInfoPrompt(characterInfo, worldSettings, hint)
+
+            const response = await this.callAI(
+                aiSettings,
+                [{ role: 'user', content: prompt }],
+                null,
+                null,
+                null,
+                null
+            )
+
+            const result = response.choices?.[0]?.message?.content || response.content || ''
+
+            if (!result || result.trim().length === 0) {
+                console.warn('[角色信息生成] AI 返回空内容')
+                return null
+            }
+
+            // 尝试解析JSON
+            let characterData
+            try {
+                // 提取JSON部分（可能被包裹在其他文本中）
+                const jsonMatch = result.match(/\{[\s\S]*\}/)
+                if (jsonMatch) {
+                    characterData = JSON.parse(jsonMatch[0])
+                } else {
+                    characterData = JSON.parse(result)
+                }
+            } catch (e) {
+                console.warn('[角色信息生成] JSON解析失败，尝试手动解析')
+                // 如果JSON解析失败，尝试从文本中提取信息
+                characterData = {
+                    name: characterInfo.name || '未命名角色',
+                    role: characterInfo.role || '未设定',
+                    personality: characterInfo.personality || result,
+                    style: characterInfo.style || '自然对话',
+                    rules: characterInfo.rules || '',
+                    goal: characterInfo.goal || '',
+                    relationships: characterInfo.relationships || ''
+                }
+            }
+
+            console.log('[角色信息生成] 生成成功:', characterData)
+            
+            return characterData
+        } catch (error) {
+            console.error('生成角色信息失败:', error)
+            throw error
+        }
+    }
+
+    // 生成随机角色提示词
+    generateRandomCharacterPrompt(worldSettings = '', hint = '') {
+        let prompt = `你是角色创作专家，负责基于世界设定创建全新的随机角色。\n\n`
+
+        if (worldSettings && worldSettings.trim()) {
+            prompt += `【世界设定】\n${worldSettings}\n\n`
+        }
+
+        prompt += `【任务】\n请基于世界设定创建一个全新的、富有特色的角色。这个角色应该：\n`
+        prompt += `1. 符合世界观和场景设定\n`
+        prompt += `2. 有明确的身份和职业\n`
+        prompt += `3. 有鲜明的个性和人设\n`
+        prompt += `4. 有独特的语言风格\n`
+        prompt += `5. 有明确的个人目标或动机\n\n`
+
+        if (hint && hint.trim()) {
+            prompt += `【用户提供的参考信息】\n${hint}\n\n`
+            prompt += `请在创建角色时参考上述用户提供的参考信息。\n\n`
+        }
+
+        prompt += `【输出要求】\n`
+        prompt += `请按照以下JSON格式输出角色信息，不要添加任何其他文字：\n\n`
+        prompt += `{\n`
+        prompt += `  "name": "角色名称",\n`
+        prompt += `  "role": "角色身份",\n`
+        prompt += `  "personality": "核心人设",\n`
+        prompt += `  "style": "语言风格",\n`
+        prompt += `  "rules": "行为准则",\n`
+        prompt += `  "goal": "个人目标",\n`
+        prompt += `  "relationships": "角色关系（如果没有可以留空）"\n`
+        prompt += `}\n\n`
+
+        prompt += `【示例】\n`
+        prompt += `{\n`
+        prompt += `  "name": "艾琳娜",\n`
+        prompt += `  "role": "流浪歌手",\n`
+        prompt += `  "personality": "自由奔放，热爱冒险，对陌生人友善但保持警惕，喜欢用歌声表达情感",\n`
+        prompt += `  "style": "说话带诗意，喜欢用比喻，语气温柔但有力量，经常哼唱旋律",\n`
+        prompt += `  "rules": "不向任何人透露自己的过去；不参与任何阵营斗争；保护弱者",\n`
+        prompt += `  "goal": "寻找失散的妹妹，收集各地的民谣",\n`
+        prompt += `  "relationships": ""\n`
+        prompt += `}\n`
+
+        return prompt
+    }
+
+    // 生成随机角色
+    async generateRandomCharacter(worldSettings = '', hint = '', aiSettings) {
+        try {
+            const prompt = this.generateRandomCharacterPrompt(worldSettings, hint)
+
+            const response = await this.callAI(
+                aiSettings,
+                [{ role: 'user', content: prompt }],
+                null,
+                null,
+                null,
+                null
+            )
+
+            const result = response.choices?.[0]?.message?.content || response.content || ''
+
+            if (!result || result.trim().length === 0) {
+                console.warn('[随机角色生成] AI 返回空内容')
+                return null
+            }
+
+            // 尝试解析JSON
+            let characterData
+            try {
+                // 提取JSON部分（可能被包裹在其他文本中）
+                const jsonMatch = result.match(/\{[\s\S]*\}/)
+                if (jsonMatch) {
+                    characterData = JSON.parse(jsonMatch[0])
+                } else {
+                    characterData = JSON.parse(result)
+                }
+            } catch (e) {
+                console.warn('[随机角色生成] JSON解析失败，尝试手动解析')
+                // 如果JSON解析失败，返回基本信息
+                characterData = {
+                    name: '未命名角色',
+                    role: '未设定',
+                    personality: result,
+                    style: '自然对话',
+                    rules: '',
+                    goal: '',
+                    relationships: ''
+                }
+            }
+
+            // 添加头像（默认）
+            characterData.avatar = characterData.avatar || '👤'
+            characterData.id = characterData.id || Date.now().toString()
+
+            console.log('[随机角色生成] 生成成功:', characterData)
+            
+            return characterData
+        } catch (error) {
+            console.error('生成随机角色失败:', error)
+            throw error
+        }
+    }
+
+    // 生成用户人设提示词
+    generateUserPersonaPrompt(existingPersona = {}, worldSettings = '', hint = '') {
+        let prompt = `你是人设创作专家，负责创建或优化用户的角色人设。\n\n`
+
+        if (worldSettings && worldSettings.trim()) {
+            prompt += `【世界设定】\n${worldSettings}\n\n`
+        }
+
+        const hasExistingInfo = existingPersona.identity || existingPersona.personality || 
+                               existingPersona.relationships || existingPersona.other
+
+        if (hasExistingInfo) {
+            prompt += `【现有用户人设】\n`
+            if (existingPersona.identity) prompt += `用户身份：${existingPersona.identity}\n`
+            if (existingPersona.personality) prompt += `用户性格：${existingPersona.personality}\n`
+            if (existingPersona.relationships) prompt += `与角色的关系：${existingPersona.relationships}\n`
+            if (existingPersona.other) prompt += `其他设定：${existingPersona.other}\n\n`
+            
+            prompt += `【任务】\n请基于上述现有用户人设和世界设定，对人设进行补充和优化。优化时应：\n`
+            prompt += `1. 保留原有的核心设定\n`
+            prompt += `2. 补充缺失的细节\n`
+            prompt += `3. 深化人设，使其更加立体\n`
+            prompt += `4. 确保人设符合世界观\n\n`
+        } else {
+            prompt += `【任务】\n请基于世界设定创建一个完整的用户人设。人设应包括：\n`
+            prompt += `1. 用户身份（在世界中的角色）\n`
+            prompt += `2. 用户性格（性格特点、价值观）\n`
+            prompt += `3. 与角色的关系（与各个角色的关系）\n`
+            prompt += `4. 其他设定（特殊能力、背景故事等）\n\n`
+        }
+
+        if (hint && hint.trim()) {
+            prompt += `【用户提供的参考信息】\n${hint}\n\n`
+            prompt += `请在创建或优化用户人设时参考上述用户提供的参考信息。\n\n`
+        }
+
+        prompt += `【输出要求】\n`
+        prompt += `请按照以下JSON格式输出用户人设信息，不要添加任何其他文字：\n\n`
+        prompt += `{\n`
+        prompt += `  "identity": "用户身份",\n`
+        prompt += `  "personality": "用户性格",\n`
+        prompt += `  "relationships": "与角色的关系",\n`
+        prompt += `  "other": "其他设定"\n`
+        prompt += `}\n\n`
+
+        return prompt
+    }
+
+    // 生成/优化用户人设
+    async generateUserPersona(existingPersona = {}, worldSettings = '', aiSettings, hint = '') {
+        try {
+            const prompt = this.generateUserPersonaPrompt(existingPersona, worldSettings, hint)
+
+            const response = await this.callAI(
+                aiSettings,
+                [{ role: 'user', content: prompt }],
+                null,
+                null,
+                null,
+                null
+            )
+
+            const result = response.choices?.[0]?.message?.content || response.content || ''
+
+            if (!result || result.trim().length === 0) {
+                console.warn('[用户人设生成] AI 返回空内容')
+                return null
+            }
+
+            // 尝试解析JSON
+            let personaData
+            try {
+                // 提取JSON部分（可能被包裹在其他文本中）
+                const jsonMatch = result.match(/\{[\s\S]*\}/)
+                if (jsonMatch) {
+                    personaData = JSON.parse(jsonMatch[0])
+                } else {
+                    personaData = JSON.parse(result)
+                }
+            } catch (e) {
+                console.warn('[用户人设生成] JSON解析失败，尝试手动解析')
+                // 如果JSON解析失败，返回基本信息
+                personaData = {
+                    identity: existingPersona.identity || '未设定',
+                    personality: result,
+                    relationships: existingPersona.relationships || '',
+                    other: existingPersona.other || ''
+                }
+            }
+
+            console.log('[用户人设生成] 生成成功:', personaData)
+            
+            return personaData
+        } catch (error) {
+            console.error('生成用户人设失败:', error)
+            throw error
         }
     }
 }

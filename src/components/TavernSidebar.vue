@@ -26,8 +26,33 @@
               class="form-control textarea"
               v-model="localConfig.worldSettings"
               placeholder="例如：本场景是名为'落风镇'的边境小镇，镇上只有一家酒馆'避风港'。小镇被魔兽森林环绕，来往客人多是猎人、佣兵和逃犯..."
-              rows="12"
+              rows="20"
             ></textarea>
+            <!-- AI生成世界设定 -->
+            <div class="ai-generate-section">
+              <div class="ai-generate-input-group">
+                <input
+                  type="text"
+                  class="form-control ai-hint-input"
+                  v-model="worldSettingsHint"
+                  placeholder="输入世界的基本设定或预期设定（可选）"
+                >
+                <button
+                  class="ai-generate-btn"
+                  :class="{ 'shine-effect': styleSettings.enableShineEffect, 'loading': isGeneratingWorldSettings }"
+                  @click="generateWorldSettings"
+                  :disabled="isGeneratingWorldSettings"
+                >
+                  <svg v-if="!isGeneratingWorldSettings" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                  </svg>
+                  <svg v-else class="loading-spinner" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="30" stroke-dashoffset="10"/>
+                  </svg>
+                  {{ isGeneratingWorldSettings ? '生成中...' : (localConfig.worldSettings ? '优化设定' : '生成设定') }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -58,7 +83,10 @@
               :key="character.id"
               class="character-item"
             >
-              <div class="character-avatar">{{ character.avatar || '👤' }}</div>
+              <div class="character-avatar">
+              <img v-if="isImageUrl(character.avatar)" :src="character.avatar" :alt="character.name" class="character-avatar-img" />
+              <span v-else>{{ character.avatar || '👤' }}</span>
+            </div>
               <div class="character-info">
                 <h4 class="character-name">{{ character.name }}</h4>
                 <p class="character-role">{{ character.role || '无角色设定' }}</p>
@@ -73,6 +101,100 @@
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                   </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI创建角色 -->
+          <div class="ai-create-character-section">
+            <div class="ai-generate-input-group">
+              <input
+                type="text"
+                class="form-control ai-hint-input"
+                v-model="createCharacterHint"
+                placeholder="输入角色基础信息（如性别、身份等，可选）"
+              >
+              <button
+                class="ai-generate-btn"
+                :class="{ 'shine-effect': styleSettings.enableShineEffect, 'loading': isCreatingCharacter }"
+                @click="createRandomCharacter"
+                :disabled="isCreatingCharacter"
+              >
+                <svg v-if="!isCreatingCharacter" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+                <svg v-else class="loading-spinner" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="30" stroke-dashoffset="10"/>
+                </svg>
+                {{ isCreatingCharacter ? '创建中...' : 'AI创建角色' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 用户人设设置 -->
+          <div class="section-divider"></div>
+          <div class="user-persona-section">
+            <h3 class="section-title">用户人设</h3>
+            <p class="section-hint">设定用户的身份、性格、与角色的关系等</p>
+            <div class="form-group">
+              <label>用户身份</label>
+              <input
+                type="text"
+                class="form-control"
+                v-model="localConfig.userPersona.identity"
+                placeholder="例如：落风镇的流浪冒险者、酒馆的常客、神秘的旅人..."
+              >
+            </div>
+            <div class="form-group">
+              <label>用户性格</label>
+              <textarea
+                class="form-control textarea"
+                v-model="localConfig.userPersona.personality"
+                placeholder="例如：性格开朗、喜欢冒险、对陌生人保持警惕但友善..."
+                rows="3"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label>与角色的关系</label>
+              <textarea
+                class="form-control textarea"
+                v-model="localConfig.userPersona.relationships"
+                placeholder="定义用户与各个角色的关系，例如：与酒馆老板是老朋友，与佣兵是竞争对手..."
+                rows="3"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label>其他设定</label>
+              <textarea
+                class="form-control textarea"
+                v-model="localConfig.userPersona.other"
+                placeholder="其他关于用户的设定信息..."
+                rows="2"
+              ></textarea>
+            </div>
+            <!-- AI填写按钮 -->
+            <div class="ai-generate-section">
+              <div class="ai-generate-input-group">
+                <input
+                  type="text"
+                  class="form-control ai-hint-input"
+                  v-model="fillUserPersonaHint"
+                  placeholder="输入人设的基本设定或预期设定（可选）"
+                >
+                <button
+                  class="ai-generate-btn"
+                  :class="{ 'shine-effect': styleSettings.enableShineEffect, 'loading': isFillingUserPersona }"
+                  @click="fillUserPersona"
+                  :disabled="isFillingUserPersona"
+                >
+                  <svg v-if="!isFillingUserPersona" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                  </svg>
+                  <svg v-else class="loading-spinner" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="30" stroke-dashoffset="10"/>
+                  </svg>
+                  {{ isFillingUserPersona ? '填写中...' : 'AI填写' }}
                 </button>
               </div>
             </div>
@@ -122,21 +244,16 @@
           <div class="panel-section">
             <h3 class="section-title">配置信息</h3>
             <div class="info-grid">
-              <div class="info-item">
+              <div class="info-item full-width">
+                <label>配置图标</label>
+                <AvatarUpload v-model="localConfig.icon" />
+              </div>
+              <div class="info-item full-width">
                 <label>配置名称</label>
                 <input
                   type="text"
                   class="form-control"
                   v-model="localConfig.name"
-                >
-              </div>
-              <div class="info-item">
-                <label>配置图标</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  v-model="localConfig.icon"
-                  maxlength="2"
                 >
               </div>
               <div class="info-item full-width">
@@ -153,16 +270,7 @@
       </div>
     </div>
 
-    <!-- Sidebar Footer -->
-    <div class="sidebar-footer">
-<button
-          class="save-btn"
-          :class="{ 'shine-effect': styleSettings.enableShineEffect }"
-          @click="saveConfig"
-        >
-          保存配置
-        </button>
-    </div>
+    <!-- Sidebar Footer - 自动保存已启用，无需手动保存按钮 -->
 
     <!-- 删除角色确认弹窗 -->
     <div v-if="showDeleteCharacterConfirm" class="confirm-overlay" @click.self="showDeleteCharacterConfirm = null">
@@ -225,13 +333,7 @@
       </div>
       <div class="form-group">
         <label>角色头像</label>
-        <input
-          type="text"
-          class="form-control"
-          v-model="characterForm.avatar"
-          placeholder="例如：👨‍🍳"
-          maxlength="2"
-        >
+        <AvatarUpload v-model="characterForm.avatar" />
       </div>
       <div class="form-group">
         <label>角色身份</label>
@@ -278,6 +380,41 @@
           rows="2"
         ></textarea>
       </div>
+      <div class="form-group">
+        <label>角色关系</label>
+        <textarea
+          class="form-control textarea"
+          v-model="characterForm.relationships"
+          placeholder="例如：张三(上级)、李四(同事)、王五(朋友)、赵六(讨厌的人)。格式：角色名(关系类型)"
+          rows="2"
+        ></textarea>
+        <p class="form-hint">定义该角色与其他角色的关系，会影响发言判定和互动方式</p>
+      </div>
+      <!-- AI填写按钮 -->
+      <div class="ai-generate-section">
+        <div class="ai-generate-input-group">
+          <input
+            type="text"
+            class="form-control ai-hint-input"
+            v-model="fillCharacterHint"
+            placeholder="输入角色基本信息或预期设定（可选）"
+          >
+          <button
+            class="ai-generate-btn"
+            :class="{ 'shine-effect': styleSettings.enableShineEffect, 'loading': isFillingCharacter }"
+            @click="fillCharacterInfo"
+            :disabled="isFillingCharacter"
+          >
+            <svg v-if="!isFillingCharacter" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+            <svg v-else class="loading-spinner" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="30" stroke-dashoffset="10"/>
+            </svg>
+            {{ isFillingCharacter ? '填写中...' : 'AI填写' }}
+          </button>
+        </div>
+      </div>
     </Modal>
 
     <!-- 添加记忆弹窗 -->
@@ -310,8 +447,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue';
+import { ref, reactive, watch, onUnmounted } from 'vue';
 import Modal from './Modal.vue';
+import AvatarUpload from './AvatarUpload.vue';
+import { tavernAIService } from '../tavernAIService.js';
 
 const props = defineProps({
   config: {
@@ -321,6 +460,10 @@ const props = defineProps({
   styleSettings: {
     type: Object,
     default: () => ({})
+  },
+  aiSettings: {
+    type: Object,
+    default: () => ({})
   }
 });
 
@@ -328,6 +471,30 @@ const emit = defineEmits(['update-config']);
 
 // 本地配置副本
 const localConfig = reactive({ ...props.config });
+
+// 确保 userPersona 对象存在
+if (!localConfig.userPersona) {
+  localConfig.userPersona = {
+    identity: '',
+    personality: '',
+    relationships: '',
+    other: ''
+  };
+}
+
+// 自动保存相关
+let autoSaveTimer = null;
+const AUTO_SAVE_DELAY = 1000; // 1秒后自动保存
+
+// 自动保存函数
+const autoSave = () => {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+  }
+  autoSaveTimer = setTimeout(() => {
+    emit('update-config', { ...localConfig });
+  }, AUTO_SAVE_DELAY);
+};
 
 // Tabs
 const tabs = [
@@ -348,7 +515,8 @@ const characterForm = reactive({
   personality: '',
   style: '',
   rules: '',
-  goal: ''
+  goal: '',
+  relationships: ''
 });
 
 // 记忆管理
@@ -362,15 +530,58 @@ const memoryForm = reactive({
 const showDeleteCharacterConfirm = ref(null);
 const showDeleteMemoryConfirm = ref(null);
 
+// AI生成相关状态
+const isGeneratingWorldSettings = ref(false);
+const isFillingCharacter = ref(false);
+const isCreatingCharacter = ref(false);
+const isFillingUserPersona = ref(false);
+const worldSettingsHint = ref('');
+const createCharacterHint = ref('');
+const fillCharacterHint = ref('');
+const fillUserPersonaHint = ref('');
+
 // 监听配置变化
 watch(() => props.config, (newConfig) => {
   Object.assign(localConfig, newConfig);
+  // 确保 userPersona 对象存在
+  if (!localConfig.userPersona) {
+    localConfig.userPersona = {
+      identity: '',
+      personality: '',
+      relationships: '',
+      other: ''
+    };
+  }
+}, { deep: true, immediate: true });
+
+// 监听本地配置变化，自动保存
+watch(localConfig, () => {
+  autoSave();
 }, { deep: true });
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+    // 立即保存最后一次更改
+    emit('update-config', { ...localConfig });
+  }
+});
 
 // 编辑角色
 const editCharacter = (character) => {
   editingCharacter.value = character;
   Object.assign(characterForm, character);
+  
+  // 将relationships对象转换为字符串格式
+  if (character.relationships && typeof character.relationships === 'object') {
+    characterForm.relationships = Object.entries(character.relationships)
+      .map(([name, type]) => `${name}(${type})`)
+      .join('、');
+  } else {
+    characterForm.relationships = '';
+  }
+  
   showAddCharacterModal.value = true;
 };
 
@@ -379,6 +590,22 @@ const saveCharacter = () => {
   if (!characterForm.name.trim()) return;
 
   const character = { ...characterForm };
+
+  // 解析角色关系字符串为对象
+  if (character.relationships && character.relationships.trim()) {
+    const relationshipsObj = {};
+    const relations = character.relationships.split(/[,，;；]/);
+    relations.forEach(rel => {
+      const match = rel.trim().match(/^(.+?)\((.+?)\)$/);
+      if (match) {
+        const [, name, type] = match;
+        relationshipsObj[name.trim()] = type.trim();
+      }
+    });
+    character.relationships = relationshipsObj;
+  } else {
+    character.relationships = {};
+  }
 
   if (editingCharacter.value) {
     // 编辑现有角色
@@ -409,6 +636,7 @@ const closeCharacterModal = () => {
   characterForm.style = '';
   characterForm.rules = '';
   characterForm.goal = '';
+  characterForm.relationships = '';
 };
 
 // 确认删除角色
@@ -466,9 +694,189 @@ const getMemoryTypeLabel = (key) => {
   return labels[type] || '未知类型';
 };
 
-// 保存配置
-const saveConfig = () => {
-  emit('update-config', { ...localConfig });
+// ==================== AI生成方法 ====================
+
+// 获取AI设置（从props获取或使用默认值）
+const getAISettings = () => {
+  // 使用父组件传递的AI配置
+  if (props.aiSettings && Object.keys(props.aiSettings).length > 0) {
+    return {
+      provider: props.aiSettings.provider || 'openai',
+      apiKey: props.aiSettings.apiKey || '',
+      baseUrl: props.aiSettings.baseUrl || '',
+      model: props.aiSettings.model || '',
+      temperature: props.aiSettings.temperature ?? 0.7,
+      maxTokens: props.aiSettings.maxTokens || 2000
+    };
+  }
+  
+  // 如果没有配置，返回默认值
+  return {
+    provider: 'openai',
+    apiKey: '',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4',
+    temperature: 0.7,
+    maxTokens: 2000
+  };
+};
+
+// 生成/优化世界设定
+const generateWorldSettings = async () => {
+  try {
+    isGeneratingWorldSettings.value = true;
+    const aiSettings = getAISettings();
+    
+    // 检查AI配置
+    if (!aiSettings.apiKey && aiSettings.provider !== 'local') {
+      alert('请先配置AI密钥');
+      return;
+    }
+    
+    const result = await tavernAIService.generateWorldSettings(
+      localConfig.worldSettings || '',
+      worldSettingsHint.value || '',
+      aiSettings
+    );
+    
+    if (result) {
+      localConfig.worldSettings = result;
+      worldSettingsHint.value = '';
+    }
+  } catch (error) {
+    console.error('生成世界设定失败:', error);
+    alert('生成世界设定失败：' + error.message);
+  } finally {
+    isGeneratingWorldSettings.value = false;
+  }
+};
+
+// 填写角色信息
+const fillCharacterInfo = async () => {
+  try {
+    isFillingCharacter.value = true;
+    const aiSettings = getAISettings();
+    
+    // 检查AI配置
+    if (!aiSettings.apiKey && aiSettings.provider !== 'local') {
+      alert('请先配置AI密钥');
+      return;
+    }
+    
+    const existingInfo = {};
+    if (characterForm.name) existingInfo.name = characterForm.name;
+    if (characterForm.role) existingInfo.role = characterForm.role;
+    if (characterForm.personality) existingInfo.personality = characterForm.personality;
+    if (characterForm.style) existingInfo.style = characterForm.style;
+    if (characterForm.rules) existingInfo.rules = characterForm.rules;
+    if (characterForm.goal) existingInfo.goal = characterForm.goal;
+    if (characterForm.relationships) existingInfo.relationships = characterForm.relationships;
+    
+    const result = await tavernAIService.generateCharacterInfo(
+      existingInfo,
+      localConfig.worldSettings || '',
+      aiSettings,
+      fillCharacterHint.value || ''
+    );
+    
+    if (result) {
+      // 更新角色信息，保留已有信息
+      if (result.name && !characterForm.name) characterForm.name = result.name;
+      if (result.role && !characterForm.role) characterForm.role = result.role;
+      if (result.personality && !characterForm.personality) characterForm.personality = result.personality;
+      if (result.style && !characterForm.style) characterForm.style = result.style;
+      if (result.rules && !characterForm.rules) characterForm.rules = result.rules;
+      if (result.goal && !characterForm.goal) characterForm.goal = result.goal;
+      if (result.relationships && !characterForm.relationships) characterForm.relationships = result.relationships;
+      fillCharacterHint.value = '';
+    }
+  } catch (error) {
+    console.error('填写角色信息失败:', error);
+    alert('填写角色信息失败：' + error.message);
+  } finally {
+    isFillingCharacter.value = false;
+  }
+};
+
+// 创建随机角色
+const createRandomCharacter = async () => {
+  try {
+    isCreatingCharacter.value = true;
+    const aiSettings = getAISettings();
+    
+    // 检查AI配置
+    if (!aiSettings.apiKey && aiSettings.provider !== 'local') {
+      alert('请先配置AI密钥');
+      return;
+    }
+    
+    const result = await tavernAIService.generateRandomCharacter(
+      localConfig.worldSettings || '',
+      createCharacterHint.value || '',
+      aiSettings
+    );
+    
+    if (result) {
+      // 添加新角色
+      if (!localConfig.characters) {
+        localConfig.characters = [];
+      }
+      localConfig.characters.push(result);
+      createCharacterHint.value = '';
+    }
+  } catch (error) {
+    console.error('创建随机角色失败:', error);
+    alert('创建随机角色失败：' + error.message);
+  } finally {
+    isCreatingCharacter.value = false;
+  }
+};
+
+// 填写用户人设
+const fillUserPersona = async () => {
+  try {
+    isFillingUserPersona.value = true;
+    const aiSettings = getAISettings();
+    
+    // 检查AI配置
+    if (!aiSettings.apiKey && aiSettings.provider !== 'local') {
+      alert('请先配置AI密钥');
+      return;
+    }
+    
+    const existingPersona = {};
+    if (localConfig.userPersona.identity) existingPersona.identity = localConfig.userPersona.identity;
+    if (localConfig.userPersona.personality) existingPersona.personality = localConfig.userPersona.personality;
+    if (localConfig.userPersona.relationships) existingPersona.relationships = localConfig.userPersona.relationships;
+    if (localConfig.userPersona.other) existingPersona.other = localConfig.userPersona.other;
+    
+    const result = await tavernAIService.generateUserPersona(
+      existingPersona,
+      localConfig.worldSettings || '',
+      aiSettings,
+      fillUserPersonaHint.value || ''
+    );
+    
+    if (result) {
+      // 更新用户人设，保留已有信息
+      if (result.identity && !localConfig.userPersona.identity) localConfig.userPersona.identity = result.identity;
+      if (result.personality && !localConfig.userPersona.personality) localConfig.userPersona.personality = result.personality;
+      if (result.relationships && !localConfig.userPersona.relationships) localConfig.userPersona.relationships = result.relationships;
+      if (result.other && !localConfig.userPersona.other) localConfig.userPersona.other = result.other;
+      fillUserPersonaHint.value = '';
+    }
+  } catch (error) {
+    console.error('填写用户人设失败:', error);
+    alert('填写用户人设失败：' + error.message);
+  } finally {
+    isFillingUserPersona.value = false;
+  }
+};
+
+// 判断是否为图片URL
+const isImageUrl = (value) => {
+  if (!value) return false;
+  return value.startsWith('http://') || value.startsWith('https://');
 };
 </script>
 
@@ -610,6 +1018,21 @@ const saveConfig = () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin-bottom: 24px;
+}
+
+/* Section Divider */
+.section-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 16px 0 24px 0;
+}
+
+/* User Persona Section */
+.user-persona-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 2px dashed var(--border-color);
 }
 
 .character-item {
@@ -630,6 +1053,19 @@ const saveConfig = () => {
 .character-avatar {
   font-size: 32px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.character-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .character-info {
@@ -857,6 +1293,13 @@ const saveConfig = () => {
   font-family: inherit;
 }
 
+.form-hint {
+  margin: 4px 0 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 select.form-control {
   cursor: pointer;
 }
@@ -1041,4 +1484,76 @@ select.form-control {
   .sidebar-footer {
     padding: 12px;
   }
+
+/* AI生成相关样式 */
+.ai-generate-section,
+.ai-create-character-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.ai-generate-input-group {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: center;
+}
+
+.ai-hint-input {
+  flex: 1;
+  font-size: 12px;
+  padding: 6px 10px;
+  min-width: 0;
+}
+
+.ai-generate-btn,
+.ai-fill-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--primary-color);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.ai-generate-btn:hover,
+.ai-fill-btn:hover {
+  opacity: 0.9;
+}
+
+.ai-generate-btn:disabled,
+.ai-fill-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ai-generate-btn.loading,
+.ai-fill-btn.loading {
+  opacity: 0.8;
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
 </style>

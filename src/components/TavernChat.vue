@@ -21,14 +21,36 @@
         </button>
         <button
           class="control-btn"
-          :class="{ 'active': autoMode, 'shine-effect': styleSettings.enableShineEffect }"
-          @click="toggleAutoMode"
-          title="自动对话模式"
+          :class="{ 'active': autoSummarizeMemory, 'shine-effect': styleSettings.enableShineEffect }"
+          @click="autoSummarizeMemory = !autoSummarizeMemory"
+          title="自动记忆总结"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8 5v14l11-7z"/>
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
           </svg>
-          自动对话
+          自动记忆
+        </button>
+        <button
+          class="control-btn"
+          :class="{ 'shine-effect': styleSettings.enableShineEffect }"
+          @click="showMemoryPanel = true"
+          title="角色记忆"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+          </svg>
+          角色记忆
+        </button>
+        <button
+          class="control-btn"
+          :class="{ 'active': smartChatMode, 'shine-effect': styleSettings.enableShineEffect }"
+          @click="toggleSmartChatMode"
+          title="智能对话模式"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+          </svg>
+          智能对话
         </button>
         <button
           class="control-btn"
@@ -67,6 +89,17 @@
 
     <!-- Chat Messages -->
     <div class="chat-messages" ref="messagesContainer">
+      <!-- 系统通知固定显示区域（覆盖在上方） -->
+      <div v-if="systemNotifications.length > 0" class="system-notifications-fixed">
+        <div
+          v-for="(notification, index) in systemNotifications"
+          :key="index"
+          class="system-notification"
+        >
+          {{ notification }}
+        </div>
+      </div>
+
       <div v-if="messages.length === 0" class="empty-state">
         <div class="empty-icon">💬</div>
         <h3>开始酒馆对话</h3>
@@ -78,24 +111,16 @@
             class="character-preview-item"
             @click="selectCharacter(character)"
           >
-            <span class="character-avatar">{{ character.avatar || '👤' }}</span>
+            <span class="character-avatar">
+              <img v-if="isImageUrl(character.avatar)" :src="character.avatar" :alt="character.name" class="character-avatar-img" />
+              <span v-else>{{ character.avatar || '👤' }}</span>
+            </span>
             <span class="character-name">{{ character.name }}</span>
           </div>
         </div>
       </div>
 
       <div v-else class="messages-container">
-        <!-- 系统通知区域 -->
-        <div v-if="systemNotifications.length > 0" class="system-notifications">
-          <div
-            v-for="(notification, index) in systemNotifications"
-            :key="index"
-            class="system-notification"
-          >
-            {{ notification }}
-          </div>
-        </div>
-
         <div
           v-for="(message, index) in messages"
           :key="message.id"
@@ -108,7 +133,8 @@
           <!-- 角色消息 -->
           <div v-if="message.type === 'character'" class="message-avatar">
             <div class="avatar assistant">
-              {{ getCharacterAvatar(message.characterId) }}
+              <img v-if="isImageUrl(getCharacterAvatar(message.characterId))" :src="getCharacterAvatar(message.characterId)" :alt="getCharacterName(message.characterId)" class="avatar-img" />
+              <span v-else>{{ getCharacterAvatar(message.characterId) }}</span>
             </div>
           </div>
 
@@ -162,25 +188,7 @@
           </div>
         </div>
 
-        <!-- 自动对话中提示 -->
-        <div v-if="autoMode && isAutoGenerating" class="message assistant typing-message">
-          <div class="message-avatar">
-            <div class="avatar assistant">💭</div>
-          </div>
-          <div class="message-content-wrapper">
-            <div class="message-content typing">
-              <div class="typing-indicator">
-                <span>角色互动中</span>
-                <div class="typing-dots">
-                  <div class="typing-dot"></div>
-                  <div class="typing-dot"></div>
-                  <div class="typing-dot"></div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
     </div>
 
     <!-- Chat Input -->
@@ -194,7 +202,10 @@
           :class="{ 'selected': index === hintSelectedIndex }"
           @click="selectHintItem(item)"
         >
-          <span class="hint-icon">{{ item.icon }}</span>
+          <span class="hint-icon">
+            <img v-if="isImageUrl(item.icon)" :src="item.icon" :alt="item.text" class="hint-icon-img" />
+            <span v-else>{{ item.icon }}</span>
+          </span>
           <span class="hint-text">{{ item.text }}</span>
           <span v-if="item.description" class="hint-description">{{ item.description }}</span>
         </div>
@@ -233,7 +244,7 @@
           class="send-btn"
           :class="{ 'shine-effect': styleSettings.enableShineEffect }"
           @click="sendMessage"
-          :disabled="!inputMessage.trim() || isAutoGenerating"
+          :disabled="!inputMessage.trim() || isSmartChatGenerating"
           title="发送消息"
         >
           <span class="send-icon">
@@ -243,12 +254,24 @@
           </span>
         </button>      </div>
     </div>
+
+    <!-- 角色记忆面板 -->
+    <TavernMemory
+      v-if="showMemoryPanel"
+      :config="config"
+      :messages="messages"
+      :ai-settings="aiSettings"
+      @close="showMemoryPanel = false"
+      @update-config="(config) => emit('update-config', config)"
+      @notify="addSystemMessage"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, nextTick, watch, onMounted, onUnmounted, computed } from 'vue';
 import CustomDropdown from './CustomDropdown.vue'
+import TavernMemory from './TavernMemory.vue'
 import { tavernDB } from '../tavernDB.js'
 import { tavernAIService } from '../tavernAIService.js'
 
@@ -267,10 +290,13 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update-config', 'toggle-sidebar']);
+const emit = defineEmits(['update-config', 'toggle-sidebar', 'notify']);
 
 // 消息列表
 const messages = ref([]);
+
+// 用户是否在聊天界面底部
+const isUserAtBottom = ref(true);
 
 // 系统通知列表（不保存到历史）
 const systemNotifications = ref([]);
@@ -284,6 +310,10 @@ const loadMessages = async () => {
   try {
     const loaded = await tavernDB.getMessages(props.config.id);
     messages.value = loaded;
+    // 加载消息后滚动到底部
+    nextTick(() => {
+      scrollToBottom();
+    });
   } catch (error) {
     console.error('加载酒馆消息失败:', error);
     messages.value = [];
@@ -328,11 +358,24 @@ onMounted(() => {
   loadMessages();
   checkMobile();
   window.addEventListener('resize', checkMobile);
+  
+  // 等待DOM渲染完成后添加滚动事件监听
+  nextTick(() => {
+    if (messagesContainer.value) {
+      messagesContainer.value.addEventListener('scroll', checkUserScrollPosition);
+      // 初始滚动到底部
+      scrollToBottom();
+    }
+  });
 });
 
 // 组件卸载时移除监听
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile);
+  // 移除滚动事件监听
+  if (messagesContainer.value) {
+    messagesContainer.value.removeEventListener('scroll', checkUserScrollPosition);
+  }
 });
 
 // 输入消息
@@ -367,15 +410,21 @@ const systemCommands = [
 ];
 
 // 自动对话模式
-const autoMode = ref(false);
-const isAutoGenerating = ref(false);
-const autoChatAbortController = ref(null);
+const smartChatMode = ref(false);
+const isSmartChatGenerating = ref(false);
+const smartChatAbortController = ref(null);
 
 // AI 状态显示
 const aiStatus = ref('');
 
 // 确认弹窗
 const showClearConfirm = ref(false);
+
+// 记忆面板
+const showMemoryPanel = ref(false);
+
+// 自动记忆总结
+const autoSummarizeMemory = ref(false);
 
 // 引用
 const messagesContainer = ref(null);
@@ -385,6 +434,12 @@ const chatInput = ref(null);
 const getCharacterAvatar = (characterId) => {
   const character = props.config.characters?.find(c => c.id === characterId);
   return character?.avatar || '👤';
+};
+
+// 判断是否为图片URL
+const isImageUrl = (value) => {
+  if (!value) return false;
+  return value.startsWith('http://') || value.startsWith('https://');
 };
 
 // 获取角色名称
@@ -547,9 +602,9 @@ const handleCommand = async (message) => {
 
   if (command === '/打断' || command === '/stop') {
     // 打断命令
-    if (isAutoGenerating.value) {
-      stopAutoChat();
-      addSystemMessage('用户打断：自主对话已停止');
+    if (isSmartChatGenerating.value) {
+      stopSmartChat();
+      addSystemMessage('用户打断：智能对话已停止');
     } else {
       addSystemMessage('当前没有正在进行的对话');
     }
@@ -667,10 +722,9 @@ const addUserMessage = async (content) => {
 
   messages.value.push(message);
   await tavernDB.addMessage(props.config.id, message);
-  scrollToBottom();
 
-  // 触发角色回复
-  if (!autoMode.value) {
+  // 触发角色回复（如果不在智能对话生成中）
+  if (!isSmartChatGenerating.value) {
     await triggerUserDrivenResponse(content);
   }
 };
@@ -745,6 +799,11 @@ const triggerUserDrivenResponse = async (userMessage, targetCharacter = null) =>
       aiStatus.value = '';
     }
   }
+
+  // 如果开启了智能对话模式，触发补充对话
+  if (smartChatMode.value) {
+    await startSmartChat();
+  }
 };
 
 // 添加角色消息
@@ -761,7 +820,54 @@ const addCharacterMessage = async (characterId, content) => {
 
   messages.value.push(message);
   await tavernDB.addMessage(props.config.id, message);
-  scrollToBottom();
+
+  // 自动记忆总结
+  if (autoSummarizeMemory.value && props.aiSettings && props.aiSettings.apiKey) {
+    // 统计该角色发言的次数
+    const characterMessageCount = messages.value.filter(msg => 
+      msg.type === 'character' && msg.characterId === characterId
+    ).length;
+
+    // 每5条该角色的发言自动总结一次
+    if (characterMessageCount > 0 && characterMessageCount % 5 === 0) {
+      try {
+        // 只获取该角色的发言消息
+        const characterMessages = messages.value.filter(msg => 
+          msg.type === 'character' && msg.characterId === characterId
+        );
+
+        const summary = await tavernAIService.summarizeConversation(
+          props.config,
+          characterMessages.slice(-10),
+          props.aiSettings,
+          'character',
+          character
+        );
+
+        if (summary) {
+          const updatedConfig = { ...props.config };
+          const characterIndex = updatedConfig.characters.findIndex(c => c.id === characterId);
+          
+          if (characterIndex !== -1) {
+            if (!updatedConfig.characters[characterIndex].memories) {
+              updatedConfig.characters[characterIndex].memories = [];
+            }
+            updatedConfig.characters[characterIndex].memories.push({
+              type: 'character',
+              content: summary,
+              timestamp: new Date().toISOString()
+            });
+          }
+          
+          emit('update-config', updatedConfig);
+          addSystemMessage(`${character.name} 的记忆已自动更新`);
+        }
+      } catch (error) {
+        console.error('自动记忆总结失败:', error);
+      }
+    }
+  }
+
   return message;
 };
 
@@ -775,51 +881,48 @@ const addSystemMessage = (content) => {
       systemNotifications.value.splice(index, 1);
     }
   }, 3000);
-  scrollToBottom();
 };
 
 // 切换自动模式
-const toggleAutoMode = () => {
-  autoMode.value = !autoMode.value;
-  if (autoMode.value) {
-    addSystemMessage('自动对话模式已开启，角色将自主互动');
-    startAutoChat();
+const toggleSmartChatMode = () => {
+  smartChatMode.value = !smartChatMode.value;
+  if (smartChatMode.value) {
+    addSystemMessage('智能对话模式已开启，角色会自动补充对话');
   } else {
-    addSystemMessage('自动对话模式已关闭');
-    stopAutoChat();
+    addSystemMessage('智能对话模式已关闭');
+    stopSmartChat();
   }
 };
 
-// 停止自动对话
-const stopAutoChat = () => {
-  if (autoChatAbortController.value) {
-    autoChatAbortController.value.abort();
-    autoChatAbortController.value = null;
+// 停止智能对话
+const stopSmartChat = () => {
+  if (smartChatAbortController.value) {
+    smartChatAbortController.value.abort();
+    smartChatAbortController.value = null;
   }
-  isAutoGenerating.value = false;
+  isSmartChatGenerating.value = false;
+  aiStatus.value = '';
 };
 
-// 开始自动对话
-const startAutoChat = async () => {
-  if (!autoMode.value || isAutoGenerating.value) return;
+// 智能补充对话
+const startSmartChat = async () => {
+  if (!smartChatMode.value || isSmartChatGenerating.value) return;
   if (!props.config.characters || props.config.characters.length === 0) {
-    addSystemMessage('没有可用的角色');
     return;
   }
 
-  isAutoGenerating.value = true;
-  autoChatAbortController.value = new AbortController();
+  isSmartChatGenerating.value = true;
+  smartChatAbortController.value = new AbortController();
 
   try {
-    const maxRounds = 15;
-    let roundCount = 0;
+    const maxSupplementRounds = 10;
+    let supplementRound = 0;
 
-    while (autoMode.value && roundCount < maxRounds) {
-      roundCount++;
+    while (smartChatMode.value && supplementRound < maxSupplementRounds) {
+      supplementRound++;
 
-      aiStatus.value = `🤔 第 ${roundCount} 轮：正在分析哪些角色应该发言...`;
+      aiStatus.value = `🤔 正在分析是否需要补充对话...`;
       
-      // 使用批量判断方法，一次请求完成所有判断
       const settings = props.aiSettings || {
         provider: 'openai',
         model: 'gpt-4',
@@ -829,81 +932,65 @@ const startAutoChat = async () => {
         maxTokens: 2000
       };
 
+      // 判断是否有角色需要补充发言（使用严格的补充对话判定）
       const responsiveCharacters = await tavernAIService.batchShouldSpeak(
         props.config.characters,
         props.config,
-        messages.value.slice(-10),
-        settings
+        messages.value.slice(-5),
+        settings,
+        true // isSupplement = true，使用严格判定
       );
 
       if (responsiveCharacters.length === 0) {
-        addSystemMessage('角色们暂时没有话想说，自主对话结束');
+        console.log('[智能对话] 没有角色需要补充发言');
         break;
       }
 
-      // 如果只有一个角色，直接发言，不需要协调排序
+      // 让角色补充发言
       if (responsiveCharacters.length === 1) {
         const character = responsiveCharacters[0];
-        aiStatus.value = `💬 ${character.name} 正在发言...`;
+        aiStatus.value = `💬 ${character.name} 正在补充发言...`;
         await generateCharacterResponse(character, responsiveCharacters);
       } else {
-        // 多个角色，需要协调排序
-        aiStatus.value = '🔄 正在协调发言顺序...';
+        // 多个角色需要补充发言，协调排序
+        aiStatus.value = '🔄 正在协调补充发言顺序...';
         
         const orderedCharacters = await tavernAIService.resolveSpeakingOrder(
           responsiveCharacters,
           props.config,
-          messages.value.slice(-10),
+          messages.value.slice(-5),
           settings
         );
 
-        // 让排序后的角色依次发言
         for (const character of orderedCharacters) {
-          if (!autoMode.value) break; // 检查是否被中断
+          if (!smartChatMode.value) break;
           
-          aiStatus.value = `💬 ${character.name} 正在发言...`;
+          aiStatus.value = `💬 ${character.name} 正在补充发言...`;
           await generateCharacterResponse(character, orderedCharacters);
           
-          // 角色之间有短暂间隔
           if (orderedCharacters.indexOf(character) < orderedCharacters.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 1500));
           }
         }
       }
 
-      // 判断是否继续对话
-      if (roundCount < maxRounds) {
-        aiStatus.value = '🤔 正在判断是否继续对话...';
-        
-        const decision = await tavernAIService.shouldContinueAutoChat(
-          props.config,
-          messages.value.slice(-10),
-          roundCount,
-          settings
-        );
-
-        if (!decision.shouldContinue) {
-          addSystemMessage(`自主对话结束：${decision.reason}`);
-          break;
-        }
-
-        // 根据AI判定的间隔时间等待
-        aiStatus.value = `⏸️ 等待 ${decision.interval} 秒后继续...`;
-        await new Promise(resolve => setTimeout(resolve, decision.interval * 1000));
+      // 短暂间隔后继续判断
+      if (supplementRound < maxSupplementRounds) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
 
-    if (roundCount >= maxRounds) {
-      addSystemMessage('自主对话已达到最大轮数，自动停止');
+    if (supplementRound >= maxSupplementRounds) {
+      console.log('[智能对话] 已达到最大补充轮数');
     }
   } catch (error) {
     if (error.name !== 'AbortError') {
-      console.error('自动对话失败:', error);
-      addSystemMessage('自动对话失败: ' + error.message);
+      console.error('智能对话失败:', error);
     }
   } finally {
-    isAutoGenerating.value = false;
-    autoChatAbortController.value = null;
+    isSmartChatGenerating.value = false;
+    smartChatAbortController.value = null;
+    aiStatus.value = '';
   }
 };
 
@@ -932,7 +1019,7 @@ const shouldCharacterSpeak = async (character) => {
       null,
       null,
       null,
-      autoChatAbortController.value?.signal
+      smartChatAbortController.value?.signal
     );
 
     const result = response.choices?.[0]?.message?.content?.toLowerCase() || '';
@@ -1029,8 +1116,46 @@ const scrollToBottom = () => {
   nextTick(() => {
     if (messagesContainer.value) {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+      isUserAtBottom.value = true;
+      console.log('[滚动] 强制滚动到底部');
     }
   });
+};
+
+// 检查是否在底部
+const isAtBottom = (threshold = 50) => {
+  if (!messagesContainer.value) return true;
+  const container = messagesContainer.value;
+  return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+};
+
+// 智能滚动到底部（只在用户处于底部时自动滚动）
+const smartScrollToBottom = () => {
+  // 先检查当前是否在底部
+  const wasAtBottom = isAtBottom();
+  
+  nextTick(() => {
+    if (messagesContainer.value) {
+      // 如果用户之前在底部，或者当前在底部，则滚动到底部
+      if (wasAtBottom || isAtBottom()) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+        isUserAtBottom.value = true;
+        console.log('[智能滚动] 自动滚动到底部，之前在底部:', wasAtBottom);
+      } else {
+        console.log('[智能滚动] 用户不在底部，不自动滚动');
+      }
+    }
+  });
+};
+
+// 检查用户滚动位置
+const checkUserScrollPosition = () => {
+  if (messagesContainer.value) {
+    const threshold = 50;
+    const isAtBottomPosition = messagesContainer.value.scrollHeight - messagesContainer.value.scrollTop - messagesContainer.value.clientHeight <= threshold;
+    isUserAtBottom.value = isAtBottomPosition;
+    // console.log('[滚动位置] isUserAtBottom:', isUserAtBottom.value);
+  }
 };
 
 // 格式化时间
@@ -1041,10 +1166,23 @@ const formatTime = (timestamp) => {
 
 // 监听角色变化，添加系统提示
 watch(() => props.config.characters, (newCharacters) => {
-  if (newCharacters && newCharacters.length > 0 && messages.value.length === 0) {
+  if (newCharacters && newCharacters.length > 0 && messages.value.length === 0 && !isInitializing.value) {
     addSystemMessage(`场景已加载，包含 ${newCharacters.length} 个角色`);
   }
 }, { immediate: true });
+
+// 监听消息加载完成，显示场景提示
+watch(isInitializing, (isInit) => {
+  if (!isInit && props.config.characters && props.config.characters.length > 0 && messages.value.length === 0) {
+    addSystemMessage(`场景已加载，包含 ${props.config.characters.length} 个角色`);
+  }
+});
+
+// 监听消息变化，智能滚动
+watch(messages, () => {
+  // 使用智能滚动
+  smartScrollToBottom();
+}, { deep: true });
 </script>
 
 <style scoped>
@@ -1173,7 +1311,37 @@ watch(() => props.config.characters, (newCharacters) => {
 .chat-messages {
   flex: 1;
   overflow-y: auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative; /* 为绝对定位的子元素提供参考框 */
+}
+
+/* Fixed System Notifications */
+.system-notifications-fixed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  padding: 16px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  pointer-events: none; /* 让点击穿透到下方内容 */
+}
+
+.system-notifications-fixed .system-notification {
+  pointer-events: auto; /* 恢复通知本身的点击事件 */
+}
+
+/* Messages Container */
+.messages-container {
+  flex: 1;
   padding: 24px;
+  overflow-y: auto;
 }
 
 .empty-state {
@@ -1182,6 +1350,7 @@ watch(() => props.config.characters, (newCharacters) => {
   align-items: center;
   justify-content: center;
   height: 100%;
+  padding: 24px;
   text-align: center;
   color: var(--text-secondary);
 }
@@ -1231,6 +1400,19 @@ watch(() => props.config.characters, (newCharacters) => {
 
 .character-avatar {
   font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.character-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .character-name {
@@ -1249,14 +1431,6 @@ watch(() => props.config.characters, (newCharacters) => {
 }
 
 /* System Notifications */
-.system-notifications {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
-  padding: 16px 0;
-}
-
 .system-notification {
   display: flex;
   align-items: center;
@@ -1318,6 +1492,13 @@ watch(() => props.config.characters, (newCharacters) => {
 
 .avatar.assistant {
   background: var(--secondary-color);
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .message-content-wrapper {
@@ -1894,6 +2075,19 @@ watch(() => props.config.characters, (newCharacters) => {
 .hint-icon {
   font-size: 20px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.hint-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .hint-text {

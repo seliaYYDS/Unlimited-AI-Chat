@@ -25,21 +25,38 @@ export class ConversationDB {
             return true
         }
 
-        // 尝试删除旧版本的数据库
+        // 检查旧版本数据库是否存在，只有在存在时才删除
         try {
-            const deleteRequest = indexedDB.deleteDatabase(this.dbName)
             await new Promise((resolve, reject) => {
-                deleteRequest.onsuccess = () => {
-                    console.log('旧版 IndexedDB 已删除')
-                    resolve()
+                const checkRequest = indexedDB.open(this.dbName)
+                checkRequest.onsuccess = () => {
+                    const db = checkRequest.result
+                    const oldVersion = db.version
+                    db.close()
+
+                    // 只有当旧版本低于当前版本时才删除
+                    if (oldVersion < this.dbVersion) {
+                        const deleteRequest = indexedDB.deleteDatabase(this.dbName)
+                        deleteRequest.onsuccess = () => {
+                            console.log(`旧版 IndexedDB (版本 ${oldVersion}) 已删除，将升级到版本 ${this.dbVersion}`)
+                            resolve()
+                        }
+                        deleteRequest.onerror = () => {
+                            console.warn('删除旧版 IndexedDB 失败')
+                            resolve()
+                        }
+                    } else {
+                        // 版本相同或更高，不需要删除
+                        resolve()
+                    }
                 }
-                deleteRequest.onerror = () => {
-                    console.warn('删除旧版 IndexedDB 失败，可能不存在')
+                checkRequest.onerror = () => {
+                    // 数据库不存在，不需要删除
                     resolve()
                 }
             })
         } catch (error) {
-            console.warn('删除旧版 IndexedDB 时出错:', error)
+            console.warn('检查旧版 IndexedDB 时出错:', error)
         }
 
         return new Promise((resolve, reject) => {

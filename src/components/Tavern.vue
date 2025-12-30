@@ -20,7 +20,10 @@
                   <span class="back-hint">← 点击返回普通模式</span>
                 </h1>
                 <div class="config-name-display" v-if="selectedConfig">
-                  <span class="config-icon">{{ selectedConfig.icon || '🏰' }}</span>
+                  <span class="config-icon">
+                    <img v-if="isImageUrl(selectedConfig.icon)" :src="selectedConfig.icon" :alt="selectedConfig.name" class="config-icon-img" />
+                    <span v-else>{{ selectedConfig.icon || '🏰' }}</span>
+                  </span>
                   <span class="config-name">{{ selectedConfig.name }}</span>
                 </div>
               </div>
@@ -54,6 +57,29 @@
     <div class="tavern-content">
       <!-- 配置列表视图 -->
       <div v-if="!selectedConfig" class="tavern-configs-view">
+        <div class="configs-header">
+          <h2 class="configs-title">酒馆配置</h2>
+          <button
+            class="import-btn"
+            :class="{ 'shine-effect': styleSettings.enableShineEffect }"
+            @click="triggerImport"
+            title="导入配置"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+            </svg>
+            导入配置
+          </button>
+          <!-- 隐藏的文件输入 -->
+          <input
+            type="file"
+            ref="fileInput"
+            accept=".json"
+            style="display: none"
+            @change="handleFileImport"
+          >
+        </div>
+        
         <div v-if="configs.length === 0" class="tavern-empty-state">
           <div class="empty-icon">🏰</div>
           <h3>还没有酒馆配置</h3>
@@ -76,7 +102,10 @@
             class="tavern-config-card"
             @click="selectConfig(config)"
           >
-            <div class="config-card-icon">{{ config.icon || '🏰' }}</div>
+            <div class="config-card-icon">
+              <img v-if="isImageUrl(config.icon)" :src="config.icon" :alt="config.name" class="config-card-icon-img" />
+              <span v-else>{{ config.icon || '🏰' }}</span>
+            </div>
             <div class="config-card-info">
               <h3 class="config-card-title">{{ config.name }}</h3>
               <p class="config-card-description">{{ config.description || '暂无描述' }}</p>
@@ -96,6 +125,15 @@
               </div>
             </div>
             <div class="config-card-actions">
+              <button
+                class="config-action-btn export"
+                @click.stop="exportConfig(config)"
+                title="导出配置"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+              </button>
               <button
                 class="config-action-btn delete"
                 @click.stop="deleteConfig(config)"
@@ -133,6 +171,8 @@
                   :config="selectedConfig"
 
                   :style-settings="styleSettings"
+
+                  :ai-settings="aiSettings"
 
                   @update-config="updateConfig"
 
@@ -207,6 +247,27 @@
         ></textarea>
       </div>
     </Modal>
+
+    <!-- 删除配置确认弹窗 -->
+    <div v-if="showDeleteConfigConfirm" class="confirm-overlay" @click.self="showDeleteConfigConfirm = null">
+      <div class="confirm-modal">
+        <div class="confirm-header">
+          <h3>确认删除配置</h3>
+          <button class="close-btn" @click="showDeleteConfigConfirm = null">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="confirm-body">
+          <p>确定要删除此配置吗？此操作不可恢复。</p>
+        </div>
+        <div class="confirm-footer">
+          <button class="confirm-btn cancel" @click="showDeleteConfigConfirm = null">取消</button>
+          <button class="confirm-btn danger" @click="confirmDeleteConfig">确认删除</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -253,6 +314,9 @@ const newConfigForm = reactive({
   icon: '🏰',
   description: ''
 });
+
+// 删除配置确认
+const showDeleteConfigConfirm = ref(null);
 
 // 从 IndexedDB 加载配置
 const loadConfigs = async () => {
@@ -334,6 +398,12 @@ const createConfig = async () => {
     worldSettings: '',
     characters: [],
     memories: {},
+    userPersona: {
+      identity: '',
+      personality: '',
+      relationships: '',
+      other: ''
+    },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -353,15 +423,96 @@ const createConfig = async () => {
 };
 
 // 删除配置
-const deleteConfig = async (config) => {
+const deleteConfig = (config) => {
+  showDeleteConfigConfirm.value = config.id;
+};
+
+// 确认删除配置
+const confirmDeleteConfig = async () => {
+  if (!showDeleteConfigConfirm.value) return;
+  
   try {
-    await tavernDB.deleteConfig(config.id);
-    const index = configs.value.findIndex(c => c.id === config.id);
+    await tavernDB.deleteConfig(showDeleteConfigConfirm.value);
+    const index = configs.value.findIndex(c => c.id === showDeleteConfigConfirm.value);
     if (index !== -1) {
       configs.value.splice(index, 1);
     }
   } catch (error) {
     console.error('删除配置失败:', error);
+  } finally {
+    showDeleteConfigConfirm.value = null;
+  }
+};
+
+// 导出配置
+const exportConfig = (config) => {
+  try {
+    const exportData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      config: config
+    };
+    
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `tavern-config-${config.name}-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    console.log('配置导出成功:', config.name);
+  } catch (error) {
+    console.error('导出配置失败:', error);
+    alert('导出配置失败，请重试');
+  }
+};
+
+// 触发导入
+const fileInput = ref(null);
+const triggerImport = () => {
+  if (fileInput.value) {
+    fileInput.value.click();
+  }
+};
+
+// 处理文件导入
+const handleFileImport = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  try {
+    const text = await file.text();
+    const importData = JSON.parse(text);
+    
+    // 验证导入数据格式
+    if (!importData.config || !importData.config.name) {
+      throw new Error('无效的配置文件格式');
+    }
+    
+    const config = importData.config;
+    
+    // 生成新的ID，避免冲突
+    config.id = Date.now().toString();
+    config.updatedAt = new Date().toISOString();
+    
+    // 保存配置
+    const saved = await tavernDB.saveConfig(config);
+    configs.value.push(saved);
+    
+    console.log('配置导入成功:', config.name);
+  } catch (error) {
+    console.error('导入配置失败:', error);
+    alert('导入配置失败：无效的文件格式');
+  } finally {
+    // 清空文件输入
+    if (fileInput.value) {
+      fileInput.value.value = '';
+    }
   }
 };
 
@@ -393,6 +544,12 @@ const formatDate = (dateString) => {
   if (diff < 604800000) return `${Math.floor(diff / 86400000)}天前`;
 
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+};
+
+// 判断是否为图片URL
+const isImageUrl = (avatar) => {
+  if (!avatar) return false;
+  return avatar.startsWith('http://') || avatar.startsWith('https://');
 };
 </script>
 
@@ -596,6 +753,19 @@ const formatDate = (dateString) => {
 .config-card-icon {
   font-size: 48px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.config-card-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .config-card-info {
@@ -656,9 +826,56 @@ const formatDate = (dateString) => {
 }
 
 .config-action-btn:hover {
-  background: var(--danger-color);
+  background: var(--primary-color);
   color: white;
+  border-color: var(--primary-color);
+}
+
+.config-action-btn.delete:hover {
+  background: var(--danger-color);
   border-color: var(--danger-color);
+}
+
+.config-action-btn.export:hover {
+  background: var(--success-color);
+  border-color: var(--success-color);
+}
+
+/* 配置列表头部 */
+.configs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 0 8px;
+}
+
+.configs-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.import-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--primary-color);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.import-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
 
 /* 流光效果 */
@@ -685,6 +902,131 @@ const formatDate = (dateString) => {
 
 .shine-effect:hover::before {
   left: 100%;
+}
+
+/* 确认弹窗 */
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.confirm-modal {
+  background: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  max-width: 400px;
+  width: 90%;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.confirm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.confirm-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.confirm-body {
+  padding: 20px;
+}
+
+.confirm-body p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.confirm-footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color);
+  justify-content: flex-end;
+}
+
+.confirm-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-btn.cancel {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.confirm-btn.cancel:hover {
+  background: var(--bg-hover);
+}
+
+.confirm-btn.danger {
+  background: var(--danger-color);
+  color: white;
+}
+
+.confirm-btn.danger:hover {
+  background: #c0392b;
 }
 
 /* Main View */
@@ -772,6 +1114,19 @@ const formatDate = (dateString) => {
 
 .config-icon {
   font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.config-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .config-name {
@@ -895,6 +1250,21 @@ const formatDate = (dateString) => {
 
   .tavern-configs-view {
     padding: 16px;
+  }
+
+  .configs-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .configs-title {
+    font-size: 20px;
+  }
+
+  .import-btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .tavern-configs-grid {
