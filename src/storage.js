@@ -313,7 +313,24 @@ export class StorageManager {
                 musicApiUrl: 'https://zm.i9mr.com', // 音乐API服务器地址
                 // 灵动岛设置
                 enableDynamicIslandMusicInfo: true, // 是否在灵动岛显示音乐信息
-                enableDynamicIslandLyrics: false // 是否在灵动岛显示歌词
+                enableDynamicIslandLyrics: false, // 是否在灵动岛显示歌词
+                // 自定义主题设置
+                customThemes: [], // 用户自定义的主题列表
+                currentThemeId: null, // 当前使用的主题ID（预制主题或自定义主题）
+                // 主题颜色配置（全局配色）
+                themeColors: {
+                    bgPrimary: '#ffffff',
+                    bgSecondary: '#f8f9fa',
+                    bgTertiary: '#e9ecef',
+                    bgHover: '#f1f3f4',
+                    textPrimary: '#1a1a1a',
+                    textSecondary: '#6c757d',
+                    textTertiary: '#adb5bd',
+                    borderColor: '#dee2e6',
+                    borderLight: '#e9ecef',
+                    shadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+                    shadowLg: '0 10px 40px rgba(0, 0, 0, 0.15)'
+                }
             }
 
             if (settings) {
@@ -632,5 +649,171 @@ export class StorageManager {
             reader.onerror = reject
             reader.readAsDataURL(file)
         })
+    }
+
+    // 自定义主题管理
+    getCustomThemes() {
+        try {
+            const settings = this.getSettings()
+            return settings.customThemes || []
+        } catch (error) {
+            console.error('获取自定义主题失败:', error)
+            return []
+        }
+    }
+
+    addCustomTheme(theme) {
+        try {
+            const settings = this.getSettings()
+            const customThemes = settings.customThemes || []
+            
+            // 生成唯一ID
+            theme.id = this.generateId()
+            theme.createdAt = new Date().toISOString()
+            theme.isCustom = true
+            
+            customThemes.push(theme)
+            settings.customThemes = customThemes
+            
+            this.saveSettings(settings)
+            return theme
+        } catch (error) {
+            console.error('添加自定义主题失败:', error)
+            return null
+        }
+    }
+
+    updateCustomTheme(themeId, updates) {
+        try {
+            const settings = this.getSettings()
+            const customThemes = settings.customThemes || []
+            const index = customThemes.findIndex(t => t.id === themeId)
+            
+            if (index !== -1) {
+                customThemes[index] = { ...customThemes[index], ...updates, updatedAt: new Date().toISOString() }
+                settings.customThemes = customThemes
+                this.saveSettings(settings)
+                return true
+            }
+            return false
+        } catch (error) {
+            console.error('更新自定义主题失败:', error)
+            return false
+        }
+    }
+
+    deleteCustomTheme(themeId) {
+        try {
+            const settings = this.getSettings()
+            const customThemes = settings.customThemes || []
+            const filteredThemes = customThemes.filter(t => t.id !== themeId)
+            
+            if (filteredThemes.length !== customThemes.length) {
+                settings.customThemes = filteredThemes
+                
+                // 如果删除的是当前使用的主题，清除当前主题ID
+                if (settings.currentThemeId === themeId) {
+                    settings.currentThemeId = null
+                }
+                
+                this.saveSettings(settings)
+                return true
+            }
+            return false
+        } catch (error) {
+            console.error('删除自定义主题失败:', error)
+            return false
+        }
+    }
+
+    setCurrentThemeId(themeId) {
+        try {
+            const settings = this.getSettings()
+            settings.currentThemeId = themeId
+            this.saveSettings(settings)
+            return true
+        } catch (error) {
+            console.error('设置当前主题ID失败:', error)
+            return false
+        }
+    }
+
+    getCurrentThemeId() {
+        try {
+            const settings = this.getSettings()
+            return settings.currentThemeId || null
+        } catch (error) {
+            console.error('获取当前主题ID失败:', error)
+            return null
+        }
+    }
+
+    // 获取当前主题（包括预制主题和自定义主题）
+    getCurrentTheme() {
+        try {
+            const settings = this.getSettings()
+            const currentThemeId = settings.currentThemeId
+            
+            if (!currentThemeId) {
+                // 如果没有设置主题ID，返回当前的颜色配置
+                return {
+                    id: null,
+                    name: '自定义',
+                    colorMode: settings.colorMode,
+                    primaryColor: settings.primaryColor,
+                    secondaryColor: settings.secondaryColor,
+                    gradientColor1: settings.gradientColor1,
+                    gradientColor2: settings.gradientColor2,
+                    advancedGradientColors: settings.advancedGradientColors,
+                    gradientDirection: settings.gradientDirection,
+                    customGradientAngle: settings.customGradientAngle,
+                    gradientColorCount: settings.gradientColorCount,
+                    isCustom: true
+                }
+            }
+            
+            // 查找预制主题
+            const presetThemes = [
+                { id: 'ocean', name: '海洋', colorMode: 'dual', primaryColor: '#0ea5e9', secondaryColor: '#06b6d4', gradientColor1: '#0ea5e9', gradientColor2: '#06b6d4' },
+                { id: 'forest', name: '森林', colorMode: 'dual', primaryColor: '#22c55e', secondaryColor: '#16a34a', gradientColor1: '#22c55e', gradientColor2: '#16a34a' },
+                { id: 'violet', name: '紫罗兰', colorMode: 'dual', primaryColor: '#8b5cf6', secondaryColor: '#a78bfa', gradientColor1: '#8b5cf6', gradientColor2: '#a78bfa' },
+                { id: 'sakura', name: '樱花', colorMode: 'dual', primaryColor: '#f472b6', secondaryColor: '#fb7185', gradientColor1: '#f472b6', gradientColor2: '#fb7185' },
+                { id: 'sunset', name: '日落', colorMode: 'dual', primaryColor: '#f59e0b', secondaryColor: '#ef4444', gradientColor1: '#f59e0b', gradientColor2: '#ef4444' },
+                { id: 'aurora', name: '极光', colorMode: 'gradient', primaryColor: '#06b6d4', secondaryColor: '#8b5cf6', gradientColor1: '#06b6d4', gradientColor2: '#8b5cf6' },
+                { id: 'deepsea', name: '深海', colorMode: 'gradient', primaryColor: '#1e3a8a', secondaryColor: '#1e40af', gradientColor1: '#1e3a8a', gradientColor2: '#1e40af' },
+                { id: 'autumn', name: '秋叶', colorMode: 'dual', primaryColor: '#f97316', secondaryColor: '#eab308', gradientColor1: '#f97316', gradientColor2: '#eab308' }
+            ]
+            
+            const presetTheme = presetThemes.find(t => t.id === currentThemeId)
+            if (presetTheme) {
+                return { ...presetTheme, isCustom: false }
+            }
+            
+            // 查找自定义主题
+            const customThemes = settings.customThemes || []
+            const customTheme = customThemes.find(t => t.id === currentThemeId)
+            if (customTheme) {
+                return { ...customTheme, isCustom: true }
+            }
+            
+            // 如果找不到主题，返回当前颜色配置
+            return {
+                id: null,
+                name: '自定义',
+                colorMode: settings.colorMode,
+                primaryColor: settings.primaryColor,
+                secondaryColor: settings.secondaryColor,
+                gradientColor1: settings.gradientColor1,
+                gradientColor2: settings.gradientColor2,
+                advancedGradientColors: settings.advancedGradientColors,
+                gradientDirection: settings.gradientDirection,
+                customGradientAngle: settings.customGradientAngle,
+                gradientColorCount: settings.gradientColorCount,
+                isCustom: true
+            }
+        } catch (error) {
+            console.error('获取当前主题失败:', error)
+            return null
+        }
     }
 }

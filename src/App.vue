@@ -373,46 +373,62 @@
       </div>
 
       <div class="chat-input-area" v-if="currentAgent">
-        <div class="input-wrapper">
-          <!-- 推荐回复按钮 -->
-          <button
-            class="suggest-btn"
-            @click="showSuggestions"
-            :disabled="isGenerating"
-            title="获取推荐回复"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
-            </svg>
-          </button>
-
-                    <textarea
-
-            v-model="inputMessage"
-
-            class="chat-input"
-
-            placeholder="输入您的消息..."
-
-            @keydown.enter.exact.prevent="sendMessage"
-
-            rows="1"
-
-            ref="chatInput"
-
-          ></textarea>
-          <button
-            :class="['send-btn', 'hover-perspective', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]"
-            @click="sendMessage"
-            :disabled="!inputMessage.trim() || isGenerating"
-          >
-            <span v-if="!isGenerating" class="send-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+        <div :class="['input-wrapper', { 'focused': isInputFocused, 'has-content': inputMessage.trim() }]">
+          <div class="input-container">
+            <!-- 推荐回复按钮 -->
+            <button
+              class="action-btn suggest-btn"
+              @click="showSuggestions"
+              :disabled="isGenerating"
+              title="获取推荐回复"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
-            </span>
-            <div v-else class="loading-spinner"></div>
-          </button>
+            </button>
+
+            <!-- 输入框 -->
+            <textarea
+              v-model="inputMessage"
+              class="chat-input"
+              placeholder="输入您的消息..."
+              @keydown.enter.exact.prevent="sendMessage"
+              @focus="isInputFocused = true"
+              @blur="isInputFocused = false"
+              rows="1"
+              ref="chatInput"
+            ></textarea>
+
+            <!-- 字符计数 -->
+            <div class="char-count" v-if="inputMessage.length > 0">
+              {{ inputMessage.length }}
+            </div>
+
+            <!-- 发送按钮 -->
+            <button
+              :class="['action-btn send-btn', { 
+                'active': inputMessage.trim() && !isGenerating,
+                'loading': isGenerating,
+                'shine-effect': settings.enableShineEffect,
+                'shine-effect-colorful': settings.enableShineEffect 
+              }]"
+              @click="sendMessage"
+              :disabled="!inputMessage.trim() || isGenerating"
+              title="发送消息"
+            >
+              <transition name="icon-fade" mode="out-in">
+                <span v-if="!isGenerating" class="send-icon" key="send">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"/>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  </svg>
+                </span>
+                <div v-else class="loading-spinner" key="loading"></div>
+              </transition>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1855,6 +1871,7 @@ export default {
       inputMessage: '',
       isGenerating: false,
       isUserAtBottom: true, // 用户是否在聊天界面底部
+      isInputFocused: false, // 输入框是否聚焦
 
       contextMenuVisible: false,
 
@@ -2545,7 +2562,9 @@ export default {
         // 灵动岛音乐信息显示设置
         enableDynamicIslandMusicInfo: settings.enableDynamicIslandMusicInfo !== undefined ? settings.enableDynamicIslandMusicInfo : true,
         // 灵动岛歌词显示设置
-        enableDynamicIslandLyrics: settings.enableDynamicIslandLyrics !== undefined ? settings.enableDynamicIslandLyrics : false
+        enableDynamicIslandLyrics: settings.enableDynamicIslandLyrics !== undefined ? settings.enableDynamicIslandLyrics : false,
+        // 主题颜色设置
+        themeColors: settings.themeColors || null
       }
 
       // 应用样式设置
@@ -2587,18 +2606,32 @@ export default {
       }
     },
 
+    // 判断颜色是否为暗色
+    isDarkColor(color) {
+      const hex = color.replace('#', '')
+      const r = parseInt(hex.substr(0, 2), 16)
+      const g = parseInt(hex.substr(2, 2), 16)
+      const b = parseInt(hex.substr(4, 2), 16)
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+      return luminance < 0.5
+    },
+
     applyStyleSettings() {
 
       // 应用其他样式设置（包含自动主题逻辑）
       this.themeManager.applyStyleSettings(this.styleSettings)
-      
-      // 如果没有启用自动主题，手动应用选择的主题
-      if (!this.styleSettings.autoTheme && this.styleSettings.theme !== this.themeManager.getCurrentTheme()) {
+
+      // 如果没有启用自动主题且没有自定义主题颜色，手动应用选择的主题
+      if (!this.styleSettings.autoTheme && !this.styleSettings.themeColors && this.styleSettings.theme !== this.themeManager.getCurrentTheme()) {
         this.themeManager.applyTheme(this.styleSettings.theme)
         this.isDarkTheme = this.styleSettings.theme === 'dark'
       } else if (this.styleSettings.autoTheme) {
         // 如果启用了自动主题，更新当前主题状态
         this.isDarkTheme = this.themeManager.isDark()
+      } else if (this.styleSettings.themeColors) {
+        // 如果有自定义主题颜色，根据主背景色判断是否为暗色主题
+        const bgColor = this.styleSettings.themeColors.bgPrimary
+        this.isDarkTheme = this.isDarkColor(bgColor)
       }
 
       

@@ -1373,4 +1373,288 @@ export class AIService {
         const shuffled = baseColors.sort(() => 0.5 - Math.random())
         return shuffled.slice(0, colorCount)
     }
+
+    // 生成全局主题配色方案（网络API）
+    async generateThemeColorScheme(prompt, settings) {
+        const { apiEndpoint, apiKey, modelName } = settings
+
+        if (!apiEndpoint || !apiKey) {
+            throw new Error('请配置API端点和密钥')
+        }
+
+        const provider = this.detectAPIProvider(apiEndpoint)
+        const fullUrl = this.buildRequestUrl(apiEndpoint, provider)
+        const headers = this.buildRequestHeaders(apiKey, provider)
+
+        const themeColorPrompt = `请根据用户提供的意象"${prompt}"，生成一组完整的UI主题配色方案。
+
+要求：
+1. 返回5个十六进制颜色值（格式如 #FF5733）
+2. 包含：主背景色、次背景色、主文字色、次文字色、边框色
+3. 颜色应该和谐搭配，确保良好的可读性和对比度
+4. 只返回JSON格式，不要添加任何其他文字
+5. JSON格式：{"bgPrimary": "#RRGGBB", "bgSecondary": "#RRGGBB", "textPrimary": "#RRGGBB", "textSecondary": "#RRGGBB", "borderColor": "#RRGGBB"}
+
+示例：
+{"bgPrimary": "#1a1a1a", "bgSecondary": "#2d2d2d", "textPrimary": "#ffffff", "textSecondary": "#b0b0b0", "borderColor": "#404040"}`
+
+        const requestBody = {
+            model: modelName,
+            messages: [
+                {
+                    role: 'user',
+                    content: themeColorPrompt
+                }
+            ],
+            temperature: 0.8,
+            max_tokens: 200
+        }
+
+        try {
+            const response = await fetch(fullUrl, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestBody)
+            })
+
+            if (!response.ok) {
+                throw new Error(`API请求失败: ${response.status}`)
+            }
+
+            const data = await response.json()
+            const content = this.parseResponseContent(data, provider)
+
+            if (!content) {
+                throw new Error('无法解析主题配色方案')
+            }
+
+            // 尝试解析JSON
+            try {
+                const themeColors = JSON.parse(content.trim())
+                // 验证颜色格式
+                const requiredFields = ['bgPrimary', 'bgSecondary', 'textPrimary', 'textSecondary', 'borderColor']
+                const isValid = requiredFields.every(field =>
+                    themeColors[field] && /^#[0-9A-F]{6}$/i.test(themeColors[field])
+                )
+
+                if (isValid) {
+                    // 补充其他必需的颜色字段
+                    return {
+                        bgPrimary: themeColors.bgPrimary,
+                        bgSecondary: themeColors.bgSecondary,
+                        bgTertiary: this.adjustBrightness(themeColors.bgSecondary, 0.1),
+                        bgHover: this.adjustBrightness(themeColors.bgSecondary, 0.05),
+                        textPrimary: themeColors.textPrimary,
+                        textSecondary: themeColors.textSecondary,
+                        textTertiary: this.adjustBrightness(themeColors.textSecondary, 0.3),
+                        borderColor: themeColors.borderColor,
+                        borderLight: this.adjustBrightness(themeColors.borderColor, 0.2),
+                        shadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+                        shadowLg: '0 10px 40px rgba(0, 0, 0, 0.15)'
+                    }
+                } else {
+                    throw new Error('主题配色格式不正确')
+                }
+            } catch (parseError) {
+                // 如果解析失败，尝试从文本中提取颜色
+                const colorMatches = content.match(/#[0-9A-F]{6}/gi)
+                if (colorMatches && colorMatches.length >= 5) {
+                    return {
+                        bgPrimary: colorMatches[0],
+                        bgSecondary: colorMatches[1],
+                        bgTertiary: this.adjustBrightness(colorMatches[1], 0.1),
+                        bgHover: this.adjustBrightness(colorMatches[1], 0.05),
+                        textPrimary: colorMatches[2],
+                        textSecondary: colorMatches[3],
+                        textTertiary: this.adjustBrightness(colorMatches[3], 0.3),
+                        borderColor: colorMatches[4],
+                        borderLight: this.adjustBrightness(colorMatches[4], 0.2),
+                        shadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+                        shadowLg: '0 10px 40px rgba(0, 0, 0, 0.15)'
+                    }
+                } else {
+                    throw new Error('无法从响应中提取有效颜色')
+                }
+            }
+        } catch (error) {
+            console.error('生成主题配色方案失败:', error)
+            throw error
+        }
+    }
+
+    // 本地模型生成主题配色方案（模拟实现）
+    async generateLocalThemeColorScheme(prompt) {
+        // 模拟网络延迟
+        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000))
+
+        // 基于关键词生成预设主题配色
+        const themeColorSchemes = {
+            '海洋': {
+                bgPrimary: '#0f172a',
+                bgSecondary: '#1e293b',
+                bgTertiary: '#334155',
+                bgHover: '#1e3a5f',
+                textPrimary: '#f1f5f9',
+                textSecondary: '#cbd5e1',
+                textTertiary: '#94a3b8',
+                borderColor: '#475569',
+                borderLight: '#64748b'
+            },
+            '森林': {
+                bgPrimary: '#14532d',
+                bgSecondary: '#166534',
+                bgTertiary: '#15803d',
+                bgHover: '#14532d',
+                textPrimary: '#f0fdf4',
+                textSecondary: '#bbf7d0',
+                textTertiary: '#86efac',
+                borderColor: '#22c55e',
+                borderLight: '#4ade80'
+            },
+            '日落': {
+                bgPrimary: '#1c1917',
+                bgSecondary: '#292524',
+                bgTertiary: '#44403c',
+                bgHover: '#78350f',
+                textPrimary: '#fef7ed',
+                textSecondary: '#fed7aa',
+                textTertiary: '#fdba74',
+                borderColor: '#ea580c',
+                borderLight: '#f97316'
+            },
+            '夜晚': {
+                bgPrimary: '#0a0a0a',
+                bgSecondary: '#1a1a1a',
+                bgTertiary: '#2a2a2a',
+                bgHover: '#333333',
+                textPrimary: '#ffffff',
+                textSecondary: '#b0b0b0',
+                textTertiary: '#808080',
+                borderColor: '#404040',
+                borderLight: '#505050'
+            },
+            '春天': {
+                bgPrimary: '#f0fdf4',
+                bgSecondary: '#dcfce7',
+                bgTertiary: '#bbf7d0',
+                bgHover: '#86efac',
+                textPrimary: '#14532d',
+                textSecondary: '#166534',
+                textTertiary: '#15803d',
+                borderColor: '#22c55e',
+                borderLight: '#4ade80'
+            },
+            '秋天': {
+                bgPrimary: '#fef7ed',
+                bgSecondary: '#fed7aa',
+                bgTertiary: '#fdba74',
+                bgHover: '#fb923c',
+                textPrimary: '#7c2d12',
+                textSecondary: '#9a3412',
+                textTertiary: '#c2410c',
+                borderColor: '#ea580c',
+                borderLight: '#f97316'
+            },
+            '紫罗兰': {
+                bgPrimary: '#2e1065',
+                bgSecondary: '#4c1d95',
+                bgTertiary: '#5b21b6',
+                bgHover: '#6d28d9',
+                textPrimary: '#faf5ff',
+                textSecondary: '#e9d5ff',
+                textTertiary: '#d8b4fe',
+                borderColor: '#7c3aed',
+                borderLight: '#8b5cf6'
+            },
+            '樱花': {
+                bgPrimary: '#fff1f2',
+                bgSecondary: '#ffe4e6',
+                bgTertiary: '#fecdd3',
+                bgHover: '#fda4af',
+                textPrimary: '#881337',
+                textSecondary: '#9f1239',
+                textTertiary: '#be123c',
+                borderColor: '#f43f5e',
+                borderLight: '#fb7185'
+            },
+            '科技': {
+                bgPrimary: '#0c4a6e',
+                bgSecondary: '#075985',
+                bgTertiary: '#0369a1',
+                bgHover: '#0284c7',
+                textPrimary: '#f0f9ff',
+                textSecondary: '#bae6fd',
+                textTertiary: '#7dd3fc',
+                borderColor: '#0ea5e9',
+                borderLight: '#38bdf8'
+            },
+            '极光': {
+                bgPrimary: '#0f172a',
+                bgSecondary: '#1e293b',
+                bgTertiary: '#334155',
+                bgHover: '#1e3a5f',
+                textPrimary: '#f0f9ff',
+                textSecondary: '#bae6fd',
+                textTertiary: '#7dd3fc',
+                borderColor: '#0ea5e9',
+                borderLight: '#38bdf8'
+            }
+        }
+
+        // 检查提示词中是否包含关键词
+        for (const [keyword, colors] of Object.entries(themeColorSchemes)) {
+            if (prompt.includes(keyword)) {
+                return {
+                    ...colors,
+                    shadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+                    shadowLg: '0 10px 40px rgba(0, 0, 0, 0.15)'
+                }
+            }
+        }
+
+        // 如果没有匹配的关键词，生成随机主题配色
+        const isDark = Math.random() > 0.5
+        const baseHue = Math.floor(Math.random() * 360)
+
+        const generateColor = (hue, saturation, lightness) => {
+            return this.hslToHex(hue, saturation, lightness)
+        }
+
+        return {
+            bgPrimary: generateColor(baseHue, 30, isDark ? 10 : 95),
+            bgSecondary: generateColor(baseHue, 25, isDark ? 20 : 90),
+            bgTertiary: generateColor(baseHue, 20, isDark ? 30 : 85),
+            bgHover: generateColor(baseHue, 25, isDark ? 25 : 88),
+            textPrimary: generateColor(baseHue, 10, isDark ? 95 : 10),
+            textSecondary: generateColor(baseHue, 15, isDark ? 75 : 40),
+            textTertiary: generateColor(baseHue, 20, isDark ? 60 : 60),
+            borderColor: generateColor(baseHue, 25, isDark ? 40 : 70),
+            borderLight: generateColor(baseHue, 20, isDark ? 50 : 65),
+            shadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+            shadowLg: '0 10px 40px rgba(0, 0, 0, 0.15)'
+        }
+    }
+
+    // 辅助方法：调整颜色亮度
+    adjustBrightness(color, amount) {
+        const hex = color.replace('#', '')
+        const num = parseInt(hex, 16)
+        const r = Math.min(255, Math.max(0, Math.floor((num >> 16) * (1 + amount))))
+        const g = Math.min(255, Math.max(0, Math.floor(((num >> 8) & 0x00FF) * (1 + amount))))
+        const b = Math.min(255, Math.max(0, Math.floor((num & 0x0000FF) * (1 + amount))))
+        return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
+    }
+
+    // 辅助方法：HSL转Hex
+    hslToHex(h, s, l) {
+        s /= 100
+        l /= 100
+        const a = s * Math.min(l, 1 - l)
+        const f = n => {
+            const k = (n + h / 30) % 12
+            const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1)
+            return Math.round(255 * color).toString(16).padStart(2, '0')
+        }
+        return `#${f(0)}${f(8)}${f(4)}`
+    }
 }

@@ -52,14 +52,22 @@ export class ThemeManager {
   applyStyleSettings(settings) {
     const root = document.documentElement
 
+    // 应用自定义主题颜色（如果存在）
+    if (settings.themeColors) {
+      Object.entries(settings.themeColors).forEach(([key, value]) => {
+        const cssVar = this.convertToCssVar(key)
+        root.style.setProperty(cssVar, value)
+      })
+    }
+
     // 处理自动主题切换
     if (settings.autoTheme !== undefined) {
       if (settings.autoTheme) {
         this.enableAutoTheme()
       } else {
         this.disableAutoTheme()
-        // 如果禁用自动主题，应用手动选择的主题
-        if (settings.theme) {
+        // 如果禁用自动主题且没有自定义主题颜色，应用手动选择的主题
+        if (settings.theme && !settings.themeColors) {
           this.applyTheme(settings.theme)
         }
       }
@@ -648,5 +656,23 @@ export class ThemeManager {
   // 检查是否为亮色主题
   isLight() {
     return this.currentTheme === 'light'
+  }
+
+  // 将主题颜色键转换为 CSS 变量名
+  convertToCssVar(key) {
+    const varMap = {
+      bgPrimary: '--bg-primary',
+      bgSecondary: '--bg-secondary',
+      bgTertiary: '--bg-tertiary',
+      bgHover: '--bg-hover',
+      textPrimary: '--text-primary',
+      textSecondary: '--text-secondary',
+      textTertiary: '--text-tertiary',
+      borderColor: '--border-color',
+      borderLight: '--border-light',
+      shadow: '--shadow',
+      shadowLg: '--shadow-lg'
+    }
+    return varMap[key] || `--${key}`
   }
 }
