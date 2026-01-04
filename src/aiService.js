@@ -1141,6 +1141,190 @@ export class AIService {
         return replies.slice(0, 4)
     }
 
+    // 翻译文本
+    async translateText(text, agent, conversationHistory, settings, targetLanguage = 'en') {
+        const { apiEndpoint, apiKey, modelName } = settings
+
+        if (!apiEndpoint || !apiKey) {
+            throw new Error('请配置API端点和密钥')
+        }
+
+        const provider = this.detectAPIProvider(apiEndpoint)
+        const fullUrl = this.buildRequestUrl(apiEndpoint, provider)
+        const headers = this.buildRequestHeaders(apiKey, provider)
+
+        // 语言映射
+        const languageMap = {
+            'en': '英语',
+            'zh': '中文',
+            'ja': '日语',
+            'ko': '韩语',
+            'fr': '法语',
+            'de': '德语',
+            'es': '西班牙语',
+            'ru': '俄语'
+        }
+
+        const targetLanguageName = languageMap[targetLanguage] || '英语'
+
+        const prompt = `请将以下文本翻译成${targetLanguageName}，保持原文的语气和风格。
+
+原文：
+${text}
+
+要求：
+1. 准确翻译原文含义为${targetLanguageName}
+2. 保持原文的语气和风格
+3. 不要添加任何额外的说明或格式
+4. 直接返回翻译结果`
+
+        const requestBody = {
+            model: modelName,
+            messages: [
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            temperature: 0.3,
+            max_tokens: 1000
+        }
+
+        try {
+            const response = await fetch(fullUrl, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestBody)
+            })
+
+            if (!response.ok) {
+                throw new Error(`API请求失败: ${response.status}`)
+            }
+
+            const data = await response.json()
+            const content = this.parseResponseContent(data, provider)
+            return content.trim()
+        } catch (error) {
+            console.error('翻译失败:', error)
+            throw error
+        }
+    }
+
+    // 扩写文本
+    async expandText(text, agent, conversationHistory, settings) {
+        const { apiEndpoint, apiKey, modelName } = settings
+
+        if (!apiEndpoint || !apiKey) {
+            throw new Error('请配置API端点和密钥')
+        }
+
+        const provider = this.detectAPIProvider(apiEndpoint)
+        const fullUrl = this.buildRequestUrl(apiEndpoint, provider)
+        const headers = this.buildRequestHeaders(apiKey, provider)
+
+        const prompt = `请对以下文本进行扩写，使其更加详细和丰富。
+
+原文：
+${text}
+
+要求：
+1. 扩写内容应该与原文主题相关
+2. 增加更多的细节、例子和解释
+3. 保持原文的核心观点和语气
+4. 扩写后的内容应该自然流畅
+5. 不要添加任何额外的说明或格式
+6. 直接返回扩写结果`
+
+        const requestBody = {
+            model: modelName,
+            messages: [
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            temperature: 0.7,
+            max_tokens: 2000
+        }
+
+        try {
+            const response = await fetch(fullUrl, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestBody)
+            })
+
+            if (!response.ok) {
+                throw new Error(`API请求失败: ${response.status}`)
+            }
+
+            const data = await response.json()
+            const content = this.parseResponseContent(data, provider)
+            return content.trim()
+        } catch (error) {
+            console.error('扩写失败:', error)
+            throw error
+        }
+    }
+
+    // 优化文本
+    async optimizeText(text, agent, conversationHistory, settings) {
+        const { apiEndpoint, apiKey, modelName } = settings
+
+        if (!apiEndpoint || !apiKey) {
+            throw new Error('请配置API端点和密钥')
+        }
+
+        const provider = this.detectAPIProvider(apiEndpoint)
+        const fullUrl = this.buildRequestUrl(apiEndpoint, provider)
+        const headers = this.buildRequestHeaders(apiKey, provider)
+
+        const prompt = `请对以下文本进行优化，使其更加清晰、准确和有说服力。
+
+原文：
+${text}
+
+要求：
+1. 改进语言表达，使其更加清晰流畅
+2. 修正语法错误和用词不当
+3. 增强逻辑性和说服力
+4. 保持原文的核心观点和意图
+5. 优化后的内容应该简洁有力
+6. 不要添加任何额外的说明或格式
+7. 直接返回优化结果`
+
+        const requestBody = {
+            model: modelName,
+            messages: [
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            temperature: 0.5,
+            max_tokens: 1500
+        }
+
+        try {
+            const response = await fetch(fullUrl, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestBody)
+            })
+
+            if (!response.ok) {
+                throw new Error(`API请求失败: ${response.status}`)
+            }
+
+            const data = await response.json()
+            const content = this.parseResponseContent(data, provider)
+            return content.trim()
+        } catch (error) {
+            console.error('优化失败:', error)
+            throw error
+        }
+    }
+
     // 生成配色方案
     async generateColorScheme(prompt, settings) {
         const { apiEndpoint, apiKey, modelName } = settings

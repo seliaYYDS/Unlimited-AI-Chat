@@ -219,7 +219,7 @@
       </div>
         
 
-      <div class="chat-messages" ref="messagesContainer">
+      <div class="chat-messages" ref="messagesContainer" @contextmenu.prevent="handleChatContextMenu($event, null)">
         <div v-if="!currentAgent" class="empty-state">
           <div class="empty-icon">💬</div>
           <h3>请选择一个智能体开始对话</h3>
@@ -242,18 +242,19 @@
               'animate-fade-in-left': message.role === 'assistant',
               'animate-bounce-in': index === conversations.length - 1
             }]"
+            @contextmenu.prevent.stop="handleChatContextMenu($event, message)"
           >
             <div class="message-avatar">
               <div class="avatar" :class="message.role">
                 {{ message.role === 'user' ? '你' : 'AI' }}
               </div>
             </div>
-            <div class="message-content-wrapper">
-              <div class="message-content" :class="{ 'typing': isGenerating && message.role === 'assistant' }">
-                <div v-if="message.role === 'assistant' && settings.enableFormatting" v-html="formatMessageContent(message.content)"></div>
-                <div v-else>{{ message.content }}</div>
+            <div class="message-content-wrapper" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
+              <div class="message-content" :class="{ 'typing': isGenerating && message.role === 'assistant' }" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
+                <div v-if="message.role === 'assistant' && settings.enableFormatting" v-html="formatMessageContent(message.content)" @contextmenu.prevent.stop="handleChatContextMenu($event, message)"></div>
+                <div v-else @contextmenu.prevent.stop="handleChatContextMenu($event, message)">{{ message.content }}</div>
               </div>
-              <div class="message-time">
+              <div class="message-time" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
                 {{ formatTime(message.timestamp) }}
                 <span v-if="message.metadata" class="message-metadata">
                   <span v-if="message.metadata.tokens" class="metadata-item">
@@ -266,8 +267,8 @@
               </div>
 
               <!-- 用户消息操作按钮 -->
-              <div v-if="message.role === 'user'" class="message-actions">
-                <button class="action-btn copy-btn" @click="copyMessage(message)" title="复制消息">
+              <div v-if="message.role === 'user'" class="message-actions" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
+                <button class="action-btn copy-btn" @click.stop="copyMessage(message)" title="复制消息">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                   </svg>
@@ -375,22 +376,76 @@
       <div class="chat-input-area" v-if="currentAgent">
         <div :class="['input-wrapper', { 'focused': isInputFocused, 'has-content': inputMessage.trim() }]">
           <div class="input-container">
-            <!-- 推荐回复按钮 -->
-            <button
-              class="action-btn suggest-btn"
-              @click="showSuggestions"
-              :disabled="isGenerating"
-              title="获取推荐回复"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-            </button>
+                    <!-- AI辅助按钮 -->
+                    <div class="ai-assistant-container" ref="aiAssistantContainer">
+                      <button
+                        class="action-btn ai-assistant-btn"
+                        @click="toggleAIAssistantMenu"
+                        :disabled="isGenerating"
+                        :class="{ 'active': showAIAssistantMenu }"
+                        title="AI辅助"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                          <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                      </button>
 
-            <!-- 输入框 -->
-            <textarea
+                      <!-- AI辅助选项菜单 -->
+                      <Teleport to="body">
+                        <div
+                          v-if="showAIAssistantMenu"
+                          class="ai-assistant-menu"
+                          ref="aiAssistantMenu"
+                          @click.stop
+                        >
+                          <div
+                            class="ai-assistant-option"
+                            @click="handleAIAssistantAction('suggest')"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <span>推荐回复</span>
+                          </div>
+                          <div
+                            class="ai-assistant-option"
+                            @click="handleAIAssistantAction('translate')"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <circle cx="12" cy="12" r="10"/>
+                              <line x1="2" y1="12" x2="22" y2="12"/>
+                              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                            </svg>
+                            <span>翻译</span>
+                          </div>
+                          <div
+                            class="ai-assistant-option"
+                            @click="handleAIAssistantAction('expand')"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <polyline points="15 3 21 3 21 9"/>
+                              <polyline points="9 21 3 21 3 15"/>
+                              <line x1="21" y1="3" x2="14" y2="10"/>
+                              <line x1="3" y1="21" x2="10" y2="14"/>
+                            </svg>
+                            <span>扩写</span>
+                          </div>
+                          <div
+                            class="ai-assistant-option"
+                            @click="handleAIAssistantAction('optimize')"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                            </svg>
+                            <span>优化</span>
+                          </div>
+                        </div>
+                      </Teleport>
+                    </div>
+          
+                    <!-- 输入框 -->            <textarea
               v-model="inputMessage"
               class="chat-input"
               placeholder="输入您的消息..."
@@ -924,54 +979,1422 @@
     </Modal>
 
     <!-- 推荐回复弹窗 -->
-    <Modal
-      v-model:visible="showSuggestionsModal"
-      title="推荐回复"
-      size="medium"
-      @confirm="useSelectedReply"
-      @close="closeSuggestionsModal"
-      :confirm-disabled="selectedReplyIndex === -1"
-    >
-      <div class="suggestions-container">
-        <div v-if="isGeneratingSuggestions" class="suggestions-loading">
-          <div class="loading-spinner"></div>
-          <p>正在生成推荐回复...</p>
-        </div>
+    <Teleport to="body">
+      <div v-if="showSuggestionsModal" class="custom-modal-overlay" @click="closeSuggestionsModal">
+        <div class="custom-modal suggestions-modal" @click.stop>
+          <div class="custom-modal-header">
+            <div class="custom-modal-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span>推荐回复</span>
+            </div>
+            <button class="custom-modal-close" @click="closeSuggestionsModal">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
 
-        <div v-else-if="suggestedReplies.length === 0" class="suggestions-empty">
-          <p>暂无推荐回复</p>
-        </div>
+          <div class="custom-modal-body">
+            <div v-if="isGeneratingSuggestions" class="suggestions-loading">
+              <div class="loading-spinner"></div>
+              <p>正在生成推荐回复...</p>
+            </div>
 
-        <div v-else class="suggestions-list">
-          <div
-            v-for="(reply, index) in suggestedReplies"
-            :key="index"
-            :class="['suggestion-item', { active: selectedReplyIndex === index }]"
-            @click="selectReply(index)"
-          >
-            <div class="suggestion-content">
-              {{ reply }}
+            <div v-else-if="suggestedReplies.length === 0" class="suggestions-empty">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <p>暂无推荐回复</p>
+            </div>
+
+            <div v-else class="suggestions-list">
+              <div
+                v-for="(reply, index) in suggestedReplies"
+                :key="index"
+                :class="['suggestion-item', { active: selectedReplyIndex === index }]"
+                @click="selectReply(index)"
+              >
+                <div class="suggestion-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                  </svg>
+                </div>
+                <div class="suggestion-content">
+                  {{ reply }}
+                </div>
+                <div class="suggestion-check" v-if="selectedReplyIndex === index">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="suggestions-actions">
-          <button
-            class="btn secondary"
-            @click="refreshSuggestions"
-            :disabled="isGeneratingSuggestions"
-          >
-            刷新推荐
-          </button>
-
+          <div class="custom-modal-footer">
+            <button
+              class="custom-btn secondary"
+              @click="refreshSuggestions"
+              :disabled="isGeneratingSuggestions"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"/>
+                <polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              刷新推荐
+            </button>
+            <button
+              class="custom-btn primary"
+              @click="useSelectedReply"
+              :disabled="selectedReplyIndex === -1"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              使用选中
+            </button>
+          </div>
         </div>
       </div>
+    </Teleport>
 
-    </Modal>
+        
 
+            <!-- 翻译目标语言选择弹窗 -->
 
+        
 
-    <!-- 编辑消息弹窗 -->
+                <Teleport to="body">
+
+        
+
+                  <div v-if="showTranslateModal" class="custom-modal-overlay" @click="showTranslateModal = false">
+
+        
+
+                    <div class="custom-modal translate-modal" @click.stop>
+
+        
+
+                      <div class="custom-modal-header">
+
+        
+
+                        <div class="custom-modal-title">
+
+        
+
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                            <circle cx="12" cy="12" r="10"/>
+
+        
+
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+
+        
+
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+
+        
+
+                          </svg>
+
+        
+
+                          <span>选择目标语言</span>
+
+        
+
+                        </div>
+
+        
+
+                        <button class="custom-modal-close" @click="showTranslateModal = false">
+
+        
+
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+
+        
+
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+
+        
+
+                          </svg>
+
+        
+
+                        </button>
+
+        
+
+                      </div>
+
+        
+
+            
+
+        
+
+                      <div class="custom-modal-body">
+
+        
+
+                        <div class="translate-field">
+
+        
+
+                          <label class="translate-label">
+
+        
+
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                              <circle cx="12" cy="12" r="10"/>
+
+        
+
+                              <line x1="2" y1="12" x2="22" y2="12"/>
+
+        
+
+                              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+
+        
+
+                            </svg>
+
+        
+
+                            目标语言
+
+        
+
+                          </label>
+
+        
+
+                          <div class="language-options">
+
+        
+
+                            <div
+
+        
+
+                              v-for="option in targetLanguageOptions"
+
+        
+
+                              :key="option.value"
+
+        
+
+                              :class="['language-option', { active: selectedTargetLanguage === option.value }]"
+
+        
+
+                              @click="selectedTargetLanguage = option.value"
+
+        
+
+                            >
+
+        
+
+                              <span class="language-icon">{{ getLanguageIcon(option.value) }}</span>
+
+        
+
+                              <span class="language-name">{{ option.label }}</span>
+
+        
+
+                              <div class="language-check" v-if="selectedTargetLanguage === option.value">
+
+        
+
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                  <polyline points="20 6 9 17 4 12"/>
+
+        
+
+                                </svg>
+
+        
+
+                              </div>
+
+        
+
+                            </div>
+
+        
+
+                          </div>
+
+        
+
+                        </div>
+
+        
+
+            
+
+        
+
+                        <div class="translate-field">
+
+        
+
+                          <label class="translate-label">
+
+        
+
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+
+        
+
+                              <polyline points="14 2 14 8 20 8"/>
+
+        
+
+                              <line x1="16" y1="13" x2="8" y2="13"/>
+
+        
+
+                              <line x1="16" y1="17" x2="8" y2="17"/>
+
+        
+
+                              <polyline points="10 9 9 9 8 9"/>
+
+        
+
+                            </svg>
+
+        
+
+                            待翻译内容
+
+        
+
+                          </label>
+
+        
+
+                          <div class="translate-preview">
+
+        
+
+                            {{ inputMessage }}
+
+        
+
+                          </div>
+
+        
+
+                        </div>
+
+        
+
+                      </div>
+
+        
+
+            
+
+        
+
+                      <div class="custom-modal-footer">
+
+        
+
+                        <button class="custom-btn secondary" @click="showTranslateModal = false">
+
+        
+
+                          取消
+
+        
+
+                        </button>
+
+        
+
+                        <button class="custom-btn primary" @click="performTranslate">
+
+        
+
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                            <polyline points="20 6 9 17 4 12"/>
+
+        
+
+                          </svg>
+
+        
+
+                          开始翻译
+
+        
+
+                        </button>
+
+        
+
+                      </div>
+
+        
+
+                    </div>
+
+        
+
+                  </div>
+
+        
+
+                </Teleport>
+
+        
+
+                
+
+        
+
+                    <!-- 聊天右键菜单 -->
+
+        
+
+                    <Teleport to="body">
+
+        
+
+                      <div
+
+        
+
+                        v-if="chatContextMenuVisible"
+
+        
+
+                        class="context-menu chat-context-menu"
+
+        
+
+                        :style="{ left: chatContextMenuPosition.x + 'px', top: chatContextMenuPosition.y + 'px' }"
+
+        
+
+                        @click.stop
+
+        
+
+                      >
+
+        
+
+                        <!-- 消息气泡右键菜单 -->
+
+        
+
+                        <template v-if="chatContextMenuType === 'message'">
+
+        
+
+                          <div class="context-menu-item" @click="handleContextMenuAction('copy')">
+
+        
+
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+
+        
+
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+
+        
+
+                            </svg>
+
+        
+
+                            <span>复制</span>
+
+        
+
+                          </div>
+
+        
+
+                          <div class="context-menu-item" @click="handleContextMenuAction('regenerate')" v-if="chatContextMenuMessage?.role === 'assistant'">
+
+        
+
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                              <polyline points="23 4 23 10 17 10"/>
+
+        
+
+                              <polyline points="1 20 1 14 7 14"/>
+
+        
+
+                              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+
+        
+
+                            </svg>
+
+        
+
+                            <span>重新生成</span>
+
+        
+
+                          </div>
+
+        
+
+                          <div class="context-menu-item" @click="handleContextMenuAction('delete')">
+
+        
+
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                              <polyline points="3 6 5 6 21 6"/>
+
+        
+
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+
+        
+
+                            </svg>
+
+        
+
+                            <span>删除</span>
+
+        
+
+                          </div>
+
+        
+
+                          <div class="context-menu-divider"></div>
+
+        
+
+                          <div class="context-menu-item" @click="handleContextMenuAction('export')">
+
+        
+
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+
+        
+
+                              <polyline points="7 10 12 15 17 10"/>
+
+        
+
+                              <line x1="12" y1="15" x2="12" y2="3"/>
+
+        
+
+                            </svg>
+
+        
+
+                            <span>导出对话</span>
+
+        
+
+                          </div>
+
+        
+
+                          <div class="context-menu-item" @click="handleContextMenuAction('multiSelect')">
+
+        
+
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                              <rect x="3" y="3" width="7" height="7"/>
+
+        
+
+                              <rect x="14" y="3" width="7" height="7"/>
+
+        
+
+                              <rect x="14" y="14" width="7" height="7"/>
+
+        
+
+                              <rect x="3" y="14" width="7" height="7"/>
+
+        
+
+                            </svg>
+
+        
+
+                            <span>多选对话</span>
+
+        
+
+                          </div>
+
+        
+
+                        </template>
+
+        
+
+                
+
+        
+
+                        <!-- 背景右键菜单 -->
+
+        
+
+                        <template v-else>
+
+        
+
+                          <div class="context-menu-item" @click="handleContextMenuAction('clear')">
+
+        
+
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                              <polyline points="3 6 5 6 21 6"/>
+
+        
+
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+
+        
+
+                            </svg>
+
+        
+
+                            <span>清理对话记录</span>
+
+        
+
+                          </div>
+
+        
+
+                          <div class="context-menu-item" @click="handleContextMenuAction('exportAgent')">
+
+        
+
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+
+        
+
+                              <polyline points="17 21 17 13 7 13 7 21"/>
+
+        
+
+                              <polyline points="7 3 7 8 15 8"/>
+
+        
+
+                            </svg>
+
+        
+
+                            <span>导出智能体</span>
+
+        
+
+                          </div>
+
+        
+
+                          <div class="context-menu-item" @click="handleContextMenuAction('multiSelect')">
+
+        
+
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                              <rect x="3" y="3" width="7" height="7"/>
+
+        
+
+                              <rect x="14" y="3" width="7" height="7"/>
+
+        
+
+                              <rect x="14" y="14" width="7" height="7"/>
+
+        
+
+                              <rect x="3" y="14" width="7" height="7"/>
+
+        
+
+                            </svg>
+
+        
+
+                            <span>多选对话</span>
+
+        
+
+                          </div>
+
+        
+
+                        </template>
+
+        
+
+                      </div>
+
+        
+
+                    </Teleport>
+
+        
+
+                
+
+        
+
+                    <!-- 导出对话弹窗 -->
+
+        
+
+                    <Teleport to="body">
+
+        
+
+                      <div v-if="showExportConversationModal" class="custom-modal-overlay" @click="showExportConversationModal = false">
+
+        
+
+                        <div class="custom-modal export-modal" @click.stop>
+
+        
+
+                          <div class="custom-modal-header">
+
+        
+
+                            <div class="custom-modal-title">
+
+        
+
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+
+        
+
+                                <polyline points="7 10 12 15 17 10"/>
+
+        
+
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+
+        
+
+                              </svg>
+
+        
+
+                              <span>导出对话</span>
+
+        
+
+                            </div>
+
+        
+
+                            <button class="custom-modal-close" @click="showExportConversationModal = false">
+
+        
+
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+
+        
+
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+
+        
+
+                              </svg>
+
+        
+
+                            </button>
+
+        
+
+                          </div>
+
+        
+
+                
+
+        
+
+                          <div class="custom-modal-body">
+
+        
+
+                            <div class="export-field">
+
+        
+
+                              <label class="export-label">
+
+        
+
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+
+        
+
+                                  <polyline points="14 2 14 8 20 8"/>
+
+        
+
+                                  <line x1="16" y1="13" x2="8" y2="13"/>
+
+        
+
+                                  <line x1="16" y1="17" x2="8" y2="17"/>
+
+        
+
+                                  <polyline points="10 9 9 9 8 9"/>
+
+        
+
+                                </svg>
+
+        
+
+                                导出格式
+
+        
+
+                              </label>
+
+        
+
+                              <div class="format-options">
+
+        
+
+                                <div
+
+        
+
+                                  v-for="format in exportFormats"
+
+        
+
+                                  :key="format.value"
+
+        
+
+                                  :class="['format-option', { active: exportFormat === format.value }]"
+
+        
+
+                                  @click="exportFormat = format.value"
+
+        
+
+                                >
+
+        
+
+                                  <span class="format-icon">{{ format.icon }}</span>
+
+        
+
+                                  <span class="format-name">{{ format.label }}</span>
+
+        
+
+                                  <div class="format-check" v-if="exportFormat === format.value">
+
+        
+
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                      <polyline points="20 6 9 17 4 12"/>
+
+        
+
+                                    </svg>
+
+        
+
+                                  </div>
+
+        
+
+                                </div>
+
+        
+
+                              </div>
+
+        
+
+                            </div>
+
+        
+
+                
+
+        
+
+                            <div class="export-field">
+
+        
+
+                              <label class="export-label">
+
+        
+
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+
+        
+
+                                  <circle cx="12" cy="12" r="3"/>
+
+        
+
+                                </svg>
+
+        
+
+                                预览
+
+        
+
+                              </label>
+
+        
+
+                              <div class="export-preview" v-html="exportPreviewContent"></div>
+
+        
+
+                            </div>
+
+        
+
+                          </div>
+
+        
+
+                
+
+        
+
+                          <div class="custom-modal-footer">
+
+        
+
+                            <button class="custom-btn secondary" @click="showExportConversationModal = false">
+
+        
+
+                              取消
+
+        
+
+                            </button>
+
+        
+
+                            <button class="custom-btn primary" @click="performExportConversation">
+
+        
+
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+
+        
+
+                                <polyline points="7 10 12 15 17 10"/>
+
+        
+
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+
+        
+
+                              </svg>
+
+        
+
+                              导出
+
+        
+
+                            </button>
+
+        
+
+                          </div>
+
+        
+
+                        </div>
+
+        
+
+                      </div>
+
+        
+
+                    </Teleport>
+
+        
+
+                
+
+        
+
+                    <!-- 多选对话弹窗 -->
+
+        
+
+                    <Teleport to="body">
+
+        
+
+                      <div v-if="showMultiSelectModal" class="custom-modal-overlay" @click="showMultiSelectModal = false">
+
+        
+
+                        <div class="custom-modal multi-select-modal" @click.stop>
+
+        
+
+                          <div class="custom-modal-header">
+
+        
+
+                            <div class="custom-modal-title">
+
+        
+
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                <rect x="3" y="3" width="7" height="7"/>
+
+        
+
+                                <rect x="14" y="3" width="7" height="7"/>
+
+        
+
+                                <rect x="14" y="14" width="7" height="7"/>
+
+        
+
+                                <rect x="3" y="14" width="7" height="7"/>
+
+        
+
+                              </svg>
+
+        
+
+                              <span>多选对话</span>
+
+        
+
+                              <span class="selected-count">已选择 {{ selectedMessageIds.size }} 条</span>
+
+        
+
+                            </div>
+
+        
+
+                            <button class="custom-modal-close" @click="showMultiSelectModal = false">
+
+        
+
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+
+        
+
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+
+        
+
+                              </svg>
+
+        
+
+                            </button>
+
+        
+
+                          </div>
+
+        
+
+                
+
+        
+
+                          <div class="custom-modal-body">
+
+        
+
+                            <div class="multi-select-list">
+
+        
+
+                              <div
+
+        
+
+                                v-for="(message, index) in conversations"
+
+        
+
+                                :key="message.id"
+
+        
+
+                                :class="['multi-select-item', { active: selectedMessageIds.has(message.id) }]"
+
+        
+
+                                @click="toggleMessageSelection(message.id)"
+
+        
+
+                              >
+
+        
+
+                                <div class="multi-select-checkbox">
+
+        
+
+                                  <svg v-if="selectedMessageIds.has(message.id)" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                    <polyline points="20 6 9 17 4 12"/>
+
+        
+
+                                  </svg>
+
+        
+
+                                </div>
+
+        
+
+                                <div class="multi-select-avatar">
+
+        
+
+                                  {{ message.role === 'user' ? '你' : 'AI' }}
+
+        
+
+                                </div>
+
+        
+
+                                <div class="multi-select-content">
+
+        
+
+                                  <div class="multi-select-role">{{ message.role === 'user' ? '用户' : 'AI助手' }}</div>
+
+        
+
+                                  <div class="multi-select-text">{{ message.content.substring(0, 100) }}{{ message.content.length > 100 ? '...' : '' }}</div>
+
+        
+
+                                  <div class="multi-select-time">{{ formatTime(message.timestamp) }}</div>
+
+        
+
+                                </div>
+
+        
+
+                              </div>
+
+        
+
+                            </div>
+
+        
+
+                          </div>
+
+        
+
+                
+
+        
+
+                          <div class="custom-modal-footer">
+
+        
+
+                            <button class="custom-btn secondary" @click="selectAllMessages">
+
+        
+
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                <polyline points="9 11 12 14 22 4"/>
+
+        
+
+                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+
+        
+
+                              </svg>
+
+        
+
+                              全选
+
+        
+
+                            </button>
+
+        
+
+                            <button class="custom-btn secondary" @click="clearMessageSelection">
+
+        
+
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                <path d="M18 6L6 18M6 6l12 12"/>
+
+        
+
+                              </svg>
+
+        
+
+                              清空选择
+
+        
+
+                            </button>
+
+        
+
+                            <button class="custom-btn primary" @click="handleMultiSelectAction('copy')" :disabled="selectedMessageIds.size === 0">
+
+        
+
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+
+        
+
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+
+        
+
+                              </svg>
+
+        
+
+                              复制
+
+        
+
+                            </button>
+
+        
+
+                            <button class="custom-btn primary" @click="handleMultiSelectAction('export')" :disabled="selectedMessageIds.size === 0">
+
+        
+
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+
+        
+
+                                <polyline points="7 10 12 15 17 10"/>
+
+        
+
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+
+        
+
+                              </svg>
+
+        
+
+                              导出
+
+        
+
+                            </button>
+
+        
+
+                            <button class="custom-btn danger" @click="handleMultiSelectAction('delete')" :disabled="selectedMessageIds.size === 0">
+
+        
+
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+        
+
+                                <polyline points="3 6 5 6 21 6"/>
+
+        
+
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+
+        
+
+                              </svg>
+
+        
+
+                              删除
+
+        
+
+                            </button>
+
+        
+
+                          </div>
+
+        
+
+                        </div>
+
+        
+
+                      </div>
+
+        
+
+                    </Teleport>
+
+        
+
+                
+
+        
+
+                            <!-- 编辑消息弹窗 -->
 
     <Modal
 
@@ -2162,17 +3585,329 @@ export default {
 
       // 推荐回复相关状态
 
-      showSuggestionsModal: false,
+            showSuggestionsModal: false,
 
-      isGeneratingSuggestions: false,
+            isGeneratingSuggestions: false,
 
-      suggestedReplies: [],
+            suggestedReplies: [],
 
-      selectedReplyIndex: -1,
+            selectedReplyIndex: -1,
 
+      
 
+            // AI辅助菜单相关状态
 
-      // SD图像生成相关状态
+      
+
+                  showAIAssistantMenu: false,
+
+      
+
+                  isGeneratingAIAssistant: false,
+
+      
+
+                  aiAssistantResult: '',
+
+      
+
+                  currentAIAssistantAction: '',
+
+      
+
+            
+
+      
+
+                  // 翻译相关状态
+
+      
+
+            
+
+      
+
+                        showTranslateModal: false,
+
+      
+
+            
+
+      
+
+                        selectedTargetLanguage: 'en',
+
+      
+
+            
+
+      
+
+                        targetLanguageOptions: [
+
+      
+
+            
+
+      
+
+                          { value: 'en', label: '英语' },
+
+      
+
+            
+
+      
+
+                          { value: 'zh', label: '中文' },
+
+      
+
+            
+
+      
+
+                          { value: 'ja', label: '日语' },
+
+      
+
+            
+
+      
+
+                          { value: 'ko', label: '韩语' },
+
+      
+
+            
+
+      
+
+                          { value: 'fr', label: '法语' },
+
+      
+
+            
+
+      
+
+                          { value: 'de', label: '德语' },
+
+      
+
+            
+
+      
+
+                          { value: 'es', label: '西班牙语' },
+
+      
+
+            
+
+      
+
+                          { value: 'ru', label: '俄语' }
+
+      
+
+            
+
+      
+
+                        ],
+
+      
+
+            
+
+      
+
+                  
+
+      
+
+            
+
+      
+
+                        // 聊天界面右键菜单状态
+
+      
+
+            
+
+      
+
+                        chatContextMenuVisible: false,
+
+      
+
+            
+
+      
+
+                        chatContextMenuPosition: { x: 0, y: 0 },
+
+      
+
+            
+
+      
+
+                        chatContextMenuMessage: null,
+
+      
+
+            
+
+      
+
+                        chatContextMenuType: 'message', // 'message' 或 'background'
+
+      
+
+            
+
+      
+
+                  
+
+      
+
+            
+
+      
+
+                        // 导出对话状态
+
+      
+
+            
+
+      
+
+                        showExportConversationModal: false,
+
+      
+
+            
+
+      
+
+                        exportFormat: 'markdown',
+
+      
+
+            
+
+      
+
+                        exportFormats: [
+
+      
+
+            
+
+      
+
+                          { value: 'markdown', label: 'Markdown', icon: '📝' },
+
+      
+
+            
+
+      
+
+                          { value: 'html', label: 'HTML', icon: '🌐' },
+
+      
+
+            
+
+      
+
+                          { value: 'pdf', label: 'PDF', icon: '📄' },
+
+      
+
+            
+
+      
+
+                          { value: 'json', label: 'JSON', icon: '📋' },
+
+      
+
+            
+
+      
+
+                          { value: 'image', label: '图片', icon: '🖼️' }
+
+      
+
+            
+
+      
+
+                        ],
+
+      
+
+            
+
+      
+
+                        exportPreviewContent: '',
+
+      
+
+            
+
+      
+
+                  
+
+      
+
+            
+
+      
+
+                        // 多选对话状态
+
+      
+
+            
+
+      
+
+                        showMultiSelectModal: false,
+
+      
+
+            
+
+      
+
+                        selectedMessageIds: new Set(),
+
+      
+
+            
+
+      
+
+                  
+
+      
+
+            
+
+      
+
+                              // SD图像生成相关状态
 
       sdModels: [],
 
@@ -2307,6 +4042,9 @@ export default {
     this.settings.maxTokens = Number(this.settings.maxTokens) || 1000
 
     this.settings.autoClearDays = Number(this.settings.autoClearDays) || 3
+
+    // 添加全局点击事件监听器，用于关闭AI辅助菜单
+    document.addEventListener('click', this.handleGlobalClick)
 
     this.settings.contextLength = Number(this.settings.contextLength) || 50
 
@@ -2444,6 +4182,13 @@ export default {
         console.log('App: agentForm.avatar changed:', newAvatar ? newAvatar.substring(0, 50) + '...' : 'No avatar')
       },
       immediate: false
+    },
+    exportFormat: {
+      handler() {
+        if (this.showExportConversationModal) {
+          this.updateExportPreview()
+        }
+      }
     }
   },
 
@@ -3857,6 +5602,911 @@ ${conversationText}
       this.showSuggestionsModal = false
       this.suggestedReplies = []
       this.selectedReplyIndex = -1
+    },
+
+    // AI辅助功能
+    toggleAIAssistantMenu() {
+      this.showAIAssistantMenu = !this.showAIAssistantMenu
+
+      // 如果打开菜单，设置菜单位置
+      if (this.showAIAssistantMenu) {
+        this.$nextTick(() => {
+          this.positionAIAssistantMenu()
+        })
+      }
+    },
+
+    // 定位AI辅助菜单
+    positionAIAssistantMenu() {
+      const container = this.$refs.aiAssistantContainer
+      const menu = this.$refs.aiAssistantMenu
+
+      if (container && menu) {
+        const rect = container.getBoundingClientRect()
+        const menuHeight = menu.offsetHeight
+        const menuWidth = 160 // 最小宽度
+
+        // 设置菜单位置在按钮上方
+        menu.style.left = `${rect.left}px`
+        menu.style.bottom = `${window.innerHeight - rect.top + 8}px`
+
+        // 确保菜单不会超出屏幕右侧
+        if (rect.left + menuWidth > window.innerWidth) {
+          menu.style.left = `${window.innerWidth - menuWidth - 16}px`
+        }
+
+        // 确保菜单不会超出屏幕上方
+        if (rect.top - menuHeight < 8) {
+          menu.style.bottom = 'auto'
+          menu.style.top = `${rect.bottom + 8}px`
+        }
+      }
+    },
+
+    // 处理全局点击事件，关闭AI辅助菜单
+    handleGlobalClick(event) {
+      // 如果AI辅助菜单是打开的
+      if (this.showAIAssistantMenu) {
+        // 检查点击是否在AI辅助容器内
+        const aiAssistantContainer = this.$refs.aiAssistantContainer
+        const aiAssistantMenu = this.$refs.aiAssistantMenu
+
+        if (aiAssistantContainer && !aiAssistantContainer.contains(event.target)) {
+          // 点击不在容器内，关闭菜单
+          this.showAIAssistantMenu = false
+        }
+      }
+
+      // 如果聊天右键菜单是打开的
+      if (this.chatContextMenuVisible) {
+        this.chatContextMenuVisible = false
+      }
+    },
+
+    async handleAIAssistantAction(action) {
+      this.showAIAssistantMenu = false
+      this.currentAIAssistantAction = action
+
+      switch (action) {
+        case 'suggest':
+          // 推荐回复 - 显示弹窗让用户选择
+          await this.showSuggestions()
+          return
+        case 'translate':
+          // 翻译 - 打开目标语言选择弹窗
+          if (!this.inputMessage.trim()) {
+            this.showNotification('请先输入要翻译的内容', 'warning')
+            return
+          }
+          this.showTranslateModal = true
+          return
+        case 'expand':
+          // 扩写 - 基于当前输入框内容进行扩写
+          if (!this.inputMessage.trim()) {
+            this.showNotification('请先输入要扩写的内容', 'warning')
+            return
+          }
+          await this.performExpand()
+          return
+        case 'optimize':
+          // 优化 - 对已有内容进行优化
+          if (!this.inputMessage.trim()) {
+            this.showNotification('请先输入要优化的内容', 'warning')
+            return
+          }
+          await this.performOptimize()
+          return
+        default:
+          this.showNotification('未知的AI辅助操作', 'danger')
+          return
+      }
+    },
+
+    // 执行扩写操作
+    async performExpand() {
+      this.isGeneratingAIAssistant = true
+
+      try {
+        const settings = this.storageManager.getSettings()
+        const result = await this.aiService.expandText(
+          this.inputMessage,
+          this.currentAgent,
+          this.conversations,
+          settings
+        )
+        this.inputMessage = result
+        this.showNotification('扩写完成', 'success')
+
+        // 聚焦到输入框
+        this.$nextTick(() => {
+          const textarea = this.$refs.chatInput
+          if (textarea) {
+            textarea.focus()
+          }
+        })
+      } catch (error) {
+        console.error('扩写失败:', error)
+        this.showNotification(`扩写失败: ${error.message}`, 'danger')
+      } finally {
+        this.isGeneratingAIAssistant = false
+      }
+    },
+
+    // 执行优化操作
+    async performOptimize() {
+      this.isGeneratingAIAssistant = true
+
+      try {
+        const settings = this.storageManager.getSettings()
+        const result = await this.aiService.optimizeText(
+          this.inputMessage,
+          this.currentAgent,
+          this.conversations,
+          settings
+        )
+        this.inputMessage = result
+        this.showNotification('优化完成', 'success')
+
+        // 聚焦到输入框
+        this.$nextTick(() => {
+          const textarea = this.$refs.chatInput
+          if (textarea) {
+            textarea.focus()
+          }
+        })
+      } catch (error) {
+        console.error('优化失败:', error)
+        this.showNotification(`优化失败: ${error.message}`, 'danger')
+      } finally {
+        this.isGeneratingAIAssistant = false
+      }
+    },
+
+    // 执行翻译操作
+    async performTranslate() {
+      this.showTranslateModal = false
+      this.isGeneratingAIAssistant = true
+
+      try {
+        const settings = this.storageManager.getSettings()
+        const result = await this.aiService.translateText(
+          this.inputMessage,
+          this.currentAgent,
+          this.conversations,
+          settings,
+          this.selectedTargetLanguage
+        )
+        this.inputMessage = result
+        this.showNotification('翻译完成', 'success')
+
+        // 聚焦到输入框
+        this.$nextTick(() => {
+          const textarea = this.$refs.chatInput
+          if (textarea) {
+            textarea.focus()
+          }
+        })
+      } catch (error) {
+        console.error('翻译失败:', error)
+        this.showNotification(`翻译失败: ${error.message}`, 'danger')
+      } finally {
+        this.isGeneratingAIAssistant = false
+      }
+    },
+
+    // 获取语言图标
+    getLanguageIcon(langCode) {
+      const icons = {
+        'en': '🇬🇧',
+        'zh': '🇨🇳',
+        'ja': '🇯🇵',
+        'ko': '🇰🇷',
+        'fr': '🇫🇷',
+        'de': '🇩🇪',
+        'es': '🇪🇸',
+        'ru': '🇷🇺'
+      }
+      return icons[langCode] || '🌐'
+    },
+
+    // 处理聊天右键菜单
+    handleChatContextMenu(event, message) {
+      event.preventDefault()
+      this.chatContextMenuMessage = message
+      this.chatContextMenuType = message ? 'message' : 'background'
+      this.chatContextMenuPosition = { x: event.clientX, y: event.clientY }
+      this.chatContextMenuVisible = true
+
+      // 确保菜单不会超出屏幕边界
+      this.$nextTick(() => {
+        const menu = document.querySelector('.chat-context-menu')
+        if (menu) {
+          const rect = menu.getBoundingClientRect()
+          if (rect.right > window.innerWidth) {
+            this.chatContextMenuPosition.x = window.innerWidth - rect.width - 10
+          }
+          if (rect.bottom > window.innerHeight) {
+            this.chatContextMenuPosition.y = window.innerHeight - rect.height - 10
+          }
+        }
+      })
+    },
+
+    // 处理右键菜单操作
+    handleContextMenuAction(action) {
+      this.chatContextMenuVisible = false
+
+      switch (action) {
+        case 'copy':
+          if (this.chatContextMenuMessage) {
+            this.copyMessage(this.chatContextMenuMessage)
+          }
+          break
+        case 'regenerate':
+          if (this.chatContextMenuMessage) {
+            this.regenerateMessage(this.chatContextMenuMessage)
+          }
+          break
+        case 'delete':
+          if (this.chatContextMenuMessage) {
+            this.deleteMessage(this.chatContextMenuMessage)
+          }
+          break
+        case 'export':
+          this.openExportConversation()
+          break
+        case 'multiSelect':
+          this.openMultiSelectModal()
+          break
+        case 'clear':
+          this.showManualCleanupConfirm()
+          break
+        case 'exportAgent':
+          this.exportCurrentAgent()
+          break
+      }
+    },
+
+    // 删除消息
+    deleteMessage(message) {
+      const index = this.conversations.findIndex(m => m.id === message.id)
+      if (index !== -1) {
+        this.conversations.splice(index, 1)
+        this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+        this.showNotification('消息已删除', 'success')
+      }
+    },
+
+    // 打开导出对话弹窗
+    openExportConversation() {
+      this.showExportConversationModal = true
+      this.updateExportPreview()
+    },
+
+    // 更新导出预览
+    updateExportPreview() {
+      // 确定要预览的消息
+      let messagesToPreview = []
+
+      if (this.selectedMessageIds.size > 0) {
+        // 如果有选中的消息，预览选中的消息
+        messagesToPreview = this.conversations.filter(msg => this.selectedMessageIds.has(msg.id))
+      } else if (this.chatContextMenuMessage) {
+        // 如果右键点击了消息，预览该消息
+        messagesToPreview = [this.chatContextMenuMessage]
+      } else {
+        // 否则预览所有消息
+        messagesToPreview = this.conversations
+      }
+
+      switch (this.exportFormat) {
+        case 'markdown':
+          this.exportPreviewContent = this.generateMarkdownPreview(messagesToPreview)
+          break
+        case 'html':
+          this.exportPreviewContent = this.generateHTMLPreview(messagesToPreview)
+          break
+        case 'json':
+          this.exportPreviewContent = this.generateJSONPreview(messagesToPreview)
+          break
+        case 'pdf':
+          this.exportPreviewContent = '<div class="export-preview-placeholder"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>PDF 格式预览</p><p>导出后将生成 PDF 文件</p></div>'
+          break
+        case 'image':
+          this.exportPreviewContent = '<div class="export-preview-placeholder"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><p>图片格式预览</p><p>导出后将生成对话截图</p></div>'
+          break
+      }
+    },
+
+    // 生成 Markdown 预览
+    generateMarkdownPreview(messages) {
+      return messages.map(msg => {
+        const role = msg.role === 'user' ? '用户' : 'AI助手'
+        const time = this.formatTime(msg.timestamp)
+        return `**${role}** (${time})\n\n${msg.content}\n\n---`
+      }).join('\n')
+    },
+
+    // 生成统一的导出样式
+    generateExportStyles() {
+      const isDark = this.styleSettings.theme === 'dark'
+      
+      // 定义颜色变量
+      const colors = isDark ? {
+        bgPrimary: '#111827',
+        bgSecondary: '#1f2937',
+        bgTertiary: '#374151',
+        textPrimary: '#ffffff',
+        textSecondary: '#d1d5db',
+        textTertiary: '#9ca3af',
+        borderColor: '#374151',
+        borderLight: '#4b5563',
+        userAvatar: '#ec4899',
+        aiAvatar: '#3b82f6',
+        userBorder: '#ec4899',
+        aiBorder: '#4b5563',
+        codeBg: 'rgba(255, 255, 255, 0.1)',
+        preBg: 'rgba(255, 255, 255, 0.1)',
+        linkColor: '#f472b6',
+        tableHeaderBg: 'rgba(255, 255, 255, 0.1)'
+      } : {
+        bgPrimary: '#ffffff',
+        bgSecondary: '#f9fafb',
+        bgTertiary: '#f3f4f6',
+        textPrimary: '#111827',
+        textSecondary: '#4b5563',
+        textTertiary: '#9ca3af',
+        borderColor: '#e5e7eb',
+        borderLight: '#f3f4f6',
+        userAvatar: '#ec4899',
+        aiAvatar: '#3b82f6',
+        userBorder: '#ec4899',
+        aiBorder: '#e5e7eb',
+        codeBg: 'rgba(0, 0, 0, 0.1)',
+        preBg: 'rgba(0, 0, 0, 0.05)',
+        linkColor: '#ec4899',
+        tableHeaderBg: 'rgba(0, 0, 0, 0.05)'
+      }
+
+      return `
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        html, body {
+          width: 100%;
+          height: 100%;
+          background-color: ${colors.bgPrimary};
+          color: ${colors.textPrimary};
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          line-height: 1.5;
+        }
+
+        .export-container {
+          max-width: 100%;
+          margin: 0 auto;
+          padding: 40px;
+        }
+
+        .export-header {
+          text-align: center;
+          margin-bottom: 30px;
+          padding-bottom: 20px;
+          border-bottom: 1px solid ${colors.borderColor};
+        }
+
+        .export-title {
+          font-size: 24px;
+          font-weight: 600;
+          margin-bottom: 12px;
+          color: ${colors.textPrimary};
+        }
+
+        .export-date {
+          font-size: 14px;
+          color: ${colors.textSecondary};
+        }
+
+        /* 消息样式 */
+        .message {
+          display: flex;
+          gap: 12px;
+          margin-bottom: 24px;
+        }
+
+        .message.user {
+          flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+          flex-shrink: 0;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: 600;
+          color: white;
+          background: ${colors.userAvatar};
+        }
+
+        .message.assistant .message-avatar {
+          background: ${colors.aiAvatar};
+        }
+
+        .message-content-wrapper {
+          flex: 1;
+          max-width: 70%;
+          min-width: 0;
+        }
+
+        .message.user .message-content-wrapper {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+        }
+
+        .message-content {
+          padding: 16px 20px;
+          border-radius: 8px;
+          background: transparent;
+          border: 1px solid ${colors.borderLight};
+          color: ${colors.textPrimary};
+          line-height: 1.5;
+          word-wrap: break-word;
+          word-break: break-word;
+          white-space: pre-wrap;
+          overflow-wrap: break-word;
+          max-width: 100%;
+          box-sizing: border-box;
+        }
+
+        .message.user .message-content {
+          border-color: ${colors.userBorder};
+        }
+
+        .message.assistant .message-content {
+          border-color: ${colors.aiBorder};
+        }
+
+        .message-time {
+          font-size: 11px;
+          color: ${colors.textTertiary};
+          margin-top: 4px;
+          padding: 0 4px;
+        }
+
+        .message.user .message-time {
+          text-align: right;
+        }
+
+        /* Markdown 样式 */
+        .message-content p { margin-bottom: 8px; }
+        .message-content p:last-child { margin-bottom: 0; }
+        
+        .message-content code {
+          background: ${colors.codeBg};
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+          font-size: 13px;
+        }
+
+        .message-content pre {
+          background: ${colors.preBg};
+          padding: 12px;
+          border-radius: 8px;
+          overflow-x: auto;
+          margin: 8px 0;
+        }
+
+        .message-content pre code {
+          background: none;
+          padding: 0;
+        }
+
+        .message-content strong { font-weight: 600; }
+        .message-content em { font-style: italic; }
+
+        .message-content ul, .message-content ol {
+          margin-left: 20px;
+          margin-bottom: 8px;
+        }
+
+        .message-content ul { list-style-type: disc; }
+        .message-content ol { list-style-type: decimal; }
+
+        .message-content li { margin-bottom: 4px; }
+
+        .message-content a {
+          color: ${colors.linkColor};
+          text-decoration: underline;
+        }
+
+        .message-content blockquote {
+          border-left: 3px solid ${colors.borderColor};
+          padding-left: 12px;
+          margin: 8px 0;
+          opacity: 0.8;
+        }
+
+        .message-content h1, .message-content h2, .message-content h3 {
+          margin: 12px 0 8px 0;
+          font-weight: 600;
+        }
+
+        .message-content h1 { font-size: 20px; }
+        .message-content h2 { font-size: 18px; }
+        .message-content h3 { font-size: 16px; }
+
+        .message-content table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: 8px 0;
+        }
+
+        .message-content th, .message-content td {
+          border: 1px solid ${colors.borderColor};
+          padding: 8px;
+          text-align: left;
+        }
+
+        .message-content th {
+          background: ${colors.tableHeaderBg};
+          font-weight: 600;
+        }
+
+        .message-content hr {
+          border: none;
+          border-top: 1px solid ${colors.borderColor};
+          margin: 12px 0;
+        }
+
+        /* 打印样式 */
+        @media print {
+          body { padding: 0; }
+          .export-container { padding: 20px; }
+        }
+      `
+    },
+
+    // 生成 HTML 预览
+    generateHTMLPreview(messages) {
+      const styles = this.generateExportStyles()
+      return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>对话导出 - ${this.currentAgent.name}</title>
+  <style>
+    ${styles}
+  </style>
+</head>
+<body>
+  <div class="export-container">
+    <div class="export-header">
+      <h1 class="export-title">与 ${this.currentAgent.name} 的对话</h1>
+      <p class="export-date">导出时间：${new Date().toLocaleString('zh-CN')}</p>
+    </div>
+    <div class="messages-list">
+      ${messages.map(msg => {
+        const role = msg.role === 'user' ? '你' : 'AI'
+        const time = this.formatTime(msg.timestamp)
+        return `<div class="message ${msg.role}">
+          <div class="message-avatar">${role}</div>
+          <div class="message-content-wrapper">
+            <div class="message-content">${this.formatMessageContent(msg.content)}</div>
+            <div class="message-time">${time}</div>
+          </div>
+        </div>`
+      }).join('')}
+    </div>
+  </div>
+</body>
+</html>`
+    },
+
+    // 生成 Markdown 预览
+    generateMarkdownPreview(messages) {
+      const lines = [
+        `# 与 ${this.currentAgent.name} 的对话`,
+        '',
+        `导出时间：${new Date().toLocaleString('zh-CN')}`,
+        '',
+        '---',
+        ''
+      ]
+
+      messages.forEach(msg => {
+        const role = msg.role === 'user' ? '用户' : 'AI助手'
+        const time = this.formatTime(msg.timestamp)
+        
+        lines.push(`### ${role}`)
+        lines.push(`*${time}*`)
+        lines.push('')
+        lines.push(msg.content)
+        lines.push('')
+        lines.push('---')
+        lines.push('')
+      })
+
+      return lines.join('\n')
+    },
+
+    // 生成 JSON 预览
+    generateJSONPreview(messages) {
+      const data = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        metadata: msg.metadata
+      }))
+      return `<pre class="json-preview">${JSON.stringify(data, null, 2)}</pre>`
+    },
+
+    // 执行导出对话
+    performExportConversation() {
+      // 确定要导出的消息
+      let messagesToExport = []
+
+      if (this.selectedMessageIds.size > 0) {
+        // 如果有选中的消息，导出选中的消息
+        messagesToExport = this.conversations.filter(msg => this.selectedMessageIds.has(msg.id))
+      } else if (this.chatContextMenuMessage) {
+        // 如果右键点击了消息，导出该消息
+        messagesToExport = [this.chatContextMenuMessage]
+      } else {
+        // 否则导出所有消息
+        messagesToExport = this.conversations
+      }
+
+      if (messagesToExport.length === 0) {
+        this.showNotification('没有可导出的消息', 'warning')
+        return
+      }
+
+      const filename = `conversation_${this.currentAgent.name}_${new Date().toISOString().slice(0, 10)}`
+
+      switch (this.exportFormat) {
+        case 'markdown':
+          this.downloadFile(
+            this.generateMarkdownPreview(messagesToExport),
+            `${filename}.md`,
+            'text/markdown'
+          )
+          break
+        case 'html':
+          this.downloadFile(
+            this.generateHTMLPreview(messagesToExport),
+            `${filename}.html`,
+            'text/html'
+          )
+          break
+        case 'json':
+          this.downloadFile(
+            JSON.stringify(messagesToExport, null, 2),
+            `${filename}.json`,
+            'application/json'
+          )
+          break
+        case 'pdf':
+          this.exportToPDF(messagesToExport, filename)
+          break
+        case 'image':
+          this.exportToImage(messagesToExport, filename)
+          break
+      }
+
+      this.showExportConversationModal = false
+      this.showNotification('导出成功', 'success')
+    },
+
+    // 下载文件
+    downloadFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    },
+
+    // 导出为PDF
+    exportToPDF(messages, filename) {
+      const styles = this.generateExportStyles()
+      
+      // 使用浏览器的打印功能生成PDF
+      const printWindow = window.open('', '_blank')
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="zh-CN">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>${filename}</title>
+          <style>
+            ${styles}
+          </style>
+        </head>
+        <body>
+          <div class="export-container">
+            <div class="export-header">
+              <h1 class="export-title">与 ${this.currentAgent.name} 的对话</h1>
+              <p class="export-date">导出时间：${new Date().toLocaleString('zh-CN')}</p>
+            </div>
+            <div class="messages-list">
+              ${messages.map(msg => {
+                const role = msg.role === 'user' ? '你' : 'AI'
+                const time = this.formatTime(msg.timestamp)
+                return `<div class="message ${msg.role}">
+                  <div class="message-avatar">${role}</div>
+                  <div class="message-content-wrapper">
+                    <div class="message-content">${this.formatMessageContent(msg.content)}</div>
+                    <div class="message-time">${time}</div>
+                  </div>
+                </div>`
+              }).join('')}
+            </div>
+          </div>
+        </body>
+        </html>
+      `)
+      printWindow.document.close()
+
+      // 等待页面加载完成后打印
+      setTimeout(() => {
+        printWindow.print()
+      }, 500)
+
+      this.showNotification('PDF导出对话框已打开，请选择"另存为PDF"', 'success')
+    },
+
+    // 导出为图片
+    exportToImage(messages, filename) {
+      // 动态导入 html2canvas
+      import('html2canvas').then(html2canvas => {
+        const styles = this.generateExportStyles()
+        const isDark = this.styleSettings.theme === 'dark'
+        
+        // 创建一个临时的canvas容器
+        const container = document.createElement('div')
+        container.style.position = 'fixed'
+        container.style.left = '-9999px'
+        container.style.top = '0'
+        container.style.width = '800px'
+        
+        // 添加样式
+        const style = document.createElement('style')
+        style.textContent = styles
+        container.appendChild(style)
+
+        // 添加消息容器
+        const messagesContainer = document.createElement('div')
+        messagesContainer.className = 'export-container'
+        
+        // 添加标题
+        const header = document.createElement('div')
+        header.className = 'export-header'
+        header.innerHTML = `
+          <h1 class="export-title">与 ${this.currentAgent.name} 的对话</h1>
+          <p class="export-date">导出时间：${new Date().toLocaleString('zh-CN')}</p>
+        `
+        messagesContainer.appendChild(header)
+
+        // 添加消息列表
+        const messagesList = document.createElement('div')
+        messagesList.className = 'messages-list'
+        
+        messages.forEach(msg => {
+          const messageDiv = document.createElement('div')
+          messageDiv.className = `message ${msg.role}`
+          
+          const role = msg.role === 'user' ? '你' : 'AI'
+          const time = this.formatTime(msg.timestamp)
+          
+          messageDiv.innerHTML = `
+            <div class="message-avatar">${role}</div>
+            <div class="message-content-wrapper">
+              <div class="message-content">${this.formatMessageContent(msg.content)}</div>
+              <div class="message-time">${time}</div>
+            </div>
+          `
+          messagesList.appendChild(messageDiv)
+        })
+        
+        messagesContainer.appendChild(messagesList)
+        container.appendChild(messagesContainer)
+
+        document.body.appendChild(container)
+
+        // 使用 html2canvas 生成图片
+        html2canvas.default(messagesContainer, {
+          backgroundColor: isDark ? '#111827' : '#ffffff',
+          scale: 2, // 提高图片质量
+          logging: false,
+          useCORS: true
+        }).then(canvas => {
+          const link = document.createElement('a')
+          link.download = `${filename}.png`
+          link.href = canvas.toDataURL('image/png')
+          link.click()
+          document.body.removeChild(container)
+          this.showNotification('图片导出成功', 'success')
+        }).catch(err => {
+          console.error('导出图片失败:', err)
+          document.body.removeChild(container)
+          this.showNotification('导出图片失败: ' + err.message, 'danger')
+        })
+      }).catch(err => {
+        console.error('加载 html2canvas 失败:', err)
+        this.showNotification('导出图片功能暂时不可用', 'danger')
+      })
+    },
+
+    // 打开多选对话弹窗
+    openMultiSelectModal() {
+      this.showMultiSelectModal = true
+      this.selectedMessageIds.clear()
+      if (this.chatContextMenuMessage) {
+        this.selectedMessageIds.add(this.chatContextMenuMessage.id)
+      }
+    },
+
+    // 切换消息选择状态
+    toggleMessageSelection(messageId) {
+      if (this.selectedMessageIds.has(messageId)) {
+        this.selectedMessageIds.delete(messageId)
+      } else {
+        this.selectedMessageIds.add(messageId)
+      }
+      // 强制更新
+      this.selectedMessageIds = new Set(this.selectedMessageIds)
+    },
+
+    // 全选消息
+    selectAllMessages() {
+      this.conversations.forEach(msg => this.selectedMessageIds.add(msg.id))
+      this.selectedMessageIds = new Set(this.selectedMessageIds)
+    },
+
+    // 清空选择
+    clearMessageSelection() {
+      this.selectedMessageIds.clear()
+      this.selectedMessageIds = new Set()
+    },
+
+    // 处理多选操作
+    handleMultiSelectAction(action) {
+      const selectedMessages = this.conversations.filter(msg => this.selectedMessageIds.has(msg.id))
+
+      switch (action) {
+        case 'copy':
+          const text = selectedMessages.map(msg => `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`).join('\n\n')
+          navigator.clipboard.writeText(text)
+            .then(() => this.showNotification('已复制到剪贴板', 'success'))
+            .catch(() => this.showNotification('复制失败', 'danger'))
+          break
+        case 'export':
+          this.chatContextMenuMessage = null
+          this.openExportConversation()
+          break
+        case 'delete':
+          selectedMessages.forEach(msg => {
+            const index = this.conversations.findIndex(m => m.id === msg.id)
+            if (index !== -1) {
+              this.conversations.splice(index, 1)
+            }
+          })
+          this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+          this.showNotification(`已删除 ${selectedMessages.length} 条消息`, 'success')
+          break
+      }
+
+      this.showMultiSelectModal = false
     },
 
     // 消息操作功能
