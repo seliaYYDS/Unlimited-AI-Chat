@@ -111,7 +111,7 @@
           </svg>
           导出数据
         </button>
-      </div>
+        </div>
 
     </div>
 
@@ -251,8 +251,35 @@
             </div>
             <div class="message-content-wrapper" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
               <div class="message-content" :class="{ 'typing': isGenerating && message.role === 'assistant' }" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
+                <!-- 工具调用状态显示 -->
+                <div v-if="isUsingTool && isGenerating && message.role === 'assistant'" class="tool-call-status">
+                  <div class="tool-call-indicator">
+                    <span class="tool-icon">🔍</span>
+                    <span class="tool-text">{{ toolCallStatus || '正在使用工具...' }}</span>
+                  </div>
+                  <div class="tool-call-animation">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                  </div>
+                </div>
                 <div v-if="message.role === 'assistant' && settings.enableFormatting" v-html="formatMessageContent(message.content)" @contextmenu.prevent.stop="handleChatContextMenu($event, message)"></div>
-                <div v-else @contextmenu.prevent.stop="handleChatContextMenu($event, message)">{{ message.content }}</div>
+                <div v-else-if="message.role === 'assistant'" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">{{ message.content }}</div>
+                <div v-else @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
+                  <template v-if="message.metadata && message.metadata.files && message.metadata.files.length > 0">
+                    <div v-for="(file, index) in message.metadata.files" :key="index">
+                      <FileDisplay
+                        :file-name="file.name"
+                        :file-content="file.content"
+                        :file-size="file.size"
+                        @click="handleFileClick"
+                      />
+                    </div>
+                  </template>
+                  <template v-if="message.content">
+                    {{ message.content }}
+                  </template>
+                </div>
               </div>
               <div class="message-time" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
                 {{ formatTime(message.timestamp) }}
@@ -374,6 +401,33 @@
       </div>
 
       <div class="chat-input-area" v-if="currentAgent">
+        <!-- 已上传文件显示区域 -->
+        <div class="uploaded-files-area" v-if="uploadedFiles.length > 0">
+          <div class="files-list">
+            <div
+              v-for="file in uploadedFiles"
+              :key="file.id"
+              class="file-item"
+            >
+              <div class="file-icon">📄</div>
+              <div class="file-info">
+                <div class="file-name">{{ file.name }}</div>
+                <div class="file-size">{{ formatFileSize(file.size) }}</div>
+              </div>
+              <button
+                class="file-remove-btn"
+                @click="removeUploadedFile(file.id)"
+                title="删除文件"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div :class="['input-wrapper', { 'focused': isInputFocused, 'has-content': inputMessage.trim() }]">
           <div class="input-container">
                     <!-- AI辅助按钮 -->
@@ -444,7 +498,38 @@
                         </div>
                       </Teleport>
                     </div>
-          
+
+                    <!-- 技能按钮 -->
+                    <div class="skills-buttons-container" v-if="currentAgentUIComponents.length > 0">
+                      <!-- 文件上传按钮 -->
+                      <button
+                        v-if="showFileUploadButton"
+                        class="action-btn skill-btn"
+                        @click="handleFileUpload"
+                        title="上传文件"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                          <polyline points="17 8 12 3 7 8"/>
+                          <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                      </button>
+
+                      <!-- 图像生成按钮 -->
+                      <button
+                        v-if="showImageGenerateButton"
+                        class="action-btn skill-btn"
+                        @click="handleImageGeneration"
+                        title="生成图像"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                          <circle cx="8.5" cy="8.5" r="1.5"/>
+                          <polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                      </button>
+                    </div>
+
                     <!-- 输入框 -->            <textarea
               v-model="inputMessage"
               class="chat-input"
@@ -560,6 +645,13 @@
       工具
     </FloatingBall>
 
+    <!-- 文件阅览弹窗 -->
+    <FileViewer
+      :visible="showFileViewer"
+      :file-info="viewingFile"
+      @close="showFileViewer = false"
+      @copy-success="showNotification('文件内容已复制', 'success')"
+    />
 
     <!-- 自定义弹窗 -->
     <Modal
@@ -630,6 +722,37 @@
           placeholder="设定对话中需要关注的重点内容"
           rows="3"
         ></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>智能体技能</label>
+        <div class="skills-wrapper">
+          <div
+            v-for="category in skillCategories"
+            :key="category.id"
+            class="skill-section"
+          >
+            <div class="skill-section-title">
+              <span class="section-icon">{{ getCategoryIcon(category.id) }}</span>
+              <span class="section-name">{{ category.name }}</span>
+            </div>
+            <div class="skill-items">
+              <div
+                v-for="skill in getSkillsByCategory(category.id)"
+                :key="skill.id"
+                :class="['skill-option', { 'active': (agentForm.skills || []).includes(skill.id) }]"
+                @click="toggleSkill(skill.id)"
+              >
+                <span class="skill-emoji">{{ skill.icon }}</span>
+                <span class="skill-text">{{ skill.name }}</span>
+                <span class="skill-check" v-if="(agentForm.skills || []).includes(skill.id)">✓</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="form-hint">
+          已选择 {{ (agentForm.skills || []).length }} 项技能
+        </div>
       </div>
     </Modal>
 
@@ -3230,6 +3353,21 @@ import AgentMemory from './components/AgentMemory.vue'
 
 import Tavern from './components/Tavern.vue'
 
+import FileDisplay from './components/FileDisplay.vue'
+
+import FileViewer from './components/FileViewer.vue'
+
+import {
+  getAllSkills,
+  getSkillsByCategory,
+  SKILL_CATEGORIES,
+  DEFAULT_SKILLS,
+  checkSkillCompatibility,
+  getRequiredUIComponents
+} from './utils/skills.js'
+
+import { skillService } from './utils/skillService.js'
+
 
 
 export default {
@@ -3276,7 +3414,15 @@ export default {
 
 
 
-        Tavern
+        Tavern,
+
+
+
+        FileDisplay,
+
+
+
+        FileViewer
 
 
 
@@ -3332,12 +3478,22 @@ export default {
       penColor: '#000000',
       penSize: 5,
       isDrawing: false,
-      
+
       // 草稿纸状态相关
       sizeUpdated: false,
       showStatus: false,
       statusText: '',
       statusTimer: null,
+
+      // 技能系统
+      skillCategories: SKILL_CATEGORIES,
+      allSkills: getAllSkills(),
+      uploadedFiles: [], // 已上传的文件列表
+      showFileViewer: false, // 是否显示文件阅览弹窗
+      viewingFile: { name: '', content: '', size: '' }, // 当前正在查看的文件信息
+      isUsingTool: false, // 是否正在使用工具
+      currentToolName: '', // 当前使用的工具名称
+      toolCallStatus: '', // 工具调用状态描述
 
       // 表单数据
       agentForm: {
@@ -3346,7 +3502,8 @@ export default {
         scenario: '',
         prompt: '',
         keyPoints: '',
-        avatar: 'AI'
+        avatar: 'AI',
+        skills: []
       },
 
     // 颜色变化处理
@@ -4204,9 +4361,133 @@ export default {
 
     isSDConfigured() {
       return this.settings.sdBaseUrl && this.settings.sdModel
+    },
+
+    // 当前智能体需要的UI组件
+    currentAgentUIComponents() {
+      if (!this.currentAgent || !this.currentAgent.skills) {
+        return []
+      }
+      return getRequiredUIComponents(this.currentAgent.skills)
+    },
+
+    // 是否显示文件上传按钮
+    showFileUploadButton() {
+      return this.currentAgentUIComponents.includes('fileUploadButton')
+    },
+
+    // 是否显示图像生成按钮
+    showImageGenerateButton() {
+      return this.currentAgentUIComponents.includes('imageGenerateButton')
     }
   },
   methods: {
+    // 技能相关方法
+    // 切换技能选择状态
+    toggleSkill(skillId) {
+      // 确保 skills 是一个数组
+      if (!this.agentForm.skills) {
+        this.agentForm.skills = []
+      }
+
+      const index = this.agentForm.skills.indexOf(skillId)
+      if (index > -1) {
+        // 移除技能
+        this.agentForm.skills.splice(index, 1)
+      } else {
+        // 添加技能
+        this.agentForm.skills.push(skillId)
+      }
+    },
+
+    // 获取分类图标
+    getCategoryIcon(categoryId) {
+      const icons = {
+        content: '✍️',
+        conversation: '💬',
+        tool: '🔧',
+        technical: '⚙️',
+        creative: '🎨'
+      }
+      return icons[categoryId] || '📋'
+    },
+
+    // 获取指定分类的技能列表
+    getSkillsByCategory(categoryId) {
+      return getSkillsByCategory(categoryId)
+    },
+
+    // 处理文件上传
+    handleFileUpload() {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.txt,.pdf,.doc,.docx,.md,.json,.csv'
+      input.multiple = true // 支持多文件选择
+      input.onchange = async (e) => {
+        const files = Array.from(e.target.files)
+        if (files.length > 0) {
+          for (const file of files) {
+            try {
+              const content = await this.readFileContent(file)
+              this.uploadedFiles.push({
+                id: Date.now() + Math.random(),
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                content: content
+              })
+            } catch (error) {
+              console.error('文件读取失败:', error)
+              this.showNotification(`文件 "${file.name}" 读取失败`, 'danger')
+            }
+          }
+          this.showNotification(`成功上传 ${files.length} 个文件`, 'success')
+        }
+      }
+      input.click()
+    },
+
+    // 删除已上传的文件
+    removeUploadedFile(fileId) {
+      const index = this.uploadedFiles.findIndex(f => f.id === fileId)
+      if (index > -1) {
+        const file = this.uploadedFiles[index]
+        this.uploadedFiles.splice(index, 1)
+        this.showNotification(`文件 "${file.name}" 已删除`, 'info')
+      }
+    },
+
+    // 格式化文件大小
+    formatFileSize(bytes) {
+      if (bytes === 0) return '0 B'
+      const k = 1024
+      const sizes = ['B', 'KB', 'MB', 'GB']
+      const i = Math.floor(Math.log(bytes) / Math.log(k))
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+    },
+
+    // 读取文件内容
+    readFileContent(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.onerror = (e) => reject(e)
+        reader.readAsText(file)
+      })
+    },
+
+    // 处理图像生成
+    handleImageGeneration() {
+      const prompt = prompt('请输入图像描述：')
+      if (prompt && prompt.trim()) {
+        if (!this.isSDConfigured) {
+          this.showNotification('Stable Diffusion未配置，请在设置中配置', 'danger')
+          return
+        }
+        this.generateImage(prompt)
+      }
+    },
+
     // 获取智能体头像
     getAgentAvatar(agent) {
       if (!agent.avatar) {
@@ -4450,6 +4731,9 @@ export default {
       this.currentAgent = agent
 
       this.conversations = await this.storageManager.getConversations(agent.id)
+
+      // 初始化技能服务
+      skillService.initializeAgentSkills(agent)
 
       // 加载图片数据
       await this.loadImagesForConversations()
@@ -4800,7 +5084,8 @@ ${conversationText}
         scenario: '',
         prompt: '',
         keyPoints: '',
-        avatar: '🤖'
+        avatar: '🤖',
+        skills: []
       }
     },
 
@@ -4865,13 +5150,26 @@ ${conversationText}
         return
       }
 
-      const message = this.inputMessage.trim()
+      let message = this.inputMessage.trim()
+      let files = []
+
+      // 如果有上传的文件，保存文件信息
+      if (this.uploadedFiles.length > 0) {
+        files = [...this.uploadedFiles]
+
+        // 清空已上传文件列表
+        this.uploadedFiles = []
+      }
+
       this.inputMessage = ''
 
-      // 添加用户消息
+      // 添加用户消息，将文件信息存储在metadata中
       const userMessage = await this.storageManager.addMessage(this.currentAgent.id, {
         role: 'user',
-        content: message
+        content: message,
+        metadata: {
+          files: files
+        }
       })
 
       if (userMessage) {
@@ -4880,8 +5178,33 @@ ${conversationText}
 
       this.isGenerating = true
 
+      // 初始化工具调用状态
+      this.isUsingTool = false
+      this.currentToolName = ''
+      this.toolCallStatus = ''
+
       try {
         const settings = this.storageManager.getSettings()
+
+        // 如果有文件，将文件内容添加到消息中发送给AI
+        let messageForAI = message
+        if (files.length > 0) {
+          const fileContents = files.map((file, index) =>
+            `[文件${index + 1}: ${file.name}]\n${file.content}`
+          ).join('\n\n')
+          messageForAI = `${fileContents}\n\n${message}`
+        }
+
+        // 使用技能服务增强消息
+        const skillIds = this.currentAgent.skills || []
+        const enhancedMessage = await skillService.enhanceMessageWithSkills(messageForAI, skillIds)
+
+        // 如果启用了网络搜索技能，显示工具调用状态
+        if (skillIds.includes('webSearch')) {
+          this.isUsingTool = true
+          this.toolCallStatus = '正在分析问题...'
+          console.log(`[App] 智能体已启用网络搜索技能，准备发送消息`)
+        }
 
         if (settings.wordByWordOutput) {
           // 优化的逐字输出模式
@@ -4891,9 +5214,14 @@ ${conversationText}
 
           const response = await this.aiService.sendMessage(
             this.currentAgent,
-            message,
+            enhancedMessage,
             this.conversations,
             async (progressText) => {
+              // 如果启用了网络搜索技能，更新工具状态
+              if (skillIds.includes('webSearch') && this.isUsingTool) {
+                this.toolCallStatus = '正在生成回复...'
+              }
+
               // 更新或创建AI消息
               if (!aiMessage) {
                 aiMessage = await this.storageManager.addMessage(this.currentAgent.id, {
@@ -4950,7 +5278,7 @@ ${conversationText}
           // 普通模式
           const response = await this.aiService.sendMessage(
             this.currentAgent,
-            message,
+            enhancedMessage,
             this.conversations
           )
 
@@ -4977,14 +5305,16 @@ ${conversationText}
 
 
 
-      } catch (error) {
-        console.error('发送消息失败:', error)
-        this.showNotification(`发送失败: ${error.message}`, 'danger')
-      } finally {
-        this.isGenerating = false
-      }
-    },
-
+              } catch (error) {
+                console.error('发送消息失败:', error)
+                this.showNotification(`发送失败: ${error.message}`, 'danger')
+              } finally {
+              this.isGenerating = false
+              this.isUsingTool = false
+              this.currentToolName = ''
+              this.toolCallStatus = ''
+            }
+          },
     showClearConfirm() {
       if (!this.currentAgent) return
 
@@ -5445,28 +5775,6 @@ ${conversationText}
       }
     },
 
-    // 处理全局点击事件，用于关闭右键菜单
-
-    handleGlobalClick(event) {
-
-      if (this.contextMenuVisible) {
-
-        // 检查点击是否在右键菜单内部
-
-        const contextMenu = document.querySelector('.context-menu')
-
-        if (contextMenu && !contextMenu.contains(event.target)) {
-
-          this.closeContextMenu()
-
-        }
-
-      }
-
-    },
-
-
-
     // 处理页面卸载事件，确保保存数据
 
     async handlePageUnload() {
@@ -5529,6 +5837,12 @@ ${conversationText}
     // 格式化消息内容
     formatMessageContent(content) {
       return MarkdownParser.formatAIOutput(content, this.settings.enableFormatting)
+    },
+
+    // 处理文件点击事件
+    handleFileClick(fileInfo) {
+      this.viewingFile = fileInfo
+      this.showFileViewer = true
     },
 
     // 推荐回复相关方法
@@ -5645,6 +5959,15 @@ ${conversationText}
 
     // 处理全局点击事件，关闭AI辅助菜单
     handleGlobalClick(event) {
+      // 如果智能体右键菜单是打开的
+      if (this.contextMenuVisible) {
+        // 检查点击是否在右键菜单内部
+        const contextMenu = document.querySelector('.context-menu')
+        if (contextMenu && !contextMenu.contains(event.target)) {
+          this.closeContextMenu()
+        }
+      }
+
       // 如果AI辅助菜单是打开的
       if (this.showAIAssistantMenu) {
         // 检查点击是否在AI辅助容器内
@@ -8718,8 +9041,7 @@ ${conversationText}
 
 <style>
 
-/* 导入新的全局样式 */
-
+/* 导入样式文件 */
 @import './styles/global.css';
 
 
@@ -11939,6 +12261,219 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   border-top: 4px solid var(--secondary-color);
   border-radius: 50%;
   animation: spin 0.8s linear reverse infinite;
+}
+
+/* 技能选择板块样式 */
+.skills-wrapper {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.skills-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.skills-wrapper::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 3px;
+}
+
+.skills-wrapper::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.skills-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+.skill-section {
+  margin-bottom: 20px;
+}
+
+.skill-section:last-child {
+  margin-bottom: 0;
+}
+
+.skill-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.section-icon {
+  font-size: 16px;
+}
+
+.section-name {
+  flex: 1;
+}
+
+.skill-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skill-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  flex: 1 0 calc(33.333% - 8px);
+}
+
+.skill-option:hover {
+  border-color: var(--primary-color);
+  background: var(--bg-secondary);
+  transform: translateY(-1px);
+}
+
+.skill-option.active {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+  color: white;
+}
+
+.skill-emoji {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.skill-text {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-check {
+  flex-shrink: 0;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* 暗色主题适配 */
+[data-theme="dark"] .skill-option {
+  border-color: var(--border-color);
+  background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .skill-option:hover {
+  background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .skill-option.active {
+  background: var(--primary-color);
+}
+
+/* 响应式设计 */
+@media (max-width: 600px) {
+  .skill-option {
+    flex: 1 0 calc(50% - 8px);
+    min-width: 100px;
+  }
+}
+
+/* 已上传文件区域样式 */
+.uploaded-files-area {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.files-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  transition: all 0.2s ease;
+}
+
+.file-item:hover {
+  border-color: var(--primary-color);
+  background: var(--bg-hover);
+}
+
+.file-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.file-remove-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.file-remove-btn:hover {
+  background: var(--danger-color);
+  color: white;
+}
+
+/* 暗色主题适配 */
+[data-theme="dark"] .file-item {
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .file-item:hover {
+  background: var(--bg-tertiary);
 }
 
 </style>

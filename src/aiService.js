@@ -1,10 +1,13 @@
 // AI模型服务兼容层 - 增强版本
+import { toolRegistry } from './utils/toolRegistry.js'
+
 export class AIService {
     constructor(storageManager) {
         this.storageManager = storageManager
         this.requestQueue = []
         this.activeRequests = new Map()
         this.maxConcurrentRequests = 3 // 最大并发请求数
+        this.toolRegistry = toolRegistry
 
         // 支持的API提供商配置
         this.apiProviders = {
@@ -218,8 +221,17 @@ export class AIService {
         const provider = this.detectAPIProvider(apiEndpoint)
         const fullUrl = this.buildRequestUrl(apiEndpoint, provider)
 
+        // 检查是否需要启用工具调用
+        const enableTools = agent.skills && agent.skills.includes('webSearch')
+        console.log(`[AI Service] 流式请求 - 工具调用检查:`, {
+            agentName: agent.name,
+            hasSkills: !!agent.skills,
+            skills: agent.skills,
+            enableTools
+        })
+
         // 构建请求体，启用流式输出
-        const requestBody = this.buildRequestBody(agent, message, conversationHistory, settings, provider)
+        const requestBody = this.buildRequestBody(agent, message, conversationHistory, settings, provider, enableTools)
         requestBody.stream = true
 
         console.log(`[AI Service] 发送流式网络API请求:`, {
@@ -228,7 +240,10 @@ export class AIService {
             model: modelName,
             messageLength: message.length,
             conversationHistoryLength: conversationHistory.length,
-            requestBodyMessages: requestBody.messages ? requestBody.messages.length : 'N/A'
+            requestBodyMessages: requestBody.messages ? requestBody.messages.length : 'N/A',
+            enableTools,
+            hasTools: !!requestBody.tools,
+            toolsCount: requestBody.tools ? requestBody.tools.length : 0
         });
 
         // 构建请求头
@@ -260,6 +275,10 @@ export class AIService {
             let lastUpdateTime = 0
             const UPDATE_INTERVAL = 50 // 最小更新间隔(ms)
 
+            // 用于收集工具调用信息
+            let toolCallsBuffer = null
+            let hasToolCalls = false
+
             while (true) {
                 const { done, value } = await reader.read()
                 if (done || chunkCount >= MAX_CHUNKS) break
@@ -275,6 +294,41 @@ export class AIService {
                     if (line.startsWith('data: ') && line !== 'data: [DONE]') {
                         try {
                             const data = JSON.parse(line.substring(6))
+
+                            // 检查是否有工具调用
+                            if (data.choices && data.choices[0] && data.choices[0].delta) {
+                                const delta = data.choices[0].delta
+
+                                // 检查tool_calls
+                                if (delta.tool_calls) {
+                                    console.log(`[AI Service] 流式响应中检测到工具调用:`, delta.tool_calls)
+                                    hasToolCalls = true
+
+                                    if (!toolCallsBuffer) {
+                                        toolCallsBuffer = []
+                                    }
+
+                                    // 处理工具调用数据
+                                    delta.tool_calls.forEach((tc, index) => {
+                                        if (!toolCallsBuffer[index]) {
+                                            toolCallsBuffer[index] = {
+                                                id: tc.id,
+                                                type: tc.type,
+                                                function: {
+                                                    name: tc.function?.name || '',
+                                                    arguments: tc.function?.arguments || ''
+                                                }
+                                            }
+                                        } else {
+                                            // 追加参数
+                                            if (tc.function?.arguments) {
+                                                toolCallsBuffer[index].function.arguments += tc.function.arguments
+                                            }
+                                        }
+                                    })
+                                }
+                            }
+
                             const content = this.parseStreamResponseContent(data, provider)
                             if (content && fullResponse.length < MAX_RESPONSE_LENGTH) {
                                 fullResponse += content
@@ -287,10 +341,29 @@ export class AIService {
                                 }
                             }
                         } catch (e) {
-                            // 忽略解析错误
+                            console.warn(`[AI Service] 解析流式数据失败:`, e)
                         }
                     }
                 }
+            }
+
+            // 如果检测到工具调用，处理工具调用
+            if (hasToolCalls && toolCallsBuffer && toolCallsBuffer.length > 0) {
+                console.log(`[AI Service] 流式响应完成，检测到 ${toolCallsBuffer.length} 个工具调用`)
+                console.log(`[AI Service] 工具调用详情:`, toolCallsBuffer)
+
+                // 构建完整的工具调用响应
+                const toolCallsResponse = {
+                    choices: [{
+                        message: {
+                            role: 'assistant',
+                            content: fullResponse || null,
+                            tool_calls: toolCallsBuffer
+                        }
+                    }]
+                }
+
+                return await this.handleToolCalls(agent, message, conversationHistory, settings, provider, toolCallsResponse)
             }
 
             // 确保最终文本完整显示
@@ -330,16 +403,21 @@ export class AIService {
         // 构建完整的请求URL
         const fullUrl = this.buildRequestUrl(apiEndpoint, provider)
 
+        // 检查是否需要启用工具调用（智能体有网络搜索技能）
+        const enableTools = agent.skills && agent.skills.includes('webSearch')
+
         // 构建请求体
-        const requestBody = this.buildRequestBody(agent, message, conversationHistory, settings, provider)
-        
+        const requestBody = this.buildRequestBody(agent, message, conversationHistory, settings, provider, enableTools)
+
         console.log(`[AI Service] 发送网络API请求:`, {
             provider,
             url: fullUrl,
             model: modelName,
             messageLength: message.length,
             conversationHistoryLength: conversationHistory.length,
-            requestBodyMessages: requestBody.messages ? requestBody.messages.length : 'N/A'
+            requestBodyMessages: requestBody.messages ? requestBody.messages.length : 'N/A',
+            enableTools,
+            hasTools: !!requestBody.tools
         });
 
         // 构建请求头
@@ -349,7 +427,8 @@ export class AIService {
 
         try {
             const response = await fetch(fullUrl, {
-                method: 'POST',                headers: headers,
+                method: 'POST',
+                headers: headers,
                 body: JSON.stringify(requestBody)
             })
 
@@ -362,6 +441,12 @@ export class AIService {
 
             const data = await response.json()
             console.log(`✅ 响应数据:`, data)
+
+            // 检查是否有工具调用
+            if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.tool_calls) {
+                console.log(`[AI Service] 检测到工具调用请求`)
+                return await this.handleToolCalls(agent, message, conversationHistory, settings, provider, data)
+            }
 
             // 解析响应内容
             const content = this.parseResponseContent(data, provider)
@@ -384,6 +469,113 @@ export class AIService {
                 throw new Error('🌐 网络请求失败，可能原因：\n• API端点无法访问\n• 网络连接问题\n• 服务器暂时不可用')
             }
 
+            throw error
+        }
+    }
+
+    // 处理工具调用
+    async handleToolCalls(agent, message, conversationHistory, settings, provider, responseData) {
+        const toolCalls = responseData.choices[0].message.tool_calls
+        console.log(`[AI Service] ========== 开始处理工具调用 ==========`)
+        console.log(`[AI Service] 检测到 ${toolCalls.length} 个工具调用`)
+        console.log(`[AI Service] 工具调用详情:`, JSON.stringify(toolCalls, null, 2))
+
+        // 构建新的消息历史，包含工具调用请求
+        const newConversationHistory = [
+            ...conversationHistory,
+            { role: 'user', content: message },
+            responseData.choices[0].message
+        ]
+
+        console.log(`[AI Service] 新的消息历史长度: ${newConversationHistory.length}`)
+
+        // 执行所有工具调用
+        const toolResults = []
+        for (let i = 0; i < toolCalls.length; i++) {
+            const toolCall = toolCalls[i]
+            const functionName = toolCall.function.name
+            const functionArgs = JSON.parse(toolCall.function.arguments)
+
+            console.log(`[AI Service] ---------- 执行工具 ${i + 1}/${toolCalls.length} ----------`)
+            console.log(`[AI Service] 工具名称: ${functionName}`)
+            console.log(`[AI Service] 工具参数:`, functionArgs)
+
+            try {
+                console.log(`[AI Service] 调用工具注册表执行工具...`)
+                const result = await this.toolRegistry.executeTool(functionName, functionArgs)
+
+                console.log(`[AI Service] 工具执行结果:`, result)
+                console.log(`[AI Service] 工具执行成功: ${functionName}`)
+
+                toolResults.push({
+                    tool_call_id: toolCall.id,
+                    role: 'tool',
+                    name: functionName,
+                    content: JSON.stringify(result)
+                })
+            } catch (error) {
+                console.error(`[AI Service] 工具执行失败: ${functionName}`, error)
+                console.error(`[AI Service] 错误详情:`, error.message, error.stack)
+
+                toolResults.push({
+                    tool_call_id: toolCall.id,
+                    role: 'tool',
+                    name: functionName,
+                    content: JSON.stringify({ error: error.message })
+                })
+            }
+        }
+
+        console.log(`[AI Service] 所有工具执行完成，共 ${toolResults.length} 个结果`)
+        console.log(`[AI Service] 工具结果:`, toolResults)
+
+        // 将工具结果添加到消息历史
+        const updatedConversationHistory = [
+            ...newConversationHistory,
+            ...toolResults
+        ]
+
+        console.log(`[AI Service] 更新后的消息历史长度: ${updatedConversationHistory.length}`)
+
+        // 再次调用API，让模型基于工具结果生成最终回复
+        console.log(`[AI Service] ========== 基于工具结果生成最终回复 ==========`)
+
+        const { apiEndpoint, apiKey, modelName, temperature, maxTokens } = settings
+        const fullUrl = this.buildRequestUrl(apiEndpoint, provider)
+
+        console.log(`[AI Service] 请求URL: ${fullUrl}`)
+        console.log(`[AI Service] 请求模型: ${modelName}`)
+
+        const requestBody = this.buildRequestBody(agent, '', updatedConversationHistory, settings, provider, false)
+        const headers = this.buildRequestHeaders(apiKey, provider)
+
+        console.log(`[AI Service] 请求体:`, JSON.stringify(requestBody, null, 2))
+
+        try {
+            const response = await fetch(fullUrl, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(requestBody)
+            })
+
+            console.log(`[AI Service] 最终响应状态: ${response.status} ${response.statusText}`)
+
+            if (!response.ok) {
+                const errorInfo = await this.parseErrorResponse(response, provider)
+                console.error(`[AI Service] 最终请求失败:`, errorInfo)
+                throw new Error(errorInfo)
+            }
+
+            const data = await response.json()
+            console.log(`[AI Service] 最终响应数据:`, data)
+
+            const content = this.parseResponseContent(data, provider)
+            console.log(`[AI Service] 解析后的内容:`, content)
+            console.log(`[AI Service] ========== 工具调用流程完成 ==========`)
+
+            return content
+        } catch (error) {
+            console.error(`[AI Service] 最终请求异常:`, error)
             throw error
         }
     }
@@ -432,7 +624,7 @@ export class AIService {
     }
 
     // 构建请求体
-    buildRequestBody(agent, message, conversationHistory, settings, provider) {
+    buildRequestBody(agent, message, conversationHistory, settings, provider, enableTools = false) {
         const { modelName, temperature, maxTokens } = settings
         const messages = this.buildMessages(agent, message, conversationHistory, settings)
 
@@ -449,6 +641,15 @@ export class AIService {
             stream: false
         }
 
+        // 如果启用了工具且智能体有网络搜索技能，添加工具定义
+        if (enableTools && agent.skills && agent.skills.includes('webSearch')) {
+            const tools = this.toolRegistry.getOpenAITools()
+            if (tools.length > 0) {
+                requestBody.tools = tools
+                requestBody.tool_choice = 'auto' // 让模型自动决定是否使用工具
+            }
+        }
+
         // 提供商特定配置
         switch (provider) {
             case 'anthropic':
@@ -458,6 +659,13 @@ export class AIService {
                     max_tokens: maxTokensValue,
                     temperature: tempValue
                 }
+                // Anthropic也支持工具调用
+                if (enableTools && agent.skills && agent.skills.includes('webSearch')) {
+                    const tools = this.toolRegistry.getOpenAITools()
+                    if (tools.length > 0) {
+                        requestBody.tools = tools
+                    }
+                }
                 break
 
             case 'google':
@@ -465,6 +673,16 @@ export class AIService {
                     contents: messages.map(msg => ({
                         parts: [{ text: msg.content }],
                         role: msg.role === 'user' ? 'user' : 'model'
+                    }))
+                }
+                // Gemini的函数调用格式不同
+                if (enableTools && agent.skills && agent.skills.includes('webSearch')) {
+                    requestBody.tools = this.toolRegistry.getAllTools().map(tool => ({
+                        functionDeclarations: [{
+                            name: tool.name,
+                            description: tool.description,
+                            parameters: tool.parameters
+                        }]
                     }))
                 }
                 break
@@ -784,10 +1002,22 @@ export class AIService {
 
         // 对话历史
         recentHistory.forEach(msg => {
-            messages.push({
+            const messageObj = {
                 role: msg.role,
                 content: msg.content
-            })
+            }
+
+            // 保留工具消息的tool_call_id字段
+            if (msg.tool_call_id) {
+                messageObj.tool_call_id = msg.tool_call_id
+            }
+
+            // 保留工具调用的其他字段
+            if (msg.tool_calls) {
+                messageObj.tool_calls = msg.tool_calls
+            }
+
+            messages.push(messageObj)
         })
 
         // 当前消息

@@ -477,3 +477,99 @@
   opacity: 1;
   transform: translateX(-50%) translateY(-8px);
 }
+
+/* 工具调用状态样式 */
+.tool-call-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  background: var(--color-gray-100);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--primary-color);
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.tool-call-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tool-icon {
+  font-size: var(--text-lg);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.tool-text {
+  font-size: var(--text-sm);
+  color: var(--color-gray-700);
+  font-weight: var(--font-medium);
+}
+
+.tool-call-animation {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.tool-call-animation .dot {
+  width: 6px;
+  height: 6px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  animation: bounce 1.4s ease-in-out infinite;
+}
+
+.tool-call-animation .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.tool-call-animation .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.tool-call-animation .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 暗色主题适配 */
+[data-theme="dark"] .tool-call-status {
+  background: var(--color-gray-800);
+  border-left-color: var(--primary-color);
+}
+
+[data-theme="dark"] .tool-text {
+  color: var(--color-gray-300);
+}
