@@ -35,7 +35,7 @@
               <p class="qrcode-tip">请使用网易云音乐APP扫描二维码登录</p>
             </div>
             <div v-else-if="qrCodeStatus === 'scanned'" class="qrcode-scanned">
-              <div class="scanned-icon">✓</div>
+              <div class="scanned-icon"><Icon emoji="✓" size="32px" /></div>
               <p>扫码成功，请在手机上确认登录</p>
             </div>
             <div v-else-if="qrCodeStatus === 'expired'" class="qrcode-expired">
@@ -98,6 +98,8 @@
 </template>
 
 <script>
+import Icon from './Icon.vue'
+
 export default {
   name: 'MusicLogin',
   props: {

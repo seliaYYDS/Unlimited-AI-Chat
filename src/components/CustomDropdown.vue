@@ -18,7 +18,7 @@
         :class="{ 'selected': modelValue === option.value }"
         @click="selectOption(option)"
       >
-        <span class="item-icon" v-if="modelValue === option.value">✓</span>
+        <span class="item-icon" v-if="modelValue === option.value"><Icon emoji="✓" size="12px" /></span>
         <span class="item-text">{{ option.label }}</span>
       </div>
     </div>
@@ -27,6 +27,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import Icon from './Icon.vue'
 
 const props = defineProps({
   modelValue: {

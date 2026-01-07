@@ -15,7 +15,7 @@
                   返回
                 </button>
                 <h1 class="tavern-title" @click="exitTavernMode" v-if="!selectedConfig">
-                  <span class="title-icon">🍺</span>
+                  <span class="title-icon"><Icon emoji="🍺" size="20px" /></span>
                   <span class="title-text">AI酒馆</span>
                   <span class="back-hint">← 点击返回普通模式</span>
                 </h1>
@@ -81,7 +81,7 @@
         </div>
         
         <div v-if="configs.length === 0" class="tavern-empty-state">
-          <div class="empty-icon">🏰</div>
+          <div class="empty-icon"><Icon emoji="🏰" size="48px" /></div>
           <h3>还没有酒馆配置</h3>
           <p>创建一套新的配置来开始你的酒馆故事</p>
           <button
@@ -149,7 +149,7 @@
             class="tavern-config-card create-new"
             @click="showCreateConfigModal = true"
           >
-            <div class="config-card-icon">➕</div>
+            <div class="config-card-icon"><Icon emoji="➕" size="32px" /></div>
             <div class="config-card-info">
               <h3 class="config-card-title">创建新配置</h3>
               <p class="config-card-description">开始一个新的酒馆故事</p>
@@ -276,6 +276,7 @@ import { ref, reactive, onMounted, watch, onUnmounted } from 'vue';
 import Modal from './Modal.vue';
 import TavernSidebar from './TavernSidebar.vue';
 import TavernChat from './TavernChat.vue';
+import Icon from './Icon.vue';
 import { tavernDB } from '../tavernDB.js';
 
 const emit = defineEmits(['exit', 'show-style-settings', 'show-ai-settings']);

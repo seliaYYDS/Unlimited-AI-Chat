@@ -101,7 +101,7 @@
       </div>
 
       <div v-if="messages.length === 0" class="empty-state">
-        <div class="empty-icon">💬</div>
+        <div class="empty-icon"><Icon emoji="💬" size="48px" /></div>
         <h3>开始酒馆对话</h3>
         <p>选择角色或输入消息开始互动</p>
         <div v-if="config.characters && config.characters.length > 0" class="characters-preview">
@@ -272,6 +272,7 @@
 import { ref, nextTick, watch, onMounted, onUnmounted, computed } from 'vue';
 import CustomDropdown from './CustomDropdown.vue'
 import TavernMemory from './TavernMemory.vue'
+import Icon from './Icon.vue'
 import { tavernDB } from '../tavernDB.js'
 import { tavernAIService } from '../tavernAIService.js'
 

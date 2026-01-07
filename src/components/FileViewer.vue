@@ -3,7 +3,7 @@
     <div class="file-viewer-container">
       <div class="file-viewer-header">
         <div class="file-viewer-title">
-          <div class="file-viewer-icon">📄</div>
+          <div class="file-viewer-icon"><Icon emoji="📄" size="24px" /></div>
           <div class="file-viewer-name">{{ safeFileInfo.name }}</div>
         </div>
         <div class="file-viewer-actions">
@@ -34,8 +34,13 @@
 </template>
 
 <script>
+import Icon from './Icon.vue'
+
 export default {
   name: 'FileViewer',
+  components: {
+    Icon
+  },
   props: {
     visible: {
       type: Boolean,

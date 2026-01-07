@@ -1,6 +1,6 @@
 <template>
   <div class="file-display" @click="handleClick">
-    <div class="file-display-icon">📄</div>
+    <div class="file-display-icon"><Icon emoji="📄" size="18px" /></div>
     <div class="file-display-info">
       <div class="file-display-name">{{ fileName }}</div>
       <div class="file-display-meta">{{ fileSize }}</div>
@@ -14,8 +14,13 @@
 </template>
 
 <script>
+import Icon from './Icon.vue'
+
 export default {
   name: 'FileDisplay',
+  components: {
+    Icon
+  },
   props: {
     fileName: {
       type: String,

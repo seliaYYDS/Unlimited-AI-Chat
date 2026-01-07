@@ -10,7 +10,7 @@
           :class="['tab-btn', { active: activeTab === tab.id, 'shine-effect': styleSettings.enableShineEffect }]"
           @click="activeTab = tab.id"
         >
-          <span class="tab-icon">{{ tab.icon }}</span>
+          <span class="tab-icon"><Icon :emoji="tab.icon" size="16px" /></span>
           <span class="tab-label">{{ tab.label }}</span>
         </button>
       </div>
@@ -73,7 +73,7 @@
           </div>
 
           <div v-if="!localConfig.characters || localConfig.characters.length === 0" class="empty-state">
-            <div class="empty-icon">👥</div>
+            <div class="empty-icon"><Icon emoji="👥" size="32px" /></div>
             <p>还没有角色</p>
           </div>
 
@@ -218,7 +218,7 @@
           </div>
 
           <div v-if="!localConfig.memories || Object.keys(localConfig.memories).length === 0" class="empty-state">
-            <div class="empty-icon">🧠</div>
+            <div class="empty-icon"><Icon emoji="🧠" size="32px" /></div>
             <p>还没有记忆</p>
           </div>
 
@@ -450,6 +450,7 @@
 import { ref, reactive, watch, onUnmounted } from 'vue';
 import Modal from './Modal.vue';
 import AvatarUpload from './AvatarUpload.vue';
+import Icon from './Icon.vue';
 import { tavernAIService } from '../tavernAIService.js';
 
 const props = defineProps({

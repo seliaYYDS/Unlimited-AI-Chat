@@ -16,7 +16,7 @@
     <!-- 角色记忆区域 -->
     <div class="memory-section character-memory">
       <div v-if="!config.characters || config.characters.length === 0" class="empty-state">
-        <div class="empty-icon">👤</div>
+        <div class="empty-icon"><Icon emoji="👤" size="32px" /></div>
         <p>暂无角色</p>
         <p class="empty-hint">请先在侧边栏中添加角色</p>
       </div>
@@ -143,6 +143,7 @@
 
 <script setup>
 import { ref, computed } from 'vue';
+import Icon from './Icon.vue';
 import { tavernAIService } from '../tavernAIService.js';
 
 const props = defineProps({

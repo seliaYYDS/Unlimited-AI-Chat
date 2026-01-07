@@ -161,13 +161,13 @@ body {
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   z-index: 10;
 }
 
 .sidebar-header {
-  padding: 24px;
+  padding: 20px 16px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-primary);
 }
@@ -176,10 +176,16 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 16px;
-  font-size: 24px;
+  margin-bottom: 12px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.app-title:hover {
+  opacity: 0.8;
 }
 
 .title-text {
@@ -187,14 +193,16 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  letter-spacing: -0.5px;
 }
 
 .title-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   background: var(--primary-color);
   border-radius: 50%;
-  animation: blink 2s infinite;
+  animation: blink 2s ease-in-out infinite;
+  flex-shrink: 0;
 }
 
 @keyframes blink {
@@ -214,7 +222,7 @@ body {
   right: 0;
   bottom: 0;
   background: var(--gradient-primary);
-  opacity: 0.1;
+  opacity: 0.05;
   border-radius: 8px;
   z-index: -1;
 }
@@ -224,12 +232,12 @@ body {
   background: var(--component-color);
   color: white;
   border: none;
-  padding: 12px 16px;
-  border-radius: var(--radius);
+  padding: 10px 16px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -241,85 +249,51 @@ body {
 .create-agent-btn:hover {
   background: var(--primary-hover);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.create-agent-btn::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.3),
-    transparent
-  );
-  transition: left 0.5s ease;
-}
-
-.create-agent-btn:hover::before {
-  left: 100%;
+.create-agent-btn:active {
+  transform: translateY(0);
 }
 
 .btn-icon {
-  font-size: 18px;
-  font-weight: bold;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 /* 智能体列表 */
 .agents-list {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 12px;
 }
 
 .agent-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
-  border-radius: var(--radius);
-  margin-bottom: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 6px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: var(--bg-primary);
-  border: 1px solid var(--border-light);
+  border: 1px solid transparent;
   position: relative;
-  overflow: hidden;
-}
-
-.agent-item::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
-  transition: left 0.6s ease;
-}
-
-.agent-item:hover::before {
-  left: 100%;
+  min-height: 60px;
 }
 
 .agent-item:hover {
-  border-color: var(--primary-color);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  background: var(--bg-hover);
+  border-color: var(--border-color);
+  transform: translateX(2px);
 }
 
 .agent-item.active {
-  border-color: var(--primary-color);
   background: var(--bg-hover);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-color);
 }
 
 .agent-avatar {
@@ -327,26 +301,28 @@ body {
 }
 
 .avatar-icon {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   background: var(--avatar-color);
-  border-radius: 50%;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   font-size: 14px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .avatar-image {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .avatar-image img {
@@ -358,6 +334,9 @@ body {
 .agent-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .agent-name {
@@ -367,6 +346,8 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .agent-scenario {
@@ -375,13 +356,18 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.4;
+  opacity: 0.85;
 }
 
 .agent-actions {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s ease;
+  height: 100%;
+  margin-top: 0 !important;
 }
 
 .agent-item:hover .agent-actions {
@@ -391,8 +377,10 @@ body {
 .agent-btn {
   width: 32px;
   height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -400,19 +388,29 @@ body {
   transition: all 0.2s ease;
   background: var(--bg-tertiary);
   color: var(--text-secondary);
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.agent-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 .agent-btn:hover {
   background: var(--bg-hover);
-  transform: scale(1.1);
+  transform: scale(1.05);
 }
 
 .agent-btn.edit:hover {
   color: var(--primary-color);
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .agent-btn.delete:hover {
   color: var(--danger-color);
+  background: rgba(239, 68, 68, 0.1);
 }
 
 /* 主内容区域 */
@@ -422,6 +420,208 @@ body {
   flex-direction: column;
   background: var(--bg-primary);
   position: relative;
+}
+
+/* 全局按钮网格 */
+.global-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
+.global-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+
+.global-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--primary-color);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  border-radius: 12px;
+}
+
+.global-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.global-btn:hover::before {
+  opacity: 0.05;
+}
+
+.global-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.global-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+
+.global-btn:hover svg {
+  transform: scale(1.1);
+}
+
+/* 侧边栏收起状态样式 */
+.sidebar.collapsed {
+  width: 72px;
+}
+
+.sidebar.collapsed .sidebar-header {
+  padding: 16px 12px;
+  text-align: center;
+}
+
+.sidebar.collapsed .app-title {
+  font-size: 14px;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.sidebar.collapsed .title-text {
+  display: none;
+}
+
+.sidebar.collapsed .title-dot {
+  margin: 0;
+}
+
+.sidebar.collapsed .create-agent-btn {
+  padding: 10px;
+  border-radius: 8px;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+}
+
+.sidebar.collapsed .create-agent-btn .btn-icon {
+  font-size: 14px;
+}
+
+.sidebar.collapsed .create-agent-btn span:not(.btn-icon) {
+  display: none;
+}
+
+.sidebar.collapsed .agents-list {
+  padding: 8px;
+}
+
+.sidebar.collapsed .agent-item {
+  justify-content: center;
+  padding: 10px;
+  margin-bottom: 4px;
+}
+
+.sidebar.collapsed .agent-info,
+.sidebar.collapsed .agent-actions {
+  display: none;
+}
+
+.sidebar.collapsed .agent-avatar {
+  margin: 0;
+}
+
+.sidebar.collapsed .avatar-icon,
+.sidebar.collapsed .avatar-image {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+}
+
+.sidebar.collapsed .global-buttons-grid {
+  display: none;
+}
+
+/* 侧边栏切换按钮 */
+.sidebar-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: -14px;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-toggle-btn:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+}
+
+.toggle-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-secondary);
+  width: 14px;
+  height: 14px;
+}
+
+.sidebar-toggle-btn:hover .toggle-icon {
+  color: white;
+}
+
+.toggle-icon.collapsed {
+  transform: rotate(180deg);
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.empty-state h3 {
+  font-size: 18px;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.empty-state p {
+  font-size: 14px;
 }
 
 .chat-header {
@@ -622,6 +822,32 @@ body {
   background: transparent;
   color: var(--text-primary);
   border-color: var(--primary-color);
+}
+
+/* 思考内容样式 */
+.reasoning-content {
+  opacity: 0.7;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: var(--bg-tertiary);
+  border-left: 3px solid var(--primary-color);
+  border-radius: 4px;
+  font-size: 0.95em;
+  line-height: 1.6;
+}
+
+.reasoning-content::before {
+  content: '💭 思考过程';
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--primary-color);
+  font-size: 0.9em;
+}
+
+/* 普通内容样式 */
+.normal-content {
+  opacity: 1;
 }
 
 .message-time {
@@ -1496,18 +1722,34 @@ body {
 /* 滚动条样式 */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 3px;
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* 侧边栏滚动条样式 */
+.agents-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.agents-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 2px;
+}
+
+.agents-list::-webkit-scrollbar-thumb:hover {
   background: var(--text-tertiary);
 }
 
@@ -1759,6 +2001,13 @@ body {
     color: var(--text-secondary);
     background: var(--bg-tertiary);
     box-shadow: var(--shadow);
+  }
+
+  /* 暗色主题下的思考内容 */
+  .reasoning-content {
+    opacity: 0.6;
+    background: var(--bg-tertiary);
+    border-left-color: var(--primary-color);
   }
 
   table {

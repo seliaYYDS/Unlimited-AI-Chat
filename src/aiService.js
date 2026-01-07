@@ -20,7 +20,8 @@ export class AIService {
                     'gpt-3.5-turbo', 'gpt-3.5-turbo-16k', 'gpt-3.5-turbo-instruct'
                 ],
                 authHeader: 'Bearer',
-                defaultModel: 'gpt-3.5-turbo'
+                defaultModel: 'gpt-3.5-turbo',
+                supportsCustomModel: true
             },
             deepseek: {
                 name: 'DeepSeek',
@@ -28,7 +29,8 @@ export class AIService {
                 chatEndpoint: '/chat/completions',
                 models: ['deepseek-chat', 'deepseek-coder'],
                 authHeader: 'Bearer',
-                defaultModel: 'deepseek-chat'
+                defaultModel: 'deepseek-chat',
+                supportsCustomModel: true
             },
             anthropic: {
                 name: 'Anthropic',
@@ -36,7 +38,8 @@ export class AIService {
                 chatEndpoint: '/messages',
                 models: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
                 authHeader: 'x-api-key',
-                defaultModel: 'claude-3-sonnet-20240229'
+                defaultModel: 'claude-3-sonnet-20240229',
+                supportsCustomModel: true
             },
             azure: {
                 name: 'Azure OpenAI',
@@ -44,7 +47,8 @@ export class AIService {
                 chatEndpoint: '/chat/completions',
                 models: ['gpt-4', 'gpt-35-turbo'],
                 authHeader: 'api-key',
-                defaultModel: 'gpt-35-turbo'
+                defaultModel: 'gpt-35-turbo',
+                supportsCustomModel: true
             },
             google: {
                 name: 'Google Gemini',
@@ -52,7 +56,104 @@ export class AIService {
                 chatEndpoint: '/models/{model}:generateContent',
                 models: ['gemini-pro', 'gemini-pro-vision'],
                 authHeader: 'x-goog-api-key',
-                defaultModel: 'gemini-pro'
+                defaultModel: 'gemini-pro',
+                supportsCustomModel: true
+            },
+            siliconflow: {
+                name: '硅基流动',
+                baseUrl: 'https://api.siliconflow.cn/v1',
+                chatEndpoint: '/chat/completions',
+                models: [
+                    // Qwen 系列
+                    'Qwen/Qwen2.5-7B-Instruct',
+                    'Qwen/Qwen2.5-14B-Instruct',
+                    'Qwen/Qwen2.5-32B-Instruct',
+                    'Qwen/Qwen2.5-72B-Instruct',
+                    'Qwen/Qwen2.5-72B-Instruct-128K',
+                    'Qwen/Qwen2-7B-Instruct',
+                    'Qwen/Qwen3-8B',
+                    'Qwen/Qwen3-14B',
+                    'Qwen/Qwen3-30B-A3B',
+                    'Qwen/Qwen3-32B',
+                    'Qwen/Qwen3-235B-A22B',
+                    'Qwen/Qwen3-30B-A3B-Instruct-2507',
+                    'Qwen/Qwen3-235B-A22B-Instruct-2507',
+                    'Qwen/Qwen3-235B-A22B-Thinking-2507',
+                    'Qwen/Qwen3-30B-A3B-Thinking-2507',
+                    'Qwen/Qwen3-Next-80B-A3B-Instruct',
+                    'Qwen/Qwen3-Next-80B-A3B-Thinking',
+                    'Qwen/Qwen3-Coder-30B-A3B-Instruct',
+                    'Qwen/Qwen3-Coder-480B-A35B-Instruct',
+                    'Qwen/Qwen2.5-Coder-7B-Instruct',
+                    'Qwen/Qwen2.5-Coder-32B-Instruct',
+                    'Qwen/QwQ-32B',
+                    'Qwen/QVQ-72B-Preview',
+                    'Tongyi-Zhiwen/QwenLong-L1-32B',
+                    
+                    // DeepSeek 系列
+                    'deepseek-ai/DeepSeek-V3',
+                    'deepseek-ai/DeepSeek-V2.5',
+                    'deepseek-ai/DeepSeek-V3.1-Terminus',
+                    'deepseek-ai/DeepSeek-V3.2',
+                    'deepseek-ai/DeepSeek-R1',
+                    'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B',
+                    'deepseek-ai/DeepSeek-R1-Distill-Qwen-14B',
+                    'deepseek-ai/DeepSeek-R1-Distill-Qwen-32B',
+                    'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
+                    
+                    // GLM 系列
+                    'THUDM/glm-4-9b-chat',
+                    'THUDM/GLM-4-9b-0414',
+                    'THUDM/GLM-4-32B-0414',
+                    'THUDM/GLM-4.1V-9B-Thinking',
+                    'THUDM/GLM-Z1-9B-0414',
+                    'THUDM/GLM-Z1-32B-0414',
+                    'THUDM/GLM-Z1-Rumination-32B-0414',
+                    'zai-org/GLM-4.5',
+                    'zai-org/GLM-4.5-Air',
+                    'zai-org/GLM-4.5V',
+                    'zai-org/GLM-4.6',
+                    'zai-org/GLM-4.6V',
+                    
+                    // ERNIE 系列
+                    'baidu/ERNIE-4.5-21B-A3B-Paddle',
+                    'baidu/ERNIE-4.5-300B-A47B',
+                    'baidu/ERNIE-4.5-VL-28B-A3B-Paddle',
+                    'baidu/ERNIE-4.5-VL-424B-A47B-Paddle',
+                    
+                    // Kimi 系列
+                    'moonshotai/Kimi-Dev-72B',
+                    'moonshotai/Kimi-K2-Instruct-0905',
+                    'moonshotai/Kimi-K2-Thinking',
+                    
+                    // MiniMax 系列
+                    'MiniMaxAI/MiniMax-M1-80k',
+                    'MiniMaxAI/MiniMax-M2',
+                    
+                    // 其他 LLM 模型
+                    'ascend-tribe/pangu-pro-moe',
+                    'stepfun-ai/step3',
+                    'internlm/internlm2_5-7b-chat',
+                    'ByteDance-Seed/Seed-OSS-36B-Instruct',
+                    'SeedLLM/Seed-Rice-7B',
+                    'tencent/Hunyuan-A13B-Instruct',
+                    'tencent/Hunyuan-MT-7B',
+                    'inclusionAI/Ling-mini-2.0',
+                    'inclusionAI/Ling-flash-2.0',
+                    'inclusionAI/Ring-flash-2.0',
+                    'Kwaipilot/KAT-Dev'
+                ],
+                recommendedModels: [
+                    'Qwen/Qwen2.5-7B-Instruct', // 推荐：轻量级，速度快
+                    'Qwen/Qwen2.5-72B-Instruct', // 推荐：性能均衡
+                    'deepseek-ai/DeepSeek-V3', // 推荐：最新版本，性能优秀
+                    'deepseek-ai/DeepSeek-R1', // 推荐：推理能力强
+                    'THUDM/glm-4-9b-chat', // 推荐：轻量级，中文优秀
+                    'moonshotai/Kimi-Dev-72B' // 推荐：长文本能力强
+                ],
+                authHeader: 'Bearer',
+                defaultModel: 'Qwen/Qwen2.5-7B-Instruct',
+                supportsCustomModel: true
             },
             local: {
                 name: '本地部署',
@@ -60,7 +161,8 @@ export class AIService {
                 chatEndpoint: '/chat/completions',
                 models: ['local-model'],
                 authHeader: 'Bearer',
-                defaultModel: 'local-model'
+                defaultModel: 'local-model',
+                supportsCustomModel: true
             }
         }
     }
@@ -210,11 +312,11 @@ export class AIService {
 
         // 验证基本配置
         if (!apiEndpoint) {
-            throw new Error('❌ 请配置API端点')
+            throw new Error('请配置API端点')
         }
 
         if (!apiKey) {
-            throw new Error('❌ 请配置API密钥')
+            throw new Error('请配置API密钥')
         }
 
         // 检测API提供商
@@ -267,6 +369,7 @@ export class AIService {
             const reader = response.body.getReader()
             const decoder = new TextDecoder()
             let fullResponse = ''
+            let fullReasoning = ''
             let buffer = ''
             let chunkCount = 0
             const MAX_RESPONSE_LENGTH = 10000 // 限制响应长度
@@ -274,6 +377,9 @@ export class AIService {
 
             let lastUpdateTime = 0
             const UPDATE_INTERVAL = 50 // 最小更新间隔(ms)
+
+            // 用于收集令牌数信息
+            let totalTokens = null
 
             // 用于收集工具调用信息
             let toolCallsBuffer = null
@@ -294,6 +400,11 @@ export class AIService {
                     if (line.startsWith('data: ') && line !== 'data: [DONE]') {
                         try {
                             const data = JSON.parse(line.substring(6))
+
+                            // 提取令牌数信息（硅基流动在每个chunk中都提供）
+                            if (data.usage && data.usage.total_tokens) {
+                                totalTokens = data.usage.total_tokens
+                            }
 
                             // 检查是否有工具调用
                             if (data.choices && data.choices[0] && data.choices[0].delta) {
@@ -329,14 +440,25 @@ export class AIService {
                                 }
                             }
 
-                            const content = this.parseStreamResponseContent(data, provider)
-                            if (content && fullResponse.length < MAX_RESPONSE_LENGTH) {
-                                fullResponse += content
+                            const parsed = this.parseStreamResponseContent(data, provider)
+                            if (parsed) {
+                                // 处理内容
+                                if (parsed.content && fullResponse.length < MAX_RESPONSE_LENGTH) {
+                                    fullResponse += parsed.content
+                                }
+                                // 处理思考内容
+                                if (parsed.reasoning_content) {
+                                    fullReasoning += parsed.reasoning_content
+                                }
 
                                 // 使用节流控制更新频率
                                 const now = Date.now()
                                 if (now - lastUpdateTime >= UPDATE_INTERVAL) {
-                                    onProgress(fullResponse)
+                                    // 使用特殊标记分隔思考内容和普通内容
+                                    const combinedResponse = fullReasoning ? 
+                                        `__REASONING_START__${fullReasoning}__REASONING_END__${fullResponse}` : 
+                                        fullResponse
+                                    onProgress(combinedResponse)
                                     lastUpdateTime = now
                                 }
                             }
@@ -367,9 +489,16 @@ export class AIService {
             }
 
             // 确保最终文本完整显示
-            onProgress(fullResponse)
+            const combinedResponse = fullReasoning ? 
+                `__REASONING_START__${fullReasoning}__REASONING_END__${fullResponse}` : 
+                fullResponse
+            onProgress(combinedResponse)
 
-            return fullResponse
+            // 返回响应和令牌数
+            return {
+                response: combinedResponse,
+                tokens: totalTokens
+            }
 
         } catch (error) {
             console.error('💥 网络API流式调用失败:', error)
@@ -383,18 +512,18 @@ export class AIService {
 
         // 验证基本配置
         if (!apiEndpoint) {
-            throw new Error('❌ 请配置API端点')
+            throw new Error('请配置API端点')
         }
 
         if (!apiKey) {
-            throw new Error('❌ 请配置API密钥')
+            throw new Error('请配置API密钥')
         }
 
         // 验证API端点格式
         try {
             new URL(apiEndpoint)
         } catch {
-            throw new Error('❌ API端点格式不正确，请输入有效的URL')
+            throw new Error('API端点格式不正确，请输入有效的URL')
         }
 
         // 检测API提供商
@@ -449,24 +578,36 @@ export class AIService {
             }
 
             // 解析响应内容
-            const content = this.parseResponseContent(data, provider)
+            const parsed = this.parseResponseContent(data, provider)
 
-            if (!content) {
-                throw new Error('❌ 无法解析API响应内容，请检查API配置和响应格式')
+            if (!parsed) {
+                throw new Error('无法解析API响应内容，请检查API配置和响应格式')
             }
 
-            return content
+            // 提取令牌数
+            const tokens = data.usage ? data.usage.total_tokens : null
+
+            // 使用特殊标记分隔思考内容和普通内容
+            const combinedResponse = parsed.reasoning_content ? 
+                `__REASONING_START__${parsed.reasoning_content}__REASONING_END__${parsed.content}` : 
+                parsed.content
+
+            // 返回响应和令牌数
+            return {
+                response: combinedResponse,
+                tokens: tokens
+            }
 
         } catch (error) {
             console.error('💥 网络API调用失败:', error)
 
             // 提供更友好的错误信息
             if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                throw new Error('🌐 网络连接失败，请检查：\n• API端点是否正确\n• 网络连接是否正常\n• 是否遇到CORS限制')
+                throw new Error('网络连接失败，请检查：\n• API端点是否正确\n• 网络连接是否正常\n• 是否遇到CORS限制')
             }
 
             if (error.message.includes('Failed to fetch')) {
-                throw new Error('🌐 网络请求失败，可能原因：\n• API端点无法访问\n• 网络连接问题\n• 服务器暂时不可用')
+                throw new Error('网络请求失败，可能原因：\n• API端点无法访问\n• 网络连接问题\n• 服务器暂时不可用')
             }
 
             throw error
@@ -594,6 +735,8 @@ export class AIService {
             return 'azure'
         } else if (endpoint.includes('googleapis.com') || endpoint.includes('generativelanguage.googleapis.com')) {
             return 'google'
+        } else if (endpoint.includes('siliconflow.cn')) {
+            return 'siliconflow'
         } else if (endpoint.includes('localhost') || endpoint.includes('127.0.0.1')) {
             return 'local'
         } else {
@@ -720,31 +863,30 @@ export class AIService {
 
     // 解析错误响应
     async parseErrorResponse(response, provider) {
-        let errorMessage = `❌ API请求失败: ${response.status} ${response.statusText}`
+        let errorMessage = `API请求失败: ${response.status} ${response.statusText}`
 
         try {
             const errorData = await response.json()
             console.log('🔍 错误响应数据:', errorData)
 
             if (errorData.error && errorData.error.message) {
-                errorMessage = `❌ ${errorData.error.message}`
-            } else if (errorData.message) {
-                errorMessage = `❌ ${errorData.message}`
-            } else if (errorData.detail) {
-                errorMessage = `❌ ${errorData.detail}`
-            }
+                errorMessage = `${errorData.error.message}`
+                        } else if (errorData.message) {
+                            errorMessage = `${errorData.message}`
+                        } else if (errorData.detail) {
+                            errorMessage = `${errorData.detail}`            }
 
             // 常见错误代码处理
             if (response.status === 401) {
-                errorMessage += '\n🔑 认证失败，请检查API密钥是否正确'
+                errorMessage += '\n认证失败，请检查API密钥是否正确'
             } else if (response.status === 403) {
-                errorMessage += '\n🚫 权限不足，请检查API密钥权限'
+                errorMessage += '\n权限不足，请检查API密钥权限'
             } else if (response.status === 404) {
-                errorMessage += '\n🔍 资源未找到，请检查API端点是否正确'
+                errorMessage += '\n资源未找到，请检查API端点是否正确'
             } else if (response.status === 429) {
-                errorMessage += '\n⏰ 请求频率超限，请稍后重试'
+                errorMessage += '\n请求频率超限，请稍后重试'
             } else if (response.status >= 500) {
-                errorMessage += '\n🔧 服务器内部错误，请稍后重试'
+                errorMessage += '\n服务器内部错误，请稍后重试'
             }
 
         } catch {
@@ -757,88 +899,212 @@ export class AIService {
 
     // 解析流式响应内容
     parseStreamResponseContent(data, provider) {
+        console.log('🔍 解析流式数据:', data)
+
         // 兼容不同API提供商的流式响应格式
         switch (provider) {
             case 'openai':
             case 'deepseek':
             case 'azure':
             case 'local':
-                if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) {
-                    return data.choices[0].delta.content
+            case 'siliconflow':
+                if (data.choices && data.choices[0] && data.choices[0].delta) {
+                    const delta = data.choices[0].delta
+                    // 返回包含内容和思考内容的对象
+                    return {
+                        content: delta.content || '',
+                        reasoning_content: delta.reasoning_content || ''
+                    }
                 }
                 break
 
             case 'anthropic':
                 if (data.type === 'content_block_delta' && data.delta && data.delta.text) {
-                    return data.delta.text
+                    return {
+                        content: data.delta.text,
+                        reasoning_content: ''
+                    }
                 }
                 break
 
             case 'google':
                 if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                    return data.candidates[0].content.parts[0].text
+                    return {
+                        content: data.candidates[0].content.parts[0].text,
+                        reasoning_content: ''
+                    }
                 }
                 break
 
             case 'custom':
                 // 尝试多种常见格式
-                if (data.choices?.[0]?.delta?.content) {
-                    return data.choices[0].delta.content
+                if (data.choices?.[0]?.delta) {
+                    const delta = data.choices[0].delta
+                    return {
+                        content: delta.content || '',
+                        reasoning_content: delta.reasoning_content || ''
+                    }
                 } else if (data.delta?.content) {
-                    return data.delta.content
+                    return {
+                        content: data.delta.content,
+                        reasoning_content: data.delta.reasoning_content || ''
+                    }
                 } else if (data.content) {
-                    return data.content
+                    return {
+                        content: data.content,
+                        reasoning_content: ''
+                    }
                 }
                 break
         }
 
-        return null
+        return {
+            content: '',
+            reasoning_content: ''
+        }
     }
 
     // 解析响应内容
-    parseResponseContent(data, provider) {
-        console.log('🔍 解析响应数据:', data)
 
-        // 兼容不同API提供商的响应格式
-        switch (provider) {
-            case 'openai':
-            case 'deepseek':
-            case 'azure':
-            case 'local':
-                if (data.choices && data.choices[0] && data.choices[0].message) {
-                    return data.choices[0].message.content
-                }
-                break
+        parseResponseContent(data, provider) {
 
-            case 'anthropic':
-                if (data.content && data.content[0] && data.content[0].text) {
-                    return data.content[0].text
-                }
-                break
+            console.log('🔍 解析响应数据:', data)
 
-            case 'google':
-                if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                    return data.candidates[0].content.parts[0].text
-                }
-                break
+    
 
-            case 'custom':
-                // 尝试多种常见格式
-                if (data.choices?.[0]?.message?.content) {
-                    return data.choices[0].message.content
-                } else if (data.content) {
-                    return data.content
-                } else if (data.result) {
-                    return data.result
-                } else if (data.text) {
-                    return data.text
-                }
-                break
+            // 兼容不同API提供商的响应格式
+
+            switch (provider) {
+
+                case 'openai':
+
+                case 'deepseek':
+
+                case 'azure':
+
+                case 'local':
+
+                case 'siliconflow':
+
+                    if (data.choices && data.choices[0] && data.choices[0].message) {
+
+                        const message = data.choices[0].message
+
+                        return {
+
+                            content: message.content || '',
+
+                            reasoning_content: message.reasoning_content || ''
+
+                        }
+
+                    }
+
+                    break
+
+    
+
+                case 'anthropic':
+
+                    if (data.content && data.content[0] && data.content[0].text) {
+
+                        return {
+
+                            content: data.content[0].text,
+
+                            reasoning_content: ''
+
+                        }
+
+                    }
+
+                    break
+
+    
+
+                case 'google':
+
+                    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+
+                        return {
+
+                            content: data.candidates[0].content.parts[0].text,
+
+                            reasoning_content: ''
+
+                        }
+
+                    }
+
+                    break
+
+    
+
+                case 'custom':
+
+                    // 尝试多种常见格式
+
+                    if (data.choices?.[0]?.message) {
+
+                        const message = data.choices[0].message
+
+                        return {
+
+                            content: message.content || '',
+
+                            reasoning_content: message.reasoning_content || ''
+
+                        }
+
+                    } else if (data.content) {
+
+                        return {
+
+                            content: data.content,
+
+                            reasoning_content: ''
+
+                        }
+
+                    } else if (data.result) {
+
+                        return {
+
+                            content: data.result,
+
+                            reasoning_content: ''
+
+                        }
+
+                    } else if (data.text) {
+
+                        return {
+
+                            content: data.text,
+
+                            reasoning_content: ''
+
+                        }
+
+                    }
+
+                    break
+
+            }
+
+    
+
+            console.warn('⚠️ 未知的API响应格式:', data)
+
+            return {
+
+                content: '',
+
+                reasoning_content: ''
+
+            }
+
         }
-
-        console.warn('⚠️ 未知的API响应格式:', data)
-        return null
-    }
 
     // 获取支持的模型列表
     getSupportedModels(apiEndpoint) {
@@ -1133,16 +1399,28 @@ export class AIService {
 
     // 添加响应元数据
     addResponseMetadata(response, settings, thinkingTime, isPartial = false) {
-        // 计算令牌数（简单估算：1个汉字≈2个token，1个英文单词≈1.3个token）
-        const chineseChars = (response.match(/[\u4e00-\u9fa5]/g) || []).length
-        const englishWords = (response.match(/\b[a-zA-Z]+\b/g) || []).length
-        const otherChars = response.length - chineseChars - englishWords
-        const estimatedTokens = Math.round(chineseChars * 2 + englishWords * 1.3 + otherChars * 0.5)
+        // 处理对象响应（包含 response 和 tokens）
+        let responseText = response
+        let tokens = null
+
+        if (typeof response === 'object' && response !== null) {
+            responseText = response.response || ''
+            tokens = response.tokens || null
+        }
+
+        // 如果没有令牌数，进行估算
+        if (!tokens) {
+            // 计算令牌数（简单估算：1个汉字≈2个token，1个英文单词≈1.3个token）
+            const chineseChars = (responseText.match(/[\u4e00-\u9fa5]/g) || []).length
+            const englishWords = (responseText.match(/\b[a-zA-Z]+\b/g) || []).length
+            const otherChars = responseText.length - chineseChars - englishWords
+            tokens = Math.round(chineseChars * 2 + englishWords * 1.3 + otherChars * 0.5)
+        }
 
         // 创建元数据对象
         const metadata = {
-            response: response,
-            tokens: settings.showTokens && !isPartial ? estimatedTokens : null,
+            response: responseText,
+            tokens: settings.showTokens && !isPartial ? tokens : null,
             thinkingTime: settings.showThinkingTime && !isPartial ? thinkingTime : null
         }
 

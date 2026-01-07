@@ -221,7 +221,7 @@
 
       <div class="chat-messages" ref="messagesContainer" @contextmenu.prevent="handleChatContextMenu($event, null)">
         <div v-if="!currentAgent" class="empty-state">
-          <div class="empty-icon">💬</div>
+          <div class="empty-icon"><Icon emoji="💬" size="32px" /></div>
           <h3>请选择一个智能体开始对话</h3>
           <p>或创建一个新的智能体</p>
         </div>
@@ -254,7 +254,7 @@
                 <!-- 工具调用状态显示 -->
                 <div v-if="isUsingTool && isGenerating && message.role === 'assistant'" class="tool-call-status">
                   <div class="tool-call-indicator">
-                    <span class="tool-icon">🔍</span>
+                    <span class="tool-icon"><Icon emoji="🔍" size="16px" /></span>
                     <span class="tool-text">{{ toolCallStatus || '正在使用工具...' }}</span>
                   </div>
                   <div class="tool-call-animation">
@@ -409,7 +409,7 @@
               :key="file.id"
               class="file-item"
             >
-              <div class="file-icon">📄</div>
+              <div class="file-icon"><Icon emoji="📄" size="16px" /></div>
               <div class="file-info">
                 <div class="file-name">{{ file.name }}</div>
                 <div class="file-size">{{ formatFileSize(file.size) }}</div>
@@ -733,7 +733,7 @@
             class="skill-section"
           >
             <div class="skill-section-title">
-              <span class="section-icon">{{ getCategoryIcon(category.id) }}</span>
+              <span class="section-icon"><Icon :emoji="getCategoryIcon(category.id)" size="16px" /></span>
               <span class="section-name">{{ category.name }}</span>
             </div>
             <div class="skill-items">
@@ -743,9 +743,9 @@
                 :class="['skill-option', { 'active': (agentForm.skills || []).includes(skill.id) }]"
                 @click="toggleSkill(skill.id)"
               >
-                <span class="skill-emoji">{{ skill.icon }}</span>
+                <span class="skill-emoji"><Icon :emoji="skill.icon" size="16px" /></span>
                 <span class="skill-text">{{ skill.name }}</span>
-                <span class="skill-check" v-if="(agentForm.skills || []).includes(skill.id)">✓</span>
+                <span class="skill-check" v-if="(agentForm.skills || []).includes(skill.id)"><Icon emoji="✓" size="12px" /></span>
               </div>
             </div>
           </div>
@@ -787,6 +787,7 @@
           常用API端点示例：<br>
           • OpenAI: https://api.openai.com/v1/chat/completions<br>
           • DeepSeek: https://api.deepseek.com/v1/chat/completions<br>
+          • 硅基流动: https://api.siliconflow.cn/v1/chat/completions<br>
           • Azure OpenAI: https://YOUR_RESOURCE.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT/chat/completions<br>
           • Anthropic: https://api.anthropic.com/v1/messages<br>
           • 本地部署: http://localhost:8080/v1/chat/completions
@@ -808,10 +809,20 @@
         <label>模型名称</label>
         <CustomSelect
           v-model="settings.modelName"
-          :options="supportedModels.map(model => ({ value: model, label: model }))"
+          :options="modelOptions"
         />
+        <div v-if="settings.modelName === 'custom'" class="form-group" style="margin-top: 12px;">
+          <label>自定义模型名称</label>
+          <input
+            type="text"
+            class="form-control"
+            v-model="settings.customModelName"
+            placeholder="例如: gpt-4-turbo-preview"
+          >
+        </div>
         <div class="form-hint">
-          当前提供商: {{ apiProviderInfo.name }}
+          当前提供商: {{ apiProviderInfo.name }}<br>
+          选择"自定义"可手动输入任意支持的模型名称
         </div>
       </div>
 
@@ -1341,7 +1352,7 @@
 
         
 
-                              <span class="language-icon">{{ getLanguageIcon(option.value) }}</span>
+                              <span class="language-icon"><Icon :emoji="getLanguageIcon(option.value)" size="16px" /></span>
 
         
 
@@ -1997,11 +2008,19 @@
 
         
 
-                                >
+                                  
 
         
 
-                                  <span class="format-icon">{{ format.icon }}</span>
+                                                                  >
+
+        
+
+                                  
+
+        
+
+                                                                    <span class="format-icon"><Icon :emoji="format.icon" size="16px" /></span>
 
         
 
@@ -2846,7 +2865,7 @@
               </div>
               
               <div v-else class="empty-preview">
-                <div class="empty-icon">🎨</div>
+                <div class="empty-icon"><Icon emoji="🎨" size="32px" /></div>
                 <p>输入提示词开始生成图片</p>
               </div>
             </div>
@@ -3356,6 +3375,7 @@ import Tavern from './components/Tavern.vue'
 import FileDisplay from './components/FileDisplay.vue'
 
 import FileViewer from './components/FileViewer.vue'
+import Icon from './components/Icon.vue'
 
 import {
   getAllSkills,
@@ -3422,7 +3442,11 @@ export default {
 
 
 
-        FileViewer
+        FileViewer,
+
+
+
+        Icon
 
 
 
@@ -3683,6 +3707,7 @@ export default {
         apiEndpoint: '',
         apiKey: '',
         modelName: 'gpt-3.5-turbo',
+        customModelName: '',
         temperature: 0.7,
         maxTokens: 1000,
         // 对话设置
@@ -4361,6 +4386,30 @@ export default {
 
     isSDConfigured() {
       return this.settings.sdBaseUrl && this.settings.sdModel
+    },
+
+    // 模型选项
+    modelOptions() {
+      const providerInfo = this.aiService.getAPIProviderInfo(
+        this.settings.apiType === 'network' ? this.settings.apiEndpoint : ''
+      )
+      
+      const options = this.supportedModels.map(model => {
+        const isRecommended = providerInfo.recommendedModels?.includes(model)
+        return {
+          value: model,
+          label: isRecommended ? `⭐ ${model}` : model
+        }
+      })
+      
+      // 将推荐模型移到前面
+      const recommendedOptions = options.filter(opt => opt.label.startsWith('⭐'))
+      const normalOptions = options.filter(opt => !opt.label.startsWith('⭐'))
+      
+      // 添加自定义选项
+      normalOptions.push({ value: 'custom', label: '📝 自定义模型名称' })
+      
+      return [...recommendedOptions, ...normalOptions]
     },
 
     // 当前智能体需要的UI组件
@@ -5398,15 +5447,22 @@ ${conversationText}
         'anthropic': 'anthropic',
         'azure': 'azure',
         'google': 'google',
+        'siliconflow': 'siliconflow',
         'local': 'local',
         'network': 'openai' // network 类型映射到 openai，使用自定义 baseUrl
       }
 
       const provider = providerMap[this.settings.apiType] || 'openai'
-      
+
+      // 处理自定义模型名称
+      let modelName = this.settings.modelName || 'gpt-4'
+      if (modelName === 'custom' && this.settings.customModelName) {
+        modelName = this.settings.customModelName
+      }
+
       this.aiSettings = {
         provider: provider,
-        model: this.settings.modelName || 'gpt-4',
+        model: modelName,
         apiKey: this.settings.apiKey || '',
         baseUrl: this.settings.apiEndpoint || '',
         temperature: Number(this.settings.temperature) || 0.7,
@@ -5836,6 +5892,28 @@ ${conversationText}
 
     // 格式化消息内容
     formatMessageContent(content) {
+      if (!content) return ''
+      
+      // 检查内容是否包含思考标记（思考内容和普通内容已经组合在一起）
+      // 如果内容以特定的标记开头，说明包含思考内容
+      const hasReasoning = content.includes('__REASONING_START__') && content.includes('__REASONING_END__')
+      
+      if (hasReasoning) {
+        // 提取思考内容和普通内容
+        const reasoningStart = content.indexOf('__REASONING_START__') + '__REASONING_START__'.length
+        const reasoningEnd = content.indexOf('__REASONING_END__')
+        const reasoningContent = content.substring(reasoningStart, reasoningEnd)
+        const normalContent = content.substring(reasoningEnd + '__REASONING_END__'.length)
+        
+        // 格式化思考内容和普通内容
+        const formattedReasoning = MarkdownParser.formatAIOutput(reasoningContent, this.settings.enableFormatting)
+        const formattedNormal = MarkdownParser.formatAIOutput(normalContent, this.settings.enableFormatting)
+        
+        // 返回带有特殊样式的思考内容
+        return `<div class="reasoning-content">${formattedReasoning}</div><div class="normal-content">${formattedNormal}</div>`
+      }
+      
+      // 如果没有思考内容，直接格式化
       return MarkdownParser.formatAIOutput(content, this.settings.enableFormatting)
     },
 
@@ -8320,7 +8398,7 @@ ${conversationText}
 
           role: 'assistant',
 
-          content: `❌ 发送失败: ${error.message}`
+          content: `发送失败: ${error.message}`
 
         });
 
@@ -9266,185 +9344,7 @@ ${conversationText}
 
 
 
-/* 侧边栏收起/展开样式 */
-
-.sidebar {
-
-  width: 320px;
-
-  transition: width 0.3s ease;
-
-}
-
-
-
-.sidebar.collapsed {
-
-  width: 80px;
-
-}
-
-
-
-.sidebar-toggle-btn {
-
-  position: absolute;
-
-  top: 50%;
-
-  right: -14px;
-
-  transform: translateY(-50%);
-
-  width: 28px;
-
-  height: 28px;
-
-  background: var(--bg-secondary);
-
-  border: 1px solid var(--border-color);
-
-  border-radius: 50%;
-
-  cursor: pointer;
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
-
-  z-index: 100;
-
-  transition: all 0.3s ease;
-
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-
-}
-
-
-
-.sidebar-toggle-btn:hover {
-
-  background: var(--primary-color);
-
-  border-color: var(--primary-color);
-
-  transform: translateY(-50%) scale(1.1);
-
-  box-shadow: 0 4px 10px rgba(236, 72, 153, 0.3);
-
-}
-
-
-
-.toggle-icon {
-
-  transition: transform 0.3s ease;
-
-  color: var(--text-secondary);
-
-  width: 16px;
-
-  height: 16px;
-
-}
-
-
-
-.sidebar-toggle-btn:hover .toggle-icon {
-
-  color: white;
-
-}
-
-
-
-.toggle-icon.collapsed {
-
-  transform: rotate(180deg);
-
-}
-
-
-
-/* 收起状态下的智能体列表样式 */
-
-.sidebar.collapsed .agent-item {
-
-  justify-content: center;
-
-  padding: 16px 8px;
-
-}
-
-
-
-.sidebar.collapsed .agent-info,
-
-.sidebar.collapsed .agent-actions,
-
-.sidebar.collapsed .agent-name,
-
-.sidebar.collapsed .agent-scenario {
-
-  display: none;
-
-}
-
-
-
-.sidebar.collapsed .agent-avatar {
-
-  margin: 0 auto;
-
-}
-
-
-
-/* 收起状态下的其他元素 */
-
-.sidebar.collapsed .sidebar-header {
-
-  text-align: center;
-
-  padding: 16px 8px;
-
-}
-
-
-
-.sidebar.collapsed .app-title {
-
-  font-size: 16px;
-
-}
-
-
-
-.sidebar.collapsed .create-agent-btn {
-
-  padding: 8px;
-
-  font-size: 12px;
-
-}
-
-
-
-.sidebar.collapsed .create-agent-btn .btn-icon {
-
-  font-size: 14px;
-
-}
-
-
-
-.sidebar.collapsed .global-buttons-grid {
-
-  display: none;
-
-}
+/* 侧边栏收起/展开样式 - 已在 global.css 中定义，此处保留为空以避免冲突 */
 
 
 
