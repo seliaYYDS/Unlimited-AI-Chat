@@ -412,7 +412,7 @@
               <div class="file-icon"><Icon emoji="📄" size="16px" /></div>
               <div class="file-info">
                 <div class="file-name">{{ file.name }}</div>
-                <div class="file-size">{{ formatFileSize(file.size) }}</div>
+                <div class="file-size">{{ file.size }}</div>
               </div>
               <button
                 class="file-remove-btn"
@@ -754,6 +754,61 @@
           已选择 {{ (agentForm.skills || []).length }} 项技能
         </div>
       </div>
+
+      <div class="form-group">
+        <CustomCheckbox 
+          v-model="agentForm.useCustomApi" 
+          label="单独设置API"
+        />
+        <div class="form-hint">
+          勾选后可以为该智能体单独配置API提供商和密钥，不使用全局设置
+        </div>
+      </div>
+
+      <div v-if="agentForm.useCustomApi" class="custom-api-section">
+        <div class="form-group">
+          <label>API服务商</label>
+          <CustomSelect
+            v-model="agentForm.customApiProvider"
+            :options="[
+              { value: 'openai', label: 'OpenAI' },
+              { value: 'deepseek', label: 'DeepSeek' },
+              { value: 'anthropic', label: 'Anthropic' },
+              { value: 'azure', label: 'Azure OpenAI' },
+              { value: 'google', label: 'Google Gemini' },
+              { value: 'siliconflow', label: '硅基流动' },
+              { value: 'local', label: '本地/自定义' }
+            ]"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>模型名称</label>
+          <CustomSelect
+            v-model="agentForm.customModelName"
+            :options="getProviderModels(agentForm.customApiProvider)"
+          />
+          <div v-if="agentForm.customModelName === 'custom'" class="form-group" style="margin-top: 12px;">
+            <label>自定义模型名称</label>
+            <input
+              type="text"
+              class="form-control"
+              v-model="agentForm.customCustomModelName"
+              placeholder="例如: gpt-4-turbo-preview"
+            >
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>API密钥</label>
+          <input
+            type="password"
+            class="form-control"
+            v-model="agentForm.customApiKey"
+            placeholder="输入API密钥"
+          >
+        </div>
+      </div>
     </Modal>
 
     <Teleport to="body">
@@ -772,16 +827,47 @@
             { value: 'local', label: '本地模型' },
             { value: 'network', label: '网络API' }
           ]"
+          @change="onApiTypeChange"
         />
       </div>
 
       <div v-if="settings.apiType === 'network'" class="form-group">
-        <label>API端点</label>
+        <label>API服务商</label>
+        <CustomSelect
+          v-model="settings.currentProvider"
+          :options="[
+            { value: 'openai', label: 'OpenAI' },
+            { value: 'deepseek', label: 'DeepSeek' },
+            { value: 'anthropic', label: 'Anthropic' },
+            { value: 'azure', label: 'Azure OpenAI' },
+            { value: 'google', label: 'Google Gemini' },
+            { value: 'siliconflow', label: '硅基流动' },
+            { value: 'local', label: '本地/自定义' }
+          ]"
+          @change="onProviderChange"
+        />
+      </div>
+
+      <div v-if="settings.apiType === 'network'" class="form-group">
+        <label>API密钥</label>
+        <input
+          type="password"
+          class="form-control"
+          v-model="(settings.apiKeys || {})[settings.currentProvider || 'openai']"
+          :placeholder="`输入${providerName} API密钥`"
+        >
+        <div class="form-hint">
+          为当前选择的服务商配置 API 密钥，切换服务商时会自动保存并加载对应的密钥
+        </div>
+      </div>
+
+      <div v-if="settings.apiType === 'network' && settings.currentProvider === 'local'" class="form-group">
+        <label>自定义API端点</label>
         <input
           type="text"
           class="form-control"
           v-model="settings.apiEndpoint"
-          placeholder="https://api.openai.com/v1/chat/completions"
+          placeholder="https://api.example.com/v1/chat/completions"
         >
         <div class="form-hint">
           常用API端点示例：<br>
@@ -792,17 +878,6 @@
           • Anthropic: https://api.anthropic.com/v1/messages<br>
           • 本地部署: http://localhost:8080/v1/chat/completions
         </div>
-      </div>
-
-      <div v-if="settings.apiType === 'network'" class="form-group">
-        <label>API密钥</label>
-        <input
-          type="password"
-          class="form-control"
-          v-model="settings.apiKey"
-          placeholder="输入API密钥"
-          autocomplete="current-password"
-        >
       </div>
 
       <div class="form-group">
@@ -844,8 +919,11 @@
           class="form-control"
           v-model="settings.maxTokens"
           min="100"
-          max="4000"
+          max="16000"
         >
+        <div class="form-hint">
+          AI回复的最大令牌数（100-16000），建议根据模型能力设置
+        </div>
       </div>
 
       <!-- 对话设置 -->
@@ -3709,7 +3787,7 @@ export default {
         modelName: 'gpt-3.5-turbo',
         customModelName: '',
         temperature: 0.7,
-        maxTokens: 1000,
+        maxTokens: 2000,
         // 对话设置
         wordByWordOutput: false,
         showTokens: false,
@@ -4213,6 +4291,36 @@ export default {
     console.log('App mounted, settings.musicApiUrl:', this.settings.musicApiUrl)
     console.log('App mounted, full settings object:', this.settings)
 
+    // 确保 apiKeys 对象存在（兼容旧数据）
+    if (!this.settings.apiKeys) {
+      this.settings.apiKeys = {
+        openai: '',
+        deepseek: '',
+        anthropic: '',
+        azure: '',
+        google: '',
+        siliconflow: '',
+        local: ''
+      }
+    }
+
+    // 确保 currentProvider 存在（兼容旧数据）
+    if (!this.settings.currentProvider) {
+      this.settings.currentProvider = 'openai'
+    }
+
+    // 确保 previousProvider 存在（兼容旧数据）
+    if (!this.settings.previousProvider) {
+      this.settings.previousProvider = 'openai'
+    }
+
+    // 初始化 apiKey 为当前服务商的密钥
+    if (this.settings.apiKeys && this.settings.apiKeys[this.settings.currentProvider]) {
+      this.settings.apiKey = this.settings.apiKeys[this.settings.currentProvider]
+    } else {
+      this.settings.apiKey = ''
+    }
+
     // 强制从 settings 同步 AI 设置（优先使用最新的 settings）
     this.syncAiSettingsFromSettings()
     console.log('App mounted, synced aiSettings:', this.aiSettings)
@@ -4221,9 +4329,36 @@ export default {
 
     this.settings.temperature = Number(this.settings.temperature) || 0.7
 
-    this.settings.maxTokens = Number(this.settings.maxTokens) || 1000
+    this.settings.maxTokens = Number(this.settings.maxTokens) || 2000
 
     this.settings.autoClearDays = Number(this.settings.autoClearDays) || 3
+
+    // 添加全局复制代码块函数
+    window.copyCodeBlock = async (button) => {
+      const container = button.closest('.code-block-container')
+      const code = container.querySelector('code')
+      if (!code) {
+        console.error('未找到代码元素')
+        return
+      }
+      const text = code.textContent
+
+      try {
+        await navigator.clipboard.writeText(text)
+        button.textContent = '已复制'
+        button.classList.add('copied')
+        setTimeout(() => {
+          button.textContent = '复制'
+          button.classList.remove('copied')
+        }, 2000)
+      } catch (err) {
+        console.error('复制失败:', err)
+        button.textContent = '复制失败'
+        setTimeout(() => {
+          button.textContent = '复制'
+        }, 2000)
+      }
+    }
 
     // 添加全局点击事件监听器，用于关闭AI辅助菜单
     document.addEventListener('click', this.handleGlobalClick)
@@ -4280,6 +4415,11 @@ export default {
   },
 
   async beforeUnmount() {
+
+    // 清理全局复制代码块函数
+    if (window.copyCodeBlock) {
+      delete window.copyCodeBlock
+    }
 
     // 在组件卸载前保存当前智能体的对话（如果存在）
 
@@ -4384,6 +4524,19 @@ export default {
       )
     },
 
+    // 当前服务商名称
+    providerName() {
+      const providerMap = {
+        openai: 'OpenAI',
+        deepseek: 'DeepSeek',
+        anthropic: 'Anthropic',
+        azure: 'Azure OpenAI',
+        google: 'Google Gemini',
+        local: '自定义'
+      }
+      return providerMap[this.settings.currentProvider] || 'OpenAI'
+    },
+
     isSDConfigured() {
       return this.settings.sdBaseUrl && this.settings.sdModel
     },
@@ -4478,11 +4631,12 @@ export default {
           for (const file of files) {
             try {
               const content = await this.readFileContent(file)
+              const fileSize = file.size !== undefined && file.size !== null ? this.formatFileSize(file.size) : '未知大小'
               this.uploadedFiles.push({
                 id: Date.now() + Math.random(),
                 name: file.name,
-                type: file.type,
-                size: file.size,
+                type: file.type || '未知类型',
+                size: fileSize,
                 content: content
               })
             } catch (error) {
@@ -4508,11 +4662,13 @@ export default {
 
     // 格式化文件大小
     formatFileSize(bytes) {
+      if (bytes === null || bytes === undefined || isNaN(bytes) || bytes < 0) return '未知大小'
       if (bytes === 0) return '0 B'
       const k = 1024
       const sizes = ['B', 'KB', 'MB', 'GB']
       const i = Math.floor(Math.log(bytes) / Math.log(k))
-      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+      const size = Math.round(bytes / Math.pow(k, i) * 100) / 100
+      return size + ' ' + sizes[i]
     },
 
     // 读取文件内容
@@ -4967,7 +5123,14 @@ export default {
         scenario: '',
         prompt: '',
         keyPoints: '',
-        avatar: '🤖'
+        avatar: '🤖',
+        // 单独 API 设置
+        useCustomApi: false, // 是否使用自定义 API 设置
+        customApiProvider: 'openai', // 自定义 API 提供商
+        customApiKey: '', // 自定义 API Key
+        customApiEndpoint: '', // 自定义 API 端点
+        customModelName: 'gpt-3.5-turbo', // 自定义模型名称
+        customCustomModelName: '' // 自定义模型名称（当选择custom时）
       }
       this.showCreateModal = true
       this.showEditModal = false
@@ -5438,6 +5601,79 @@ ${conversationText}
       }
     },
 
+    // API 类型切换处理
+    onApiTypeChange() {
+      if (this.settings.apiType === 'local') {
+        // 切换到本地模型时，清空网络 API 相关设置
+        this.settings.apiKeys = {
+          openai: '',
+          deepseek: '',
+          anthropic: '',
+          azure: '',
+          google: '',
+          local: ''
+        }
+        this.settings.currentProvider = 'openai'
+      }
+    },
+
+    // 服务商切换处理
+    onProviderChange() {
+      const provider = this.settings.currentProvider
+      const oldProvider = this.settings.previousProvider || 'openai'
+      
+      // 保存旧服务商的 API Key
+      if (this.settings.apiKeys && this.settings.apiKey) {
+        this.settings.apiKeys[oldProvider] = this.settings.apiKey
+      }
+      
+      // 根据服务商自动设置默认端点
+      const endpointMap = {
+        openai: 'https://api.openai.com/v1/chat/completions',
+        deepseek: 'https://api.deepseek.com/v1/chat/completions',
+        anthropic: 'https://api.anthropic.com/v1/messages',
+        azure: '',
+        google: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
+        siliconflow: 'https://api.siliconflow.cn/v1/chat/completions'
+      }
+      
+      if (provider !== 'local' && endpointMap[provider]) {
+        this.settings.apiEndpoint = endpointMap[provider]
+      }
+      
+      // 加载新服务商的 API Key
+      if (this.settings.apiKeys && this.settings.apiKeys[provider]) {
+        this.settings.apiKey = this.settings.apiKeys[provider]
+      } else {
+        this.settings.apiKey = ''
+      }
+      
+      // 保存当前服务商，用于下次切换时保存
+      this.settings.previousProvider = provider
+    },
+
+    // 获取服务商支持的模型列表
+    getProviderModels(provider) {
+      const providerInfo = this.aiService.apiProviders[provider]
+      if (!providerInfo || !providerInfo.models) {
+        return [{ value: 'custom', label: '自定义' }]
+      }
+
+      const models = providerInfo.models
+      const recommended = providerInfo.recommendedModels || []
+
+      // 转换为选项格式，推荐模型添加 ⭐ 标记
+      const options = models.map(model => ({
+        value: model,
+        label: recommended.includes(model) ? `⭐ ${model}` : model
+      }))
+
+      // 添加自定义选项
+      options.push({ value: 'custom', label: '自定义' })
+
+      return options
+    },
+
     // 从 settings 同步到 aiSettings
     syncAiSettingsFromSettings() {
       // 映射 settings 中的字段到 aiSettings
@@ -5466,7 +5702,7 @@ ${conversationText}
         apiKey: this.settings.apiKey || '',
         baseUrl: this.settings.apiEndpoint || '',
         temperature: Number(this.settings.temperature) || 0.7,
-        maxTokens: Number(this.settings.maxTokens) || 2000
+        maxTokens: Math.max(100, Math.min(16000, Number(this.settings.maxTokens) || 2000))
       }
 
       console.log('Synced aiSettings from settings:', this.aiSettings)
@@ -12360,6 +12596,35 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   justify-content: center;
   color: var(--text-secondary);
   transition: all 0.2s ease;
+}
+
+/* 单独 API 设置部分 */
+.custom-api-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.custom-api-section .form-group {
+  margin-bottom: 16px;
+}
+
+.custom-api-section .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.custom-api-section label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.custom-api-section input {
+  font-size: 14px;
 }
 
 .file-remove-btn:hover {

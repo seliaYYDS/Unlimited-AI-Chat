@@ -1,4 +1,6 @@
 // Markdown 解析器 - 用于格式化AI输出内容
+import { SyntaxHighlighter } from './syntaxHighlighter.js'
+
 export class MarkdownParser {
     // 解析markdown文本为HTML
     static parse(markdown) {
@@ -12,9 +14,9 @@ export class MarkdownParser {
             const index = codeBlocks.length
             codeBlocks.push({
                 lang: lang || '',
-                code: code
+                code: code.trim()
             })
-            return `__CODEBLOCK_${index}__`
+            return `__MD_CODEBLOCK_${index}__`
         })
 
         // 第二步：提取并保护行内代码
@@ -22,7 +24,7 @@ export class MarkdownParser {
         html = html.replace(/`([^`]+)`/g, (match, code) => {
             const index = inlineCodes.length
             inlineCodes.push(code)
-            return `__INLINECODE_${index}__`
+            return `__MD_INLINECODE_${index}__`
         })
 
         // 第三步：处理表格
@@ -46,7 +48,34 @@ export class MarkdownParser {
         // 第七步：处理列表
         html = this.parseLists(html)
 
-        // 第八步：处理粗体和斜体
+        // 第八步：处理链接
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+
+        // 第九步：先恢复代码块和行内代码（避免被粗体/斜体处理破坏）
+        codeBlocks.forEach((block, index) => {
+            // 应用语法高亮
+            const highlightedCode = SyntaxHighlighter.highlight(block.code, block.lang)
+            const langAttr = block.lang ? ` class="language-${block.lang}"` : ''
+            const copyButton = `<button class="copy-button" onclick="copyCodeBlock(this)">复制</button>`
+
+            // 添加语言标签栏
+            const langLabel = block.lang
+                ? `<div class="code-block-header"><span class="code-block-language">${block.lang}</span></div>`
+                : ''
+
+            const blockHtml = `<div class="code-block-container">${langLabel}${copyButton}<pre><code${langAttr}>${highlightedCode}</code></pre></div>`
+            const placeholder = `__MD_CODEBLOCK_${index}__`
+            html = html.split(placeholder).join(blockHtml)
+        })
+
+        inlineCodes.forEach((code, index) => {
+            const escapedCode = this.escapeHtml(code)
+            const inlineHtml = `<code>${escapedCode}</code>`
+            const placeholder = `__MD_INLINECODE_${index}__`
+            html = html.split(placeholder).join(inlineHtml)
+        })
+
+        // 第十步：处理粗体和斜体（现在代码已经恢复，不会影响占位符）
         html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
         html = html.replace(/___(.+?)___/g, '<strong><em>$1</em></strong>')
         html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -54,28 +83,25 @@ export class MarkdownParser {
         html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
         html = html.replace(/_(.+?)_/g, '<em>$1</em>')
 
-        // 第九步：处理链接
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-
-        // 第十步：处理段落
-        html = html.replace(/^([^<\n#*-].*?)(?=\n\n|\n*$)/gm, '<p>$1</p>')
-
-        // 第十一步：恢复代码块
-        codeBlocks.forEach((block, index) => {
-            const escapedCode = this.escapeHtml(block.code)
-            const langAttr = block.lang ? ` class="language-${block.lang}"` : ''
-            const blockHtml = `<pre><code${langAttr}>${escapedCode}</code></pre>`
-            const placeholder = new RegExp(`__CODEBLOCK_${index}__`, 'g')
-            html = html.replace(placeholder, blockHtml)
+        // 第十一步：处理段落（排除代码块占位符）
+        html = html.replace(/^([^<\n#*-].*?)(?=\n\n|\n*$)/gm, (match, content) => {
+            // 如果内容包含代码块占位符，不添加 p 标签
+            if (content.includes('__MD_CODEBLOCK_') || content.includes('__MD_INLINECODE_')) {
+                return content
+            }
+            return `<p>${content}</p>`
         })
 
-        // 第十二步：恢复行内代码
-        inlineCodes.forEach((code, index) => {
-            const escapedCode = this.escapeHtml(code)
-            const inlineHtml = `<code>${escapedCode}</code>`
-            const placeholder = new RegExp(`__INLINECODE_${index}__`, 'g')
-            html = html.replace(placeholder, inlineHtml)
-        })
+        // 验证：检查是否有未替换的占位符
+        const remainingCodeBlocks = html.match(/__MD_CODEBLOCK_\d+__/g)
+        const remainingInlineCodes = html.match(/__MD_INLINECODE_\d+__/g)
+        
+        if (remainingCodeBlocks || remainingInlineCodes) {
+            console.warn('[MarkdownParser] 警告：存在未替换的占位符', {
+                remainingCodeBlocks,
+                remainingInlineCodes
+            })
+        }
 
         return html
     }

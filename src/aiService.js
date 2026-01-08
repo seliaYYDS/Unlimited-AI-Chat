@@ -19,6 +19,7 @@ export class AIService {
                     'gpt-4', 'gpt-4-32k', 'gpt-4-turbo', 'gpt-4-vision-preview',
                     'gpt-3.5-turbo', 'gpt-3.5-turbo-16k', 'gpt-3.5-turbo-instruct'
                 ],
+                recommendedModels: ['gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini'],
                 authHeader: 'Bearer',
                 defaultModel: 'gpt-3.5-turbo',
                 supportsCustomModel: true
@@ -27,7 +28,8 @@ export class AIService {
                 name: 'DeepSeek',
                 baseUrl: 'https://api.deepseek.com/v1',
                 chatEndpoint: '/chat/completions',
-                models: ['deepseek-chat', 'deepseek-coder'],
+                models: ['deepseek-chat', 'deepseek-reasoner'],
+                recommendedModels: ['deepseek-chat'],
                 authHeader: 'Bearer',
                 defaultModel: 'deepseek-chat',
                 supportsCustomModel: true
@@ -36,27 +38,41 @@ export class AIService {
                 name: 'Anthropic',
                 baseUrl: 'https://api.anthropic.com/v1',
                 chatEndpoint: '/messages',
-                models: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
+                models: [
+                    'claude-3-haiku-20240307',
+                    'claude-3-5-sonnet-20241022',
+                    'claude-3-5-haiku-20241022',
+                    'claude-3-opus-20240229',
+                    'claude-3-sonnet-20240229'
+                ],
+                recommendedModels: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
                 authHeader: 'x-api-key',
-                defaultModel: 'claude-3-sonnet-20240229',
+                defaultModel: 'claude-3-5-sonnet-20241022',
                 supportsCustomModel: true
             },
             azure: {
                 name: 'Azure OpenAI',
                 baseUrl: 'https://{resource}.openai.azure.com/openai/deployments/{deployment}',
                 chatEndpoint: '/chat/completions',
-                models: ['gpt-4', 'gpt-35-turbo'],
+                models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-35-turbo'],
+                recommendedModels: ['gpt-4o', 'gpt-4o-mini'],
                 authHeader: 'api-key',
-                defaultModel: 'gpt-35-turbo',
+                defaultModel: 'gpt-4o',
                 supportsCustomModel: true
             },
             google: {
                 name: 'Google Gemini',
                 baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
                 chatEndpoint: '/models/{model}:generateContent',
-                models: ['gemini-pro', 'gemini-pro-vision'],
+                models: [
+                    'gemini-1.5-pro',
+                    'gemini-1.5-flash',
+                    'gemini-pro',
+                    'gemini-pro-vision'
+                ],
+                recommendedModels: ['gemini-1.5-pro', 'gemini-1.5-flash'],
                 authHeader: 'x-goog-api-key',
-                defaultModel: 'gemini-pro',
+                defaultModel: 'gemini-1.5-pro',
                 supportsCustomModel: true
             },
             siliconflow: {
@@ -246,28 +262,37 @@ export class AIService {
                 console.log(`[AI Service] 智能体无记忆内容，跳过注入`)
             }
 
+            // 合并设置：智能体级别的设置优先于全局设置
+            const mergedSettings = this.mergeAgentSettings(settings, request.agent)
+            console.log(`[AI Service] 使用设置:`, {
+                hasCustomApi: !!request.agent.useCustomApi,
+                apiType: mergedSettings.apiType,
+                apiEndpoint: mergedSettings.apiEndpoint ? '已配置' : '未配置',
+                modelName: mergedSettings.modelName
+            })
+
             let response
-            if (settings.apiType === 'network') {
-                if (settings.wordByWordOutput && request.onProgress) {
+            if (mergedSettings.apiType === 'network') {
+                if (mergedSettings.wordByWordOutput && request.onProgress) {
                     // 流式输出模式
-                    response = await this.sendToNetworkAPIStream(request.agent, request.message, enhancedConversationHistory, settings, request.onProgress)
+                    response = await this.sendToNetworkAPIStream(request.agent, request.message, enhancedConversationHistory, mergedSettings, request.onProgress)
                     thinkingTime = Date.now() - startTime
-                    response = this.addResponseMetadata(response, settings, thinkingTime)
+                    response = this.addResponseMetadata(response, mergedSettings, thinkingTime)
                 } else {
                     // 普通模式
-                    response = await this.sendToNetworkAPI(request.agent, request.message, enhancedConversationHistory, settings)
+                    response = await this.sendToNetworkAPI(request.agent, request.message, enhancedConversationHistory, mergedSettings)
                     thinkingTime = Date.now() - startTime
-                    response = this.addResponseMetadata(response, settings, thinkingTime)
+                    response = this.addResponseMetadata(response, mergedSettings, thinkingTime)
                 }
             } else {
-                if (settings.wordByWordOutput && request.onProgress) {
+                if (mergedSettings.wordByWordOutput && request.onProgress) {
                     // 本地模型的流式输出
-                    response = await this.sendToLocalModelStream(request.agent, request.message, enhancedConversationHistory, settings, request.onProgress)
+                    response = await this.sendToLocalModelStream(request.agent, request.message, enhancedConversationHistory, mergedSettings, request.onProgress)
                     thinkingTime = Date.now() - startTime
-                    response = this.addResponseMetadata(response, settings, thinkingTime)
+                    response = this.addResponseMetadata(response, mergedSettings, thinkingTime)
                 } else {
                     // 普通模式
-                    response = await this.sendToLocalModel(request.agent, request.message, enhancedConversationHistory, settings)
+                    response = await this.sendToLocalModel(request.agent, request.message, enhancedConversationHistory, mergedSettings)
                     thinkingTime = Date.now() - startTime
                     response = this.addResponseMetadata(response, settings, thinkingTime)
                 }
@@ -365,15 +390,22 @@ export class AIService {
                 throw new Error(errorInfo)
             }
 
-            // 处理流式响应 - 添加内存保护
+            // 处理流式响应 - 使用动态长度控制
             const reader = response.body.getReader()
             const decoder = new TextDecoder()
             let fullResponse = ''
             let fullReasoning = ''
             let buffer = ''
             let chunkCount = 0
-            const MAX_RESPONSE_LENGTH = 10000 // 限制响应长度
-            const MAX_CHUNKS = 1000 // 限制最大chunk数量
+            // 根据 maxTokens 计算最大响应长度（估算：1 token ≈ 4 字符）
+            const MAX_RESPONSE_LENGTH = (maxTokens || 2000) * 4
+            const MAX_CHUNKS = 10000 // 大幅增加 chunk 数量限制
+
+            console.log(`[AI Service] 流式输出长度控制:`, {
+                maxTokens,
+                MAX_RESPONSE_LENGTH,
+                MAX_CHUNKS
+            })
 
             let lastUpdateTime = 0
             const UPDATE_INTERVAL = 50 // 最小更新间隔(ms)
@@ -446,8 +478,9 @@ export class AIService {
                                 if (parsed.content && fullResponse.length < MAX_RESPONSE_LENGTH) {
                                     fullResponse += parsed.content
                                 }
-                                // 处理思考内容
-                                if (parsed.reasoning_content) {
+                                // 处理思考内容（限制为总长度的 30%）
+                                const MAX_REASONING_LENGTH = Math.floor(MAX_RESPONSE_LENGTH * 0.3)
+                                if (parsed.reasoning_content && fullReasoning.length < MAX_REASONING_LENGTH) {
                                     fullReasoning += parsed.reasoning_content
                                 }
 
@@ -493,6 +526,15 @@ export class AIService {
                 `__REASONING_START__${fullReasoning}__REASONING_END__${fullResponse}` : 
                 fullResponse
             onProgress(combinedResponse)
+
+            console.log(`[AI Service] 流式输出完成:`, {
+                总chunk数: chunkCount,
+                响应长度: fullResponse.length,
+                思考内容长度: fullReasoning.length,
+                总长度: combinedResponse.length,
+                最大限制: MAX_RESPONSE_LENGTH,
+                令牌数: totalTokens
+            })
 
             // 返回响应和令牌数
             return {
@@ -767,22 +809,172 @@ export class AIService {
     }
 
     // 构建请求体
-    buildRequestBody(agent, message, conversationHistory, settings, provider, enableTools = false) {
-        const { modelName, temperature, maxTokens } = settings
-        const messages = this.buildMessages(agent, message, conversationHistory, settings)
 
-        // 确保数值参数为数字类型
-        const tempValue = Number(temperature) || 0.7
-        const maxTokensValue = Number(maxTokens) || 1000
+        buildRequestBody(agent, message, conversationHistory, settings, provider, enableTools = false) {
 
-        // 基础请求体
-        let requestBody = {
-            model: modelName,
-            messages: messages,
-            temperature: tempValue,
-            max_tokens: maxTokensValue,
-            stream: false
-        }
+            const { modelName, temperature, maxTokens } = settings
+
+    
+
+            const messages = this.buildMessages(agent, message, conversationHistory, settings)
+
+    
+
+            // 确保数值参数为数字类型
+
+            const tempValue = Number(temperature) || 0.7
+
+            
+
+            // 智能 maxTokens 调整机制
+
+            let maxTokensValue = Number(maxTokens) || 2000
+
+            
+
+            // 获取模型的上下文窗口大小
+
+            const modelContextWindow = this.getModelContextWindow(modelName)
+
+            
+
+            // 计算当前请求的实际 token 消耗
+
+            let requestTokens = 0
+
+            messages.forEach(msg => {
+
+                requestTokens += this.estimateTokens(msg.content || '')
+
+            })
+
+            
+
+            // 计算可用于输出的 token 预算（保留 30% 缓冲）
+
+            const outputTokenBudget = Math.floor((modelContextWindow - requestTokens) * 0.7)
+
+            
+
+            // 如果用户设置的 maxTokens 超出模型的实际能力，自动调整
+
+            if (maxTokensValue > outputTokenBudget) {
+
+                console.log(`[AI Service] 智能调整 maxTokens:`, {
+
+                    用户设置: maxTokensValue,
+
+                    模型上下文窗口: modelContextWindow,
+
+                    请求token数: requestTokens,
+
+                    输出token预算: outputTokenBudget,
+
+                    调整后: outputTokenBudget
+
+                });
+
+                maxTokensValue = outputTokenBudget
+
+            }
+
+            
+
+            // 确保 maxTokens 不低于最小值 100
+
+            
+
+                        maxTokensValue = Math.max(100, maxTokensValue)
+
+            
+
+            
+
+            
+
+                        // 根据服务商限制 maxTokens 的最大值
+
+            
+
+                        const providerMaxTokensLimits = {
+
+            
+
+                            deepseek: 8192,
+
+            
+
+                            anthropic: 4096,
+
+            
+
+                            openai: 4096,
+
+            
+
+                            azure: 4096,
+
+            
+
+                            google: 8192
+
+            
+
+                        }
+
+            
+
+            
+
+            
+
+                        if (providerMaxTokensLimits[provider]) {
+
+            
+
+                            maxTokensValue = Math.min(maxTokensValue, providerMaxTokensLimits[provider])
+
+            
+
+                            console.log(`[AI Service] 应用服务商 maxTokens 限制:`, {
+
+            
+
+                                服务商: provider,
+
+            
+
+                                限制: providerMaxTokensLimits[provider],
+
+            
+
+                                最终值: maxTokensValue
+
+            
+
+                            })
+
+            
+
+                        }
+
+    
+
+            // 基础请求体
+
+            let requestBody = {
+
+                model: modelName,
+
+                messages: messages,
+
+                temperature: tempValue,
+
+                max_tokens: maxTokensValue,
+
+                stream: false
+
+            }
 
         // 如果启用了工具且智能体有网络搜索技能，添加工具定义
         if (enableTools && agent.skills && agent.skills.includes('webSearch')) {
@@ -1246,14 +1438,68 @@ export class AIService {
         // 获取上下文长度限制，如果没有提供settings则使用默认值50
         const maxHistoryLength = settings && settings.contextLength ? settings.contextLength : 50
         
+        // 获取最大输出 token 数，用于计算上下文预算
+        const maxOutputTokens = settings && settings.maxTokens ? settings.maxTokens : 2000
+        
+        // 估算模型的上下文窗口大小（保守估计）
+        // OpenAI GPT-4: 128K, GPT-3.5: 16K, DeepSeek: 128K, Claude: 200K
+        const modelContextWindow = this.getModelContextWindow(settings?.modelName || 'gpt-3.5-turbo')
+        
+        // 计算可用的上下文 token 预算（保留 20% 缓冲）
+        const contextBudget = Math.floor(modelContextWindow * 0.8) - maxOutputTokens
+        
+        // 估算系统提示词的 token 数
+        const systemPromptTokens = agent.prompt ? this.estimateTokens(agent.prompt) : 0
+        
+        // 估算当前消息的 token 数
+        const currentMessageTokens = this.estimateTokens(currentMessage)
+        
+        // 计算可用于历史消息的 token 预算
+        const historyTokenBudget = contextBudget - systemPromptTokens - currentMessageTokens
+        
         // 限制对话历史长度，只取最近的消息
-        const recentHistory = conversationHistory.slice(-maxHistoryLength)
+        let recentHistory = conversationHistory.slice(-maxHistoryLength)
+        
+        // 如果历史消息的 token 数超出预算，进行智能截断
+        let historyTokens = 0
+        const truncatedHistory = []
+        
+        // 从最新的消息开始倒序遍历，确保保留最新的对话
+        for (let i = recentHistory.length - 1; i >= 0; i--) {
+            const msg = recentHistory[i]
+            const msgTokens = this.estimateTokens(msg.content || '')
+            
+            // 如果添加这条消息会超出预算，跳过
+            if (historyTokens + msgTokens > historyTokenBudget) {
+                continue
+            }
+            
+            truncatedHistory.unshift(msg)
+            historyTokens += msgTokens
+        }
+        
+        recentHistory = truncatedHistory
 
-        // 调试输出：显示截断前后的历史消息数量
-        if (conversationHistory.length > maxHistoryLength) {
-            console.log(`[AI Service] 消息历史已截断: ${conversationHistory.length} -> ${recentHistory.length} 条消息 (限制: ${maxHistoryLength})`);
+        // 调试输出：显示截断前后的历史消息数量和 token 数
+        if (conversationHistory.length > recentHistory.length) {
+            console.log(`[AI Service] 消息历史已截断:`, {
+                原始消息数: conversationHistory.length,
+                截断后消息数: recentHistory.length,
+                消息数限制: maxHistoryLength,
+                模型上下文窗口: modelContextWindow,
+                上下文预算: contextBudget,
+                系统提示词token: systemPromptTokens,
+                当前消息token: currentMessageTokens,
+                历史消息token预算: historyTokenBudget,
+                实际历史消息token: historyTokens
+            });
         } else {
-            console.log(`[AI Service] 消息历史未截断: ${conversationHistory.length} 条消息 (限制: ${maxHistoryLength})`);
+            console.log(`[AI Service] 消息历史未截断:`, {
+                消息数: conversationHistory.length,
+                消息数限制: maxHistoryLength,
+                实际历史消息token: historyTokens,
+                历史消息token预算: historyTokenBudget
+            });
         }
 
         const messages = []
@@ -1410,11 +1656,7 @@ export class AIService {
 
         // 如果没有令牌数，进行估算
         if (!tokens) {
-            // 计算令牌数（简单估算：1个汉字≈2个token，1个英文单词≈1.3个token）
-            const chineseChars = (responseText.match(/[\u4e00-\u9fa5]/g) || []).length
-            const englishWords = (responseText.match(/\b[a-zA-Z]+\b/g) || []).length
-            const otherChars = responseText.length - chineseChars - englishWords
-            tokens = Math.round(chineseChars * 2 + englishWords * 1.3 + otherChars * 0.5)
+            tokens = this.estimateTokens(responseText)
         }
 
         // 创建元数据对象
@@ -2348,5 +2590,140 @@ ${text}
             return Math.round(255 * color).toString(16).padStart(2, '0')
         }
         return `#${f(0)}${f(8)}${f(4)}`
+    }
+
+    // 估算文本的 token 数（改进版）
+    estimateTokens(text) {
+        if (!text || typeof text !== 'string') {
+            return 0
+        }
+
+        // 更精确的 token 估算算法
+        // 基于实际统计：中文平均 1.5-2 tokens/字符，英文平均 0.75 tokens/单词
+        const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length
+        const englishWords = (text.match(/\b[a-zA-Z]+\b/g) || []).length
+        const numbers = (text.match(/\b\d+\b/g) || []).length
+        const punctuation = (text.match(/[^\w\s]/g) || []).length
+        const whitespace = (text.match(/\s/g) || []).length
+        const otherChars = text.length - chineseChars - englishWords * 5 - numbers * 3 - punctuation - whitespace
+
+        // 计算估算的 token 数
+        const chineseTokens = chineseChars * 1.8
+        const englishTokens = englishWords * 1.3
+        const numberTokens = numbers * 1.5
+        const punctuationTokens = punctuation * 0.5
+        const whitespaceTokens = whitespace * 0.3
+        const otherTokens = otherChars * 0.5
+
+        return Math.round(chineseTokens + englishTokens + numberTokens + punctuationTokens + whitespaceTokens + otherTokens)
+    }
+
+    // 获取模型的上下文窗口大小
+    getModelContextWindow(modelName) {
+        const model = modelName.toLowerCase()
+        
+        // GPT-4 系列
+        if (model.includes('gpt-4-turbo') || model.includes('gpt-4-1106')) {
+            return 128000
+        } else if (model.includes('gpt-4-32k')) {
+            return 32768
+        } else if (model.includes('gpt-4')) {
+            return 8192
+        }
+        
+        // GPT-3.5 系列
+        if (model.includes('gpt-3.5-turbo-16k')) {
+            return 16384
+        } else if (model.includes('gpt-3.5-turbo')) {
+            return 16384
+        }
+        
+        // DeepSeek 系列
+        if (model.includes('deepseek')) {
+            return 128000
+        }
+        
+        // Claude 系列
+        if (model.includes('claude-3-opus')) {
+            return 200000
+        } else if (model.includes('claude-3-sonnet')) {
+            return 200000
+        } else if (model.includes('claude-3-haiku')) {
+            return 200000
+        } else if (model.includes('claude-2')) {
+            return 100000
+        }
+        
+        // Gemini 系列
+        if (model.includes('gemini-pro')) {
+            return 32768
+        }
+        
+        // Qwen 系列（通义千问）
+        if (model.includes('qwen')) {
+            if (model.includes('128k') || model.includes('long')) {
+                return 128000
+            } else if (model.includes('32k')) {
+                return 32768
+            } else {
+                return 8192
+            }
+        }
+        
+        // GLM 系列（智谱）
+        if (model.includes('glm')) {
+            return 128000
+        }
+        
+        // Kimi 系列（月之暗面）
+        if (model.includes('kimi')) {
+            return 128000
+        }
+        
+        // 硅基流动模型
+        if (model.includes('siliconflow') || model.includes('/')) {
+            // 默认支持 128K 上下文
+            return 128000
+        }
+        
+        // 默认值（保守估计）
+        return 8192
+    }
+
+    // 合并智能体设置和全局设置
+    mergeAgentSettings(globalSettings, agent) {
+        // 如果智能体没有单独设置，直接返回全局设置
+        if (!agent || !agent.useCustomApi) {
+            return { ...globalSettings }
+        }
+
+        // 智能体有单独设置，合并设置（智能体设置优先）
+        const merged = { ...globalSettings }
+
+        // 如果智能体配置了自定义 API，使用智能体的配置
+        if (agent.useCustomApi) {
+            // 使用智能体的自定义 API 配置
+            merged.apiType = 'network'
+            
+            // 根据服务商自动设置默认端点
+            const endpointMap = {
+                openai: 'https://api.openai.com/v1/chat/completions',
+                deepseek: 'https://api.deepseek.com/v1/chat/completions',
+                anthropic: 'https://api.anthropic.com/v1/messages',
+                azure: '',
+                google: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent'
+            }
+            
+            // API 端点优先使用智能体的配置，否则根据服务商自动设置
+            merged.apiEndpoint = agent.customApiEndpoint || endpointMap[agent.customApiProvider] || globalSettings.apiEndpoint
+            
+            // API 密钥优先使用智能体的配置，否则使用全局设置
+            merged.apiKey = agent.customApiKey || globalSettings.apiKeys?.[agent.customApiProvider] || globalSettings.apiKey
+            
+            // 模型名称优先使用智能体的配置，否则使用全局设置
+            merged.modelName = agent.customModelName || globalSettings.modelName
+        }
+
+        return merged
     }
 }

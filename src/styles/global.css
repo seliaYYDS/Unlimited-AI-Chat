@@ -82,6 +82,10 @@ ul, ol {
   list-style: initial;
   margin: 8px 0;
   padding-left: 24px;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .message-content ul {
@@ -96,6 +100,10 @@ ul, ol {
   margin: 6px 0;
   line-height: 1.6;
   color: var(--text-primary);
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* 确保有序列表正确显示 */
@@ -111,6 +119,8 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
   overflow: hidden;
   font-size: var(--text-base);
+  min-width: 0;
+  max-width: 100vw;
 }
 
 /* 应用布局 */
@@ -121,7 +131,8 @@ body {
   position: relative;
   overflow: hidden;
   min-height: 100vh;
-  min-width: 100vw;
+  min-width: 0;
+  max-width: 100vw;
 }
 
 /* 主题切换按钮 */
@@ -420,6 +431,9 @@ body {
   flex-direction: column;
   background: var(--bg-primary);
   position: relative;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 /* 全局按钮网格 */
@@ -746,20 +760,25 @@ body {
   overflow-y: auto;
   padding: 0 16px 16px 16px; /* 只保留左右和底部padding */
   background: var(--bg-primary);
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
 }
 
 .messages-container {
   max-width: 100%;
   margin: 0 auto;
   padding: 0 16px;
+  overflow: hidden;
 }
 
 .message {
   display: flex;
   gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   animation: messageSlideIn 0.3s ease;
-
+  max-width: 100%;
+  min-width: 0;
 }
 
 .message.user {
@@ -794,6 +813,7 @@ body {
   flex: 1;
   max-width: min(70%, 600px);
   min-width: 0;
+  overflow: hidden;
 }
 
 .message.user .message-content-wrapper {
@@ -808,14 +828,16 @@ body {
   background: transparent;
   border: 1px solid var(--border-light);
   color: var(--text-primary);
-  line-height: 1.5;
+  line-height: 1.4;
   word-wrap: break-word;
   word-break: break-word;
   white-space: pre-wrap;
   overflow-wrap: break-word;
   animation: messageAppear 0.3s ease;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .message.user .message-content {
@@ -889,6 +911,9 @@ body {
   padding: 20px 24px;
   border-top: 1px solid var(--border-color);
   background: var(--bg-primary);
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
 }
 
 /* 一体化输入框设计 */
@@ -897,6 +922,8 @@ body {
   margin: 0 auto;
   position: relative;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0;
+  width: 100%;
 }
 
 .input-container {
@@ -909,6 +936,9 @@ body {
   border-radius: 20px;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
 }
 
 .input-wrapper.focused .input-container {
@@ -1092,6 +1122,7 @@ body {
   font-family: inherit;
   transition: all 0.3s ease;
   order: 2;
+  min-width: 0;
 }
 
 .chat-input::placeholder {
@@ -1764,6 +1795,14 @@ body {
 
 /* 特殊字符和Markdown样式处理 */
 .message-content {
+  /* 确保所有内联元素都不会超出容器 */
+  * {
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
   /* 处理代码块 */
   code {
     background: var(--bg-tertiary);
@@ -1774,45 +1813,209 @@ body {
     color: var(--text-primary);
     border: 1px solid var(--border-light);
     line-height: 1.4;
+    max-width: 100%;
+    word-break: break-all;
+    overflow-wrap: break-word;
   }
 
   /* 处理内联代码 */
-  pre {
-    background: var(--bg-tertiary);
-    padding: 12px 16px;
-    border-radius: 8px;
-    overflow-x: auto;
+  .code-block-container {
+    position: relative;
     margin: 12px 0;
-    font-family: var(--font-mono);
-    font-size: 0.85em;
-    line-height: 1.4;
+    border-radius: 8px;
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow);
-    white-space: pre-wrap;
-    word-wrap: break-word;
+    overflow: hidden;
   }
 
-  pre code {
-    background: none;
+  /* 代码块语言标签栏 */
+  .code-block-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.05);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  /* 代码块样式 */
+  .code-block-container pre {
+    background: var(--bg-tertiary);
     padding: 0;
+    margin: 0;
+    border-radius: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    line-height: 1;
+    border: none;
+    box-shadow: none;
+    white-space: pre;
+    word-wrap: normal;
+    word-break: normal;
+    overflow-wrap: normal;
+    position: relative;
+    max-width: 100%;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    display: block;
+  }
+
+  .code-block-language {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* 代码块滚动条样式 */
+  .code-block-container pre::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .code-block-container pre::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 4px;
+  }
+
+  .code-block-container pre::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+  }
+
+  .code-block-container pre::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+  }
+
+  .code-block-container pre code {
+    background: none;
+    padding: 12px 16px;
     border: none;
     border-radius: 0;
     box-shadow: none;
     font-family: inherit;
     font-size: inherit;
-    line-height: inherit;
+    line-height: 1.5;
+    display: inline-block;
+    white-space: pre;
+    word-wrap: normal;
+    word-break: normal;
+    overflow-wrap: normal;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* 代码块内的段落样式 */
+  .code-block-container pre p {
+    margin: 0;
+    line-height: 1.5;
+    color: inherit;
+  }
+
+  /* 语法高亮样式 */
+  .code-block-container pre .syntax-comment {
+    color: #6a9955;
+    font-style: italic;
+  }
+
+  .code-block-container pre .syntax-string {
+    color: #ce9178;
+  }
+
+  .code-block-container pre .syntax-number {
+    color: #b5cea8;
+  }
+
+  .code-block-container pre .syntax-keyword {
+    color: #569cd6;
+    font-weight: 600;
+  }
+
+  .code-block-container pre .syntax-builtin {
+    color: #4ec9b0;
+  }
+
+  .code-block-container pre .syntax-function {
+    color: #dcdcaa;
+  }
+
+  .code-block-container pre .syntax-operator {
+    color: #d4d4d4;
+  }
+
+  .code-block-container pre .syntax-class {
+    color: #4ec9b0;
+    font-weight: 600;
+  }
+
+  .code-block-container pre .syntax-identifier {
+    color: #9cdcfe;
+  }
+
+  /* 代码块复制按钮 */
+  .code-block-container .copy-button {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: var(--font-family);
+    z-index: 10;
+    opacity: 0.8;
+  }
+
+  .code-block-container .copy-button:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--primary-color);
+    opacity: 1;
+  }
+
+  pre .copy-button:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--primary-color);
+  }
+
+  pre .copy-button:active {
+    transform: scale(0.95);
+  }
+
+  pre .copy-button.copied {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
   }
 
   /* 处理粗体文本 */
   strong, b {
     font-weight: 700;
     color: var(--text-primary);
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   /* 处理斜体文本 */
   em, i {
     font-style: italic;
     color: var(--text-secondary);
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   /* 处理粗斜体文本 */
@@ -1840,6 +2043,10 @@ body {
     color: var(--text-secondary);
     font-style: italic;
     position: relative;
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   /* 处理列表 */
@@ -1883,12 +2090,17 @@ body {
     overflow: hidden;
     box-shadow: var(--shadow);
     border: 1px solid var(--border-color);
+    max-width: 100%;
+    table-layout: fixed;
   }
 
   th, td {
     border: 1px solid var(--border-color);
     padding: 8px 12px;
     text-align: left;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   th {
@@ -1940,6 +2152,11 @@ body {
     text-decoration: none;
     border-bottom: 1px dotted var(--primary-color);
     transition: all 0.2s ease;
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-all;
+    display: inline-block;
   }
 
   a:hover {
@@ -1952,9 +2169,18 @@ body {
 
   /* 处理段落 */
   p {
-    margin: 8px 0;
-    line-height: 1.6;
+    margin: 2px 0;
+    line-height: 1.4;
     color: var(--text-primary);
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  /* 相邻段落之间的间距 */
+  p + p {
+    margin-top: 4px;
   }
 
   /* 处理指令格式（如 {更改 好感度 50}） */
@@ -1969,6 +2195,14 @@ body {
     margin: 4px 0;
     display: inline-block;
     box-shadow: var(--shadow);
+  }
+
+  /* 处理图片 */
+  img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 8px 0;
   }
 
   /* 处理用户消息中的特殊字符 */
@@ -1990,10 +2224,90 @@ body {
     border-color: var(--border-color);
   }
 
-  pre {
-    background: var(--bg-tertiary);
-    border-color: var(--border-color);
-    box-shadow: var(--shadow);
+  /* 暗色主题下的语法高亮 */
+  pre .syntax-comment {
+    color: #6a9955;
+  }
+
+  pre .syntax-string {
+    color: #ce9178;
+  }
+
+  pre .syntax-number {
+    color: #b5cea8;
+  }
+
+  pre .syntax-keyword {
+    color: #569cd6;
+  }
+
+  pre .syntax-builtin {
+    color: #4ec9b0;
+  }
+
+  pre .syntax-function {
+    color: #dcdcaa;
+  }
+
+  pre .syntax-operator {
+    color: #d4d4d4;
+  }
+
+  pre .syntax-class {
+    color: #4ec9b0;
+    font-weight: 600;
+  }
+
+  pre .syntax-identifier {
+    color: #9cdcfe;
+  }
+
+  /* 暗色主题下的代码块语言标签 */
+  .code-block-container .code-block-header {
+    background: rgba(255, 255, 255, 0.05);
+    border-bottom-color: var(--border-color);
+  }
+
+  .code-block-container .code-block-language {
+    color: var(--text-secondary);
+  }
+
+  /* 暗色主题下的语法高亮 */
+  .code-block-container pre .syntax-comment {
+    color: #6a9955;
+  }
+
+  .code-block-container pre .syntax-string {
+    color: #ce9178;
+  }
+
+  .code-block-container pre .syntax-number {
+    color: #b5cea8;
+  }
+
+  .code-block-container pre .syntax-keyword {
+    color: #569cd6;
+  }
+
+  .code-block-container pre .syntax-builtin {
+    color: #4ec9b0;
+  }
+
+  .code-block-container pre .syntax-function {
+    color: #dcdcaa;
+  }
+
+  .code-block-container pre .syntax-operator {
+    color: #d4d4d4;
+  }
+
+  .code-block-container pre .syntax-class {
+    color: #4ec9b0;
+    font-weight: 600;
+  }
+
+  .code-block-container pre .syntax-identifier {
+    color: #9cdcfe;
   }
 
   blockquote {

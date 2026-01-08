@@ -252,9 +252,22 @@ export class StorageManager {
                 apiType: 'local', // 'local' 或 'network'
                 apiEndpoint: 'https://api.openai.com/v1/chat/completions',
                 apiKey: '',
+                // 多服务商 API Key 管理
+                apiKeys: {
+                    openai: '',
+                    deepseek: '',
+                    anthropic: '',
+                    azure: '',
+                    google: '',
+                    siliconflow: '',
+                    local: ''
+                },
+                // 当前选择的服务商
+                currentProvider: 'openai',
+                previousProvider: 'openai',
                 modelName: 'gpt-3.5-turbo',
                 temperature: 0.7,
-                maxTokens: 1000,
+                maxTokens: 2000, // 提升默认值，更适合现代大模型
                                 // 对话设置
                 wordByWordOutput: false,
                 showTokens: false,
@@ -338,7 +351,7 @@ export class StorageManager {
                 
                 // 确保数值参数为正确类型
                 parsedSettings.temperature = Number(parsedSettings.temperature) || 0.7
-                parsedSettings.maxTokens = Number(parsedSettings.maxTokens) || 1000
+                parsedSettings.maxTokens = Number(parsedSettings.maxTokens) || 2000
                 // 确保清理设置参数为正确类型
                 parsedSettings.autoClearDays = Number(parsedSettings.autoClearDays) || 3
                 // 确保高级渐变模式参数为正确类型
