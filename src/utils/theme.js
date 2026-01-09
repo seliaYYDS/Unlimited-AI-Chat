@@ -394,6 +394,42 @@ export class ThemeManager {
 
     }
 
+    
+
+    // 应用通知设置
+
+    if (settings.notificationBorderMode) {
+
+      document.body.setAttribute('data-notification-border', settings.notificationBorderMode)
+
+    }
+
+    
+
+    if (settings.notificationDuration !== undefined) {
+
+      root.style.setProperty('--notification-duration', settings.notificationDuration + 's')
+
+    }
+
+    
+
+    // 应用弹窗背景设置
+
+    if (settings.modalBackdropBlur !== undefined) {
+
+      root.style.setProperty('--modal-backdrop-blur', settings.modalBackdropBlur ? 'blur(' + (settings.modalBackdropBlurAmount || 8) + 'px)' : 'none')
+
+    }
+
+    
+
+    if (settings.modalBackdropOpacity !== undefined) {
+
+      root.style.setProperty('--modal-backdrop-opacity', settings.modalBackdropOpacity)
+
+    }
+
   }
   
 

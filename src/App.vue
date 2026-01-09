@@ -329,12 +329,23 @@
                   @click="generateImageForMessage(message)"
                   @touchend="handleImageGenerateTouch($event, message)"
                   :disabled="!isSDConfigured"
-                  :title="isSDConfigured ? '生成当前场景的图像' : '请先配置SD图像生成设置'"
+                  :title="isSDConfigured ? '生成当前场景的图像' : '请先配置AI图像生成设置'"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/>
                     <circle cx="8.5" cy="8.5" r="1.5"/>
                     <path d="M16.5 10.5l-4 4-2.5-3-3.5 4h12l-2.5-5z"/>
+                  </svg>
+                </button>
+                <!-- 展开图片按钮 - 当图片被隐藏时显示 -->
+                <button
+                  v-if="message.imageData && !message.imageExpanded"
+                  class="action-btn expand-img-btn"
+                  @click="toggleImageVisibility(message)"
+                  title="展开图片"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                   </svg>
                 </button>
               </div>
@@ -520,7 +531,7 @@
                         v-if="showImageGenerateButton"
                         class="action-btn skill-btn"
                         @click="handleImageGeneration"
-                        title="生成图像"
+                        :title="hasHiddenImage ? '展开图片' : '生成图像'"
                       >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -1058,124 +1069,245 @@
 
       <!-- SD图像生成设置 -->
       <div class="form-group">
-        <h4 class="section-title">Stable Diffusion 图像生成设置</h4>
+        <h4 class="section-title">AI 图像生成设置</h4>
       </div>
 
       <div class="form-group">
-        <label>SD WebUI Base URL</label>
-        <input
-          type="text"
-          class="form-control"
-          v-model="settings.sdBaseUrl"
-          placeholder="http://127.0.0.1:7860"
-        >
-        <div class="form-hint">
-          Stable Diffusion WebUI 的本地地址，默认端口为7860
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label>模型选择</label>
-        <div class="select-with-button">
-          <CustomSelect
-            v-model="settings.sdModel"
-            :options="[
-              { value: '', label: '请选择模型' },
-              ...sdModels.map(model => ({ value: model, label: model }))
-            ]"
-          />
-          <button class="refresh-btn" @click="refreshSDModels" :disabled="isRefreshingModels">
-            <span v-if="!isRefreshingModels">刷新</span>
-            <div v-else class="loading-spinner small"></div>
-          </button>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <CustomSlider
-          v-model="settings.sdSteps"
-          :min="1"
-          :max="50"
-          :step="1"
-          label="采样步数"
-          unit=""
-        />
-      </div>
-
-      <div class="form-group">
-        <label>负面提示词</label>
-        <textarea
-          class="form-control textarea"
-          v-model="settings.sdNegativePrompt"
-          placeholder="输入负面提示词，用逗号分隔"
-          rows="3"
-        ></textarea>
-      </div>
-
-      <div class="form-group">
-        <label>正面质量词</label>
-        <input
-          type="text"
-          class="form-control"
-          v-model="settings.sdPositivePrompt"
-          placeholder="best quality, masterpiece"
-        >
-      </div>
-
-      <div class="form-group">
-        <CustomSlider
-          v-model="settings.sdCfgScale"
-          :min="1"
-          :max="20"
-          :step="0.5"
-          label="CFG Scale"
-          unit=""
-        />
-      </div>
-
-      <div class="form-group">
-        <CustomSlider
-          v-model="settings.sdWidth"
-          :min="256"
-          :max="1024"
-          :step="64"
-          label="宽度"
-          unit="px"
-        />
-      </div>
-
-      <div class="form-group">
-        <CustomSlider
-          v-model="settings.sdHeight"
-          :min="256"
-          :max="1024"
-          :step="64"
-          label="高度"
-          unit="px"
-        />
-      </div>
-
-      <div class="form-group">
-        <label>采样方法</label>
+        <label>图像生成服务提供商</label>
         <CustomSelect
-          v-model="settings.sdSampler"
+          v-model="settings.imageGenProvider"
           :options="[
-            { value: 'Euler a', label: 'Euler a' },
-            { value: 'Euler', label: 'Euler' },
-            { value: 'LMS', label: 'LMS' },
-            { value: 'Heun', label: 'Heun' },
-            { value: 'DPM2', label: 'DPM2' },
-            { value: 'DPM2 a', label: 'DPM2 a' },
-            { value: 'DPM++ 2S a', label: 'DPM++ 2S a' },
-            { value: 'DPM++ 2M', label: 'DPM++ 2M' },
-            { value: 'DPM++ SDE', label: 'DPM++ SDE' },
-            { value: 'DPM++ 2M Karras', label: 'DPM++ 2M Karras' },
-            { value: 'DPM++ SDE Karras', label: 'DPM++ SDE Karras' },
-            { value: 'DDIM', label: 'DDIM' },
-            { value: 'PLMS', label: 'PLMS' }
+            { value: 'sdapi', label: 'SD API（Stable Diffusion API）' },
+            { value: 'network', label: '网络服务商（如硅基流动）' }
           ]"
         />
+        <div class="form-hint">
+          选择图像生成服务提供商
+        </div>
       </div>
+
+      <!-- SD API 配置 -->
+      <template v-if="settings.imageGenProvider === 'sdapi'">
+        <div class="form-group">
+          <label>SD API URL</label>
+          <input
+            type="text"
+            class="form-control"
+            v-model="settings.sdApiUrl"
+            placeholder="http://127.0.0.1:7860"
+          >
+          <div class="form-hint">
+            Stable Diffusion WebUI 的本地地址，默认端口为7860
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>模型选择</label>
+          <div class="select-with-button">
+            <CustomSelect
+              v-model="settings.sdModel"
+              :options="[
+                { value: '', label: '请选择模型' },
+                ...sdModels.map(model => ({ value: model, label: model }))
+              ]"
+            />
+            <button class="refresh-btn" @click="refreshSDModels" :disabled="isRefreshingModels">
+              <span v-if="!isRefreshingModels">刷新</span>
+              <div v-else class="loading-spinner small"></div>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <CustomSlider
+            v-model="settings.sdSteps"
+            :min="1"
+            :max="50"
+            :step="1"
+            label="采样步数"
+            unit=""
+          />
+        </div>
+
+        <div class="form-group">
+          <label>负面提示词</label>
+          <textarea
+            class="form-control textarea"
+            v-model="settings.sdNegativePrompt"
+            placeholder="输入负面提示词，用逗号分隔"
+            rows="3"
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>正面质量词</label>
+          <input
+            type="text"
+            class="form-control"
+            v-model="settings.sdPositivePrompt"
+            placeholder="best quality, masterpiece"
+          >
+        </div>
+
+        <div class="form-group">
+          <CustomSlider
+            v-model="settings.sdCfgScale"
+            :min="1"
+            :max="20"
+            :step="0.5"
+            label="CFG Scale"
+            unit=""
+          />
+        </div>
+
+        <div class="form-group">
+          <CustomSlider
+            v-model="settings.sdWidth"
+            :min="256"
+            :max="1024"
+            :step="64"
+            label="宽度"
+            unit="px"
+          />
+        </div>
+
+        <div class="form-group">
+          <CustomSlider
+            v-model="settings.sdHeight"
+            :min="256"
+            :max="1024"
+            :step="64"
+            label="高度"
+            unit="px"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>采样方法</label>
+          <CustomSelect
+            v-model="settings.sdSampler"
+            :options="[
+              { value: 'Euler a', label: 'Euler a' },
+              { value: 'Euler', label: 'Euler' },
+              { value: 'LMS', label: 'LMS' },
+              { value: 'Heun', label: 'Heun' },
+              { value: 'DPM2', label: 'DPM2' },
+              { value: 'DPM2 a', label: 'DPM2 a' },
+              { value: 'DPM++ 2S a', label: 'DPM++ 2S a' },
+              { value: 'DPM++ 2M', label: 'DPM++ 2M' },
+              { value: 'DPM++ SDE', label: 'DPM++ SDE' },
+              { value: 'DPM++ 2M Karras', label: 'DPM++ 2M Karras' },
+              { value: 'DPM++ SDE Karras', label: 'DPM++ SDE Karras' },
+              { value: 'DDIM', label: 'DDIM' },
+              { value: 'PLMS', label: 'PLMS' }
+            ]"
+          />
+        </div>
+      </template>
+
+      <!-- 网络服务商配置 -->
+      <template v-if="settings.imageGenProvider === 'network'">
+        <div class="form-group">
+          <label>网络服务商</label>
+          <CustomSelect
+            v-model="settings.networkImageProvider"
+            :options="[
+              { value: 'siliconflow', label: '硅基流动' }
+            ]"
+          />
+          <div class="form-hint">
+            选择网络图像生成服务提供商
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>API Key</label>
+          <input
+            type="password"
+            class="form-control"
+            v-model="settings.networkImageApiKey"
+            placeholder="输入 API Key"
+          >
+          <div class="form-hint">
+            网络服务商的 API 密钥
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>模型</label>
+          <CustomSelect
+            v-model="settings.networkImageModel"
+            :options="networkImageModels"
+          />
+          <div class="form-hint">
+            图像生成模型 ID
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>正面质量词</label>
+          <input
+            type="text"
+            class="form-control"
+            v-model="settings.sdPositivePrompt"
+            placeholder="best quality, masterpiece"
+          >
+        </div>
+
+        <div class="form-group">
+          <label>负面提示词</label>
+          <textarea
+            class="form-control textarea"
+            v-model="settings.sdNegativePrompt"
+            placeholder="输入负面提示词，用逗号分隔"
+            rows="3"
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <CustomSlider
+            v-model="settings.sdSteps"
+            :min="1"
+            :max="50"
+            :step="1"
+            label="采样步数"
+            unit=""
+          />
+        </div>
+
+        <div class="form-group">
+          <CustomSlider
+            v-model="settings.sdCfgScale"
+            :min="1"
+            :max="20"
+            :step="0.5"
+            label="CFG Scale"
+            unit=""
+          />
+        </div>
+
+        <div class="form-group">
+          <CustomSlider
+            v-model="settings.sdWidth"
+            :min="256"
+            :max="2048"
+            :step="64"
+            label="宽度"
+            unit="px"
+          />
+        </div>
+
+        <div class="form-group">
+          <CustomSlider
+            v-model="settings.sdHeight"
+            :min="256"
+            :max="2048"
+            :step="64"
+            label="高度"
+            unit="px"
+          />
+        </div>
+      </template>
       </Modal>
     </Teleport>
 
@@ -2767,84 +2899,154 @@
             </div>
             
             <div class="image-generator-controls">
-              <div class="control-row">
-                <div class="control-item">
-                  <CustomSlider
-                    v-model="settings.sdSteps"
-                    :min="1"
-                    :max="50"
-                    :step="1"
-                    label="采样步数"
-                    unit=""
-                    :disabled="imageGeneratorIsGenerating"
-                  />
+              <!-- SD API 配置 -->
+              <template v-if="settings.imageGenProvider === 'sdapi'">
+                <div class="control-row">
+                  <div class="control-item">
+                    <CustomSlider
+                      v-model="settings.sdSteps"
+                      :min="1"
+                      :max="50"
+                      :step="1"
+                      label="采样步数"
+                      unit=""
+                      :disabled="imageGeneratorIsGenerating"
+                    />
+                  </div>
+                  
+                  <div class="control-item">
+                    <CustomSlider
+                      v-model="settings.sdCfgScale"
+                      :min="1"
+                      :max="20"
+                      :step="0.5"
+                      label="CFG Scale"
+                      unit=""
+                      :disabled="imageGeneratorIsGenerating"
+                    />
+                  </div>
                 </div>
                 
-                <div class="control-item">
-                  <CustomSlider
-                    v-model="settings.sdCfgScale"
-                    :min="1"
-                    :max="20"
-                    :step="0.5"
-                    label="CFG Scale"
-                    unit=""
-                    :disabled="imageGeneratorIsGenerating"
-                  />
-                </div>
-              </div>
-              
-              <div class="control-row">
-                <div class="control-item">
-                  <CustomSlider
-                    v-model="settings.sdWidth"
-                    :min="256"
-                    :max="2048"
-                    :step="64"
-                    label="宽度"
-                    unit="px"
-                    :disabled="imageGeneratorIsGenerating"
-                  />
-                </div>
-                
-                <div class="control-item">
-                  <CustomSlider
-                    v-model="settings.sdHeight"
-                    :min="256"
-                    :max="2048"
-                    :step="64"
-                    label="高度"
-                    unit="px"
-                    :disabled="imageGeneratorIsGenerating"
-                  />
-                </div>
-              </div>
-              
-              <div class="control-row">
-                <div class="control-item">
-                  <label>模型</label>
-                  <CustomSelect
-                    v-model="settings.sdModel"
-                    :options="sdModels.map(model => ({ value: model, label: model }))"
-                    :disabled="imageGeneratorIsGenerating"
-                    placeholder="选择模型"
-                  />
+                <div class="control-row">
+                  <div class="control-item">
+                    <CustomSlider
+                      v-model="settings.sdWidth"
+                      :min="256"
+                      :max="2048"
+                      :step="64"
+                      label="宽度"
+                      unit="px"
+                      :disabled="imageGeneratorIsGenerating"
+                    />
+                  </div>
+                  
+                  <div class="control-item">
+                    <CustomSlider
+                      v-model="settings.sdHeight"
+                      :min="256"
+                      :max="2048"
+                      :step="64"
+                      label="高度"
+                      unit="px"
+                      :disabled="imageGeneratorIsGenerating"
+                    />
+                  </div>
                 </div>
                 
-                <div class="control-item">
-                  <label>采样方法</label>
-                  <CustomSelect
-                    v-model="settings.sdSampler"
-                    :options="[
-                      { value: 'Euler a', label: 'Euler a' },
-                      { value: 'Euler', label: 'Euler' },
-                      { value: 'LMS', label: 'LMS' },
-                      { value: 'DPM++ 2M Karras', label: 'DPM++ 2M Karras' },
-                      { value: 'DPM++ SDE Karras', label: 'DPM++ SDE Karras' }
-                    ]"
-                    :disabled="imageGeneratorIsGenerating"
-                  />
+                <div class="control-row">
+                  <div class="control-item">
+                    <label>模型</label>
+                    <CustomSelect
+                      v-model="settings.sdModel"
+                      :options="sdModels.map(model => ({ value: model, label: model }))"
+                      :disabled="imageGeneratorIsGenerating"
+                      placeholder="选择模型"
+                    />
+                  </div>
+                  
+                  <div class="control-item">
+                    <label>采样方法</label>
+                    <CustomSelect
+                      v-model="settings.sdSampler"
+                      :options="[
+                        { value: 'Euler a', label: 'Euler a' },
+                        { value: 'Euler', label: 'Euler' },
+                        { value: 'LMS', label: 'LMS' },
+                        { value: 'DPM++ 2M Karras', label: 'DPM++ 2M Karras' },
+                        { value: 'DPM++ SDE Karras', label: 'DPM++ SDE Karras' }
+                      ]"
+                      :disabled="imageGeneratorIsGenerating"
+                    />
+                  </div>
                 </div>
-              </div>
+              </template>
+
+              <!-- 网络服务商配置 -->
+              <template v-if="settings.imageGenProvider === 'network'">
+                <div class="control-row">
+                  <div class="control-item">
+                    <CustomSlider
+                      v-model="settings.sdSteps"
+                      :min="1"
+                      :max="50"
+                      :step="1"
+                      label="采样步数"
+                      unit=""
+                      :disabled="imageGeneratorIsGenerating"
+                    />
+                  </div>
+                  
+                  <div class="control-item">
+                    <CustomSlider
+                      v-model="settings.sdCfgScale"
+                      :min="1"
+                      :max="20"
+                      :step="0.5"
+                      label="CFG Scale"
+                      unit=""
+                      :disabled="imageGeneratorIsGenerating"
+                    />
+                  </div>
+                </div>
+                
+                <div class="control-row">
+                  <div class="control-item">
+                    <label>模型</label>
+                    <CustomSelect
+                      v-model="settings.networkImageModel"
+                      :options="networkImageModels"
+                      :disabled="imageGeneratorIsGenerating"
+                      placeholder="选择模型"
+                    />
+                  </div>
+                </div>
+
+                <div class="control-row">
+                  <div class="control-item">
+                    <CustomSlider
+                      v-model="settings.sdWidth"
+                      :min="256"
+                      :max="2048"
+                      :step="64"
+                      label="宽度"
+                      unit="px"
+                      :disabled="imageGeneratorIsGenerating"
+                    />
+                  </div>
+                  
+                  <div class="control-item">
+                    <CustomSlider
+                      v-model="settings.sdHeight"
+                      :min="256"
+                      :max="2048"
+                      :step="64"
+                      label="高度"
+                      unit="px"
+                      :disabled="imageGeneratorIsGenerating"
+                    />
+                  </div>
+                </div>
+              </template>
             </div>
             
             <div class="image-generator-actions">
@@ -4170,6 +4372,10 @@ export default {
                               // SD图像生成相关状态
 
       sdModels: [],
+      networkImageModels: [
+        { value: 'Qwen/Qwen-Image', label: 'Qwen Image' },
+        { value: 'Kwai-Kolors/Kolors', label: 'Kolors' }
+      ],
 
       isRefreshingModels: false,
 
@@ -4324,6 +4530,24 @@ export default {
     // 强制从 settings 同步 AI 设置（优先使用最新的 settings）
     this.syncAiSettingsFromSettings()
     console.log('App mounted, synced aiSettings:', this.aiSettings)
+
+    // 确保图像生成设置存在（兼容旧数据）
+    if (!this.settings.imageGenProvider) {
+      this.settings.imageGenProvider = 'sdapi'
+    }
+    if (!this.settings.sdApiUrl && this.settings.sdBaseUrl) {
+      // 兼容旧数据：将 sdBaseUrl 迁移到 sdApiUrl
+      this.settings.sdApiUrl = this.settings.sdBaseUrl
+    }
+    if (!this.settings.networkImageProvider) {
+      this.settings.networkImageProvider = 'siliconflow'
+    }
+    if (!this.settings.networkImageModel) {
+      this.settings.networkImageModel = 'stabilityai/stable-diffusion-xl-base-1.0'
+    }
+    if (!this.settings.imageSize) {
+      this.settings.imageSize = '1024x1024'
+    }
 
     // 确保数值设置正确类型
 
@@ -4538,7 +4762,13 @@ export default {
     },
 
     isSDConfigured() {
-      return this.settings.sdBaseUrl && this.settings.sdModel
+      if (this.settings.imageGenProvider === 'network') {
+        // 网络服务商需要 API Key 和模型
+        return this.settings.networkImageApiKey && this.settings.networkImageModel
+      } else {
+        // SD API 需要 API URL 和模型
+        return this.settings.sdApiUrl && this.settings.sdModel
+      }
     },
 
     // 模型选项
@@ -4581,6 +4811,12 @@ export default {
     // 是否显示图像生成按钮
     showImageGenerateButton() {
       return this.currentAgentUIComponents.includes('imageGenerateButton')
+    },
+
+    // 是否有隐藏的图片
+    hasHiddenImage() {
+      const lastAIMessage = [...this.conversations].reverse().find(msg => msg.role === 'assistant')
+      return lastAIMessage && lastAIMessage.hasImage && !lastAIMessage.imageExpanded
     }
   },
   methods: {
@@ -4683,10 +4919,19 @@ export default {
 
     // 处理图像生成
     handleImageGeneration() {
+      // 检查最后一条 AI 消息是否有隐藏的图片
+      const lastAIMessage = [...this.conversations].reverse().find(msg => msg.role === 'assistant')
+      if (lastAIMessage && lastAIMessage.hasImage && !lastAIMessage.imageExpanded) {
+        // 有隐藏的图片，直接展开
+        this.toggleImageVisibility(lastAIMessage)
+        return
+      }
+
+      // 没有隐藏的图片，生成新图片
       const prompt = prompt('请输入图像描述：')
       if (prompt && prompt.trim()) {
         if (!this.isSDConfigured) {
-          this.showNotification('Stable Diffusion未配置，请在设置中配置', 'danger')
+          this.showNotification('AI图像生成未配置，请在设置中配置', 'danger')
           return
         }
         this.generateImage(prompt)
@@ -4957,6 +5202,10 @@ export default {
           } catch (error) {
             console.error('加载图片失败:', error)
           }
+        }
+        // 确保 imageExpanded 属性存在，默认为 true
+        if (message.hasImage && message.imageExpanded === undefined) {
+          message.imageExpanded = true
         }
       }
     },
@@ -7347,8 +7596,8 @@ ${conversationText}
 
     // SD图像生成相关方法
     async refreshSDModels() {
-      if (!this.settings.sdBaseUrl) {
-        this.showNotification('请先配置SD WebUI Base URL', 'warning')
+      if (!this.settings.sdApiUrl) {
+        this.showNotification('请先配置SD API URL', 'warning')
         return
       }
 
@@ -7356,9 +7605,9 @@ ${conversationText}
 
       try {
         // 使用相对路径通过代理访问SD API
-        const apiUrl = this.settings.sdBaseUrl.includes('localhost') || this.settings.sdBaseUrl.includes('127.0.0.1')
+        const apiUrl = this.settings.sdApiUrl.includes('localhost') || this.settings.sdApiUrl.includes('127.0.0.1')
           ? '/sdapi/v1/sd-models'
-          : `${this.settings.sdBaseUrl}/sdapi/v1/sd-models`
+          : `${this.settings.sdApiUrl}/sdapi/v1/sd-models`
 
         const response = await fetch(apiUrl)
         if (!response.ok) {
@@ -7373,7 +7622,7 @@ ${conversationText}
         // 提供更详细的错误信息
         let errorMessage = `获取模型失败: ${error.message}`
         if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-          errorMessage = '无法连接到SD WebUI，请检查：\n1. SD WebUI是否正在运行\n2. Base URL地址是否正确\n3. 网络连接是否正常'
+          errorMessage = '无法连接到SD WebUI，请检查：\n1. SD WebUI是否正在运行\n2. API URL地址是否正确\n3. 网络连接是否正常'
         }
 
         this.showNotification(errorMessage, 'danger')
@@ -7385,7 +7634,7 @@ ${conversationText}
 
     async generateImageForMessage(message) {
       if (!this.isSDConfigured) {
-        this.showNotification('请先配置SD图像生成设置', 'warning')
+        this.showNotification('请先配置AI图像生成设置', 'warning')
         return
       }
 
@@ -7542,19 +7791,53 @@ ${conversationText}
     },
 
     async generateImageWithSD(prompt, onProgress) {
-      const { sdBaseUrl, sdModel, sdSteps, sdNegativePrompt, sdPositivePrompt, sdCfgScale, sdWidth, sdHeight, sdSampler } = this.settings
+      const { imageGenProvider, sdApiUrl, sdModel, sdSteps, sdNegativePrompt, sdPositivePrompt, sdCfgScale, sdWidth, sdHeight, sdSampler, networkImageProvider, networkImageApiKey, networkImageModel, imageSize } = this.settings
+
+      // 根据服务提供商选择不同的生成方式
+      if (imageGenProvider === 'network') {
+        // 使用网络服务商（如硅基流动）
+        return await this.generateImageWithNetwork(prompt, onProgress, {
+          provider: networkImageProvider,
+          apiKey: networkImageApiKey,
+          model: networkImageModel,
+          positivePrompt: sdPositivePrompt,
+          negativePrompt: sdNegativePrompt,
+          steps: sdSteps,
+          cfgScale: sdCfgScale,
+          width: sdWidth,
+          height: sdHeight
+        })
+      } else {
+        // 使用 SD API
+        return await this.generateImageWithSDApi(prompt, onProgress, {
+          apiUrl: sdApiUrl,
+          model: sdModel,
+          steps: sdSteps,
+          negativePrompt: sdNegativePrompt,
+          positivePrompt: sdPositivePrompt,
+          cfgScale: sdCfgScale,
+          width: sdWidth,
+          height: sdHeight,
+          sampler: sdSampler
+        })
+      }
+    },
+
+    // 使用 SD API 生成图像
+    async generateImageWithSDApi(prompt, onProgress, config) {
+      const { apiUrl, model, steps, negativePrompt, positivePrompt, cfgScale, width, height, sampler } = config
 
       // 构建完整的提示词
-      const fullPrompt = `${sdPositivePrompt}, ${prompt}`
+      const fullPrompt = `${positivePrompt}, ${prompt}`
 
       const requestBody = {
         prompt: fullPrompt,
-        negative_prompt: sdNegativePrompt,
-        steps: sdSteps,
-        cfg_scale: sdCfgScale,
-        width: sdWidth,
-        height: sdHeight,
-        sampler_name: sdSampler,
+        negative_prompt: negativePrompt,
+        steps: steps,
+        cfg_scale: cfgScale,
+        width: width,
+        height: height,
+        sampler_name: sampler,
         enable_hr: false,
         denoising_strength: 0.7,
         batch_size: 1,
@@ -7564,7 +7847,7 @@ ${conversationText}
         subseed_strength: 0,
         seed_resize_from_h: -1,
         seed_resize_from_w: -1,
-        sampler_index: sdSampler
+        sampler_index: sampler
       }
 
       try {
@@ -7572,12 +7855,12 @@ ${conversationText}
         onProgress(10)
 
         // 使用相对路径通过代理访问SD API
-        const apiUrl = sdBaseUrl.includes('localhost') || sdBaseUrl.includes('127.0.0.1')
+        const requestUrl = apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1')
           ? '/sdapi/v1/txt2img'
-          : `${sdBaseUrl}/sdapi/v1/txt2img`
+          : `${apiUrl}/sdapi/v1/txt2img`
 
         // 调用SD API
-        const response = await fetch(apiUrl, {
+        const response = await fetch(requestUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -7605,6 +7888,79 @@ ${conversationText}
         }
       } catch (error) {
         console.error('SD API调用失败:', error)
+        throw error
+      }
+    },
+
+    // 使用网络服务商（如硅基流动）生成图像
+    async generateImageWithNetwork(prompt, onProgress, config) {
+      const { provider, apiKey, model, positivePrompt, negativePrompt, steps, cfgScale, width, height } = config
+
+      // 构建完整的提示词
+      const fullPrompt = `${positivePrompt}, ${prompt}`
+
+      const requestBody = {
+        model: model,
+        prompt: fullPrompt,
+        negative_prompt: negativePrompt,
+        image_size: `${width}x${height}`,
+        steps: steps,
+        cfg_scale: cfgScale
+      }
+
+      try {
+        // 更新进度 - 开始生成
+        onProgress(10)
+
+        let apiUrl = ''
+        let headers = {
+          'Content-Type': 'application/json'
+        }
+
+        // 根据服务商配置 API 端点
+        if (provider === 'siliconflow') {
+          apiUrl = 'https://api.siliconflow.cn/v1/images/generations'
+          headers['Authorization'] = `Bearer ${apiKey}`
+        } else {
+          throw new Error(`不支持的网络服务商: ${provider}`)
+        }
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(requestBody)
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(`网络服务商API请求失败: ${response.status} - ${errorData.message || '未知错误'}`)
+        }
+
+        // 更新进度 - 正在处理
+        onProgress(50)
+
+        const data = await response.json()
+
+        // 更新进度 - 完成
+        onProgress(100)
+
+        // 返回图片 URL
+        if (data.data && data.data.length > 0) {
+          const imageUrl = data.data[0].url
+          // 将 URL 转换为 base64
+          const imageResponse = await fetch(imageUrl)
+          const blob = await imageResponse.blob()
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })
+        } else {
+          throw new Error('网络服务商API返回了空的图片数据')
+        }
+      } catch (error) {
+        console.error('网络服务商API调用失败:', error)
         throw error
       }
     },

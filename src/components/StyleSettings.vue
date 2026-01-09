@@ -626,58 +626,40 @@
 
       <div class="form-group">
         <label>字体大小</label>
-        <div class="option-buttons">
-          <button
-            v-for="size in fontSizeOptions"
-            :key="size.value"
-            :class="['option-btn', { active: settings.fontSize === size.value }]"
-            @click="updateSetting('fontSize', size.value)"
-          >
-            {{ size.label }}
-          </button>
-        </div>
+        <HorizontalSlider
+          :model-value="settings.fontSize"
+          :options="fontSizeOptions"
+          @update:model-value="updateSetting('fontSize', $event)"
+        />
       </div>
 
       <div class="form-group">
         <label>圆角大小</label>
-        <div class="option-buttons">
-          <button
-            v-for="radius in borderRadiusOptions"
-            :key="radius.value"
-            :class="['option-btn', { active: settings.borderRadius === radius.value }]"
-            @click="updateSetting('borderRadius', radius.value)"
-          >
-            {{ radius.label }}
-          </button>
-        </div>
+        <HorizontalSlider
+          :model-value="settings.borderRadius"
+          :options="borderRadiusOptions"
+          @update:model-value="updateSetting('borderRadius', $event)"
+        />
       </div>
 
       <div class="form-group">
         <label>消息气泡样式</label>
-        <div class="option-buttons">
-          <button
-            v-for="style in bubbleStyleOptions"
-            :key="style.value"
-            :class="['option-btn', { active: settings.messageBubbleStyle === style.value }]"
-            @click="updateSetting('messageBubbleStyle', style.value)"
-          >
-            {{ style.label }}
-          </button>
-        </div>
+        <CustomSelect
+          :model-value="settings.messageBubbleStyle"
+          :options="bubbleStyleOptions"
+          placeholder="选择消息气泡样式"
+          @update:model-value="updateSetting('messageBubbleStyle', $event)"
+        />
       </div>
 
       <div class="form-group">
         <label>聊天布局</label>
-        <div class="option-buttons">
-          <button
-            v-for="layout in chatLayoutOptions"
-            :key="layout.value"
-            :class="['option-btn', { active: settings.chatLayout === layout.value }]"
-            @click="updateSetting('chatLayout', layout.value)"
-          >
-            {{ layout.label }}
-          </button>
-        </div>
+        <CustomSelect
+          :model-value="settings.chatLayout"
+          :options="chatLayoutOptions"
+          placeholder="选择聊天布局"
+          @update:model-value="updateSetting('chatLayout', $event)"
+        />
       </div>
     </div>
 
@@ -698,16 +680,11 @@
 
       <div class="form-group">
         <label>动画速度</label>
-        <div class="option-buttons">
-          <button
-            v-for="speed in animationSpeedOptions"
-            :key="speed.value"
-            :class="['option-btn', { active: settings.animationSpeed === speed.value }]"
-            @click="updateSetting('animationSpeed', speed.value)"
-          >
-            {{ speed.label }}
-          </button>
-        </div>
+        <HorizontalSlider
+          :model-value="settings.animationSpeed"
+          :options="animationSpeedOptions"
+          @update:model-value="updateSetting('animationSpeed', $event)"
+        />
       </div>
     </div>
 
@@ -738,17 +715,15 @@
       </div>
 
       <div class="form-group">
-        <label>边框宽度</label>
-        <div class="option-buttons">
-          <button
-            v-for="width in dynamicIslandBorderWidthOptions"
-            :key="width.value"
-            :class="['option-btn', { active: settings.dynamicIslandBorderWidth === width.value }]"
-            @click="updateSetting('dynamicIslandBorderWidth', width.value)"
-          >
-            {{ width.label }}
-          </button>
-        </div>
+        <CustomSlider
+          :model-value="settings.dynamicIslandBorderWidth"
+          :min="0"
+          :max="10"
+          :step="0.5"
+          label="边框宽度"
+          unit="px"
+          @update:model-value="updateSetting('dynamicIslandBorderWidth', $event)"
+        />
       </div>
 
       <div class="form-group" v-if="settings.dynamicIslandBorderWidth > 0">
@@ -811,16 +786,11 @@
 
       <div class="form-group">
         <label>流光速度</label>
-        <div class="option-buttons">
-          <button
-            v-for="speed in shineSpeedOptions"
-            :key="speed.value"
-            :class="['option-btn', { active: settings.shineSpeed === speed.value }]"
-            @click="updateSetting('shineSpeed', speed.value)"
-          >
-            {{ speed.label }}
-          </button>
-        </div>
+        <HorizontalSlider
+          :model-value="settings.shineSpeed"
+          :options="shineSpeedOptions"
+          @update:model-value="updateSetting('shineSpeed', $event)"
+        />
       </div>
 
       <div class="form-group">
@@ -914,13 +884,15 @@ import { FontDetector } from '../utils/fontDetector.js'
 import CustomSelect from './CustomSelect.vue'
 import CustomSlider from './CustomSlider.vue'
 import CustomCheckbox from './CustomCheckbox.vue'
+import HorizontalSlider from './HorizontalSlider.vue'
 
 export default {
   name: 'StyleSettings',
   components: {
     CustomSelect,
     CustomSlider,
-    CustomCheckbox
+    CustomCheckbox,
+    HorizontalSlider
   },
   emits: ['update:settings', 'notify'],
   props: {

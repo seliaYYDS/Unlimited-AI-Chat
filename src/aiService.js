@@ -1805,13 +1805,13 @@ export class AIService {
             }
 
             const data = await response.json()
-            const content = this.parseResponseContent(data, provider)
+            const parsed = this.parseResponseContent(data, provider)
 
-            if (!content) {
+            if (!parsed || !parsed.content) {
                 throw new Error('无法解析推荐回复')
             }
 
-            return this.parseSuggestedReplies(content)
+            return this.parseSuggestedReplies(parsed.content)
         } catch (error) {
             console.error('生成推荐回复失败:', error)
             throw error
@@ -1952,8 +1952,8 @@ ${text}
             }
 
             const data = await response.json()
-            const content = this.parseResponseContent(data, provider)
-            return content.trim()
+            const parsed = this.parseResponseContent(data, provider)
+            return parsed.content ? parsed.content.trim() : ''
         } catch (error) {
             console.error('翻译失败:', error)
             throw error
@@ -2009,8 +2009,8 @@ ${text}
             }
 
             const data = await response.json()
-            const content = this.parseResponseContent(data, provider)
-            return content.trim()
+            const parsed = this.parseResponseContent(data, provider)
+            return parsed.content ? parsed.content.trim() : ''
         } catch (error) {
             console.error('扩写失败:', error)
             throw error
@@ -2067,8 +2067,8 @@ ${text}
             }
 
             const data = await response.json()
-            const content = this.parseResponseContent(data, provider)
-            return content.trim()
+            const parsed = this.parseResponseContent(data, provider)
+            return parsed.content ? parsed.content.trim() : ''
         } catch (error) {
             console.error('优化失败:', error)
             throw error

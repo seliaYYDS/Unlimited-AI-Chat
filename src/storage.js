@@ -277,8 +277,10 @@ export class StorageManager {
                 // 聊天记录清理设置
                 autoClearConversations: false, // 是否自动清理对话记录
                 autoClearDays: 3, // 自动清理多少天前的对话记录
-                // SD图像生成设置
-                sdBaseUrl: 'http://127.0.0.1:7860',
+                // AI图像生成设置
+                imageGenProvider: 'sdapi', // 'sdapi' 或 'network'
+                // SD API 配置
+                sdApiUrl: 'http://127.0.0.1:7860',
                 sdModel: '',
                 sdSteps: 20,
                 sdNegativePrompt: 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry',
@@ -287,6 +289,10 @@ export class StorageManager {
                 sdWidth: 600,
                 sdHeight: 1000,
                 sdSampler: 'DPM++ 2M Karras',
+                // 网络服务商配置
+                networkImageProvider: 'siliconflow', // 默认硅基流动
+                networkImageApiKey: '',
+                networkImageModel: 'Qwen/Qwen-Image', // 默认模型
                 // 样式设置
                 autoTheme: false, // 是否自动切换主题
                 theme: 'light', // 'light' 或 'dark'
