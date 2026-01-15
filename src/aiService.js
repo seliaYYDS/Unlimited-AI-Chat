@@ -2123,11 +2123,13 @@ ${text}
             }
 
             const data = await response.json()
-            const content = this.parseResponseContent(data, provider)
+            const parsed = this.parseResponseContent(data, provider)
 
-            if (!content) {
+            if (!parsed || !parsed.content) {
                 throw new Error('无法解析配色方案')
             }
+
+            const content = parsed.content
 
             // 尝试解析JSON
             try {
@@ -2244,11 +2246,13 @@ ${text}
             }
 
             const data = await response.json()
-            const content = this.parseResponseContent(data, provider)
+            const parsed = this.parseResponseContent(data, provider)
 
-            if (!content) {
+            if (!parsed || !parsed.content) {
                 throw new Error('无法解析高级配色方案')
             }
+
+            const content = parsed.content
 
             // 尝试解析JSON
             try {
@@ -2356,11 +2360,13 @@ ${text}
             }
 
             const data = await response.json()
-            const content = this.parseResponseContent(data, provider)
+            const parsed = this.parseResponseContent(data, provider)
 
-            if (!content) {
+            if (!parsed || !parsed.content) {
                 throw new Error('无法解析主题配色方案')
             }
+
+            const content = parsed.content
 
             // 尝试解析JSON
             try {
