@@ -435,19 +435,21 @@ export default {
 }
 
 .action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 8px 16px !important;
   border: none;
-  border-radius: var(--radius);
-  font-size: 14px;
+  border-radius: var(--radius) !important;
+  font-size: 14px !important;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--duration-fast) ease;
   user-select: none;
   position: relative;
   overflow: hidden;
+  width: auto !important;
+  height: auto !important;
 }
 
 .action-btn:focus-visible {

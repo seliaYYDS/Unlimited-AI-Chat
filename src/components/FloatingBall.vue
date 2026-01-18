@@ -505,7 +505,8 @@ export default {
   top: 60px;
   left: 0;
   width: 100%;
-  background: white;
+  background: var(--bg-primary, white);
+  border: 1px solid var(--border-color, #dee2e6);
   border-radius: 12px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
   overflow: hidden;
@@ -514,6 +515,9 @@ export default {
   transform: translateY(-10px);
   visibility: hidden;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  /* 确保子元素能访问到这些 CSS 变量 */
+  --primary-color: var(--primary-color, #ec4899);
+  --secondary-color: var(--secondary-color, #3b82f6);
 }
 
 /* 移动端工具下拉菜单特定样式 */
@@ -542,7 +546,7 @@ export default {
   border-radius: 8px;
   transition: all 0.2s ease;
   font-size: 14px;
-  color: #333;
+  color: var(--text-secondary, #6b7280);
   text-align: left;
   white-space: nowrap;
   user-select: none; /* 防止文本选择 */
@@ -552,7 +556,8 @@ export default {
 }
 
 .tool-item:hover {
-  background-color: #f5f5f5;
+  background-color: var(--bg-hover, #f5f5f5);
+  color: var(--text-primary, #333);
   transform: translateX(5px);
 }
 
@@ -565,7 +570,7 @@ export default {
 }
 
 .floating-ball.mobile .tool-item:active {
-  background-color: #e8e8e8;
+  background-color: var(--bg-hover, #e8e8e8);
   transform: translateX(3px);
 }
 
@@ -591,19 +596,6 @@ export default {
 /* 暗色主题适配 */
 .theme-dark .floating-ball {
   background: linear-gradient(135deg, var(--primary-color-dark, #c0399d), var(--secondary-color-dark, #2c6cb0));
-}
-
-.theme-dark .tools-dropdown {
-  background: #2d2d2d;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-}
-
-.theme-dark .tool-item {
-  color: #ddd;
-}
-
-.theme-dark .tool-item:hover {
-  background-color: #444;
 }
 
 /* 颜色模式适配 */

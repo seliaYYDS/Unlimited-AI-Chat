@@ -16,16 +16,28 @@
     <div :class="['sidebar', { 'collapsed': !sidebarExpanded }]">
       <div class="sidebar-header neon-glow">
         <h1 class="app-title" @click="toggleTavernMode">
-          <span class="title-text">Unlimited</span>
+          <span
+            class="title-text"
+            @mousedown="handleTitlePressStart"
+            @mouseup="handleTitlePressEnd"
+            @mouseleave="handleTitlePressEnd"
+            @touchstart="handleTitlePressStart"
+            @touchend="handleTitlePressEnd"
+          >Unlimited</span>
           <span class="title-dot"></span>
         </h1>
-        <button :class="['create-agent-btn', 'hover-scale', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="showCreateModal = true">
+        <button v-if="!isMultiChatMode" :class="['create-agent-btn', 'hover-scale', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="showCreateModal = true">
           <span class="btn-icon">+</span>
           创建新智能体
         </button>
+        <button v-else :class="['create-chat-btn', 'hover-scale', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="createChatSession()">
+          <span class="btn-icon">+</span>
+          创建新对话
+        </button>
       </div>
 
-      <div class="agents-list">
+      <!-- 智能体列表 -->
+      <div v-if="!isMultiChatMode" class="agents-list">
                 <div
           v-for="(agent, index) in agents"
           :key="agent.id"
@@ -54,7 +66,29 @@
             <div class="agent-name">{{ agent.name }}</div>
             <div class="agent-scenario">{{ agent.scenario || '无场景设置' }}</div>
           </div>
-          <div class="agent-actions">
+
+          <!-- 多对话提示 -->
+          <div v-if="currentAgent?.id === agent.id && !isMultiChatMode" class="multi-chat-hint">
+            <button class="multi-chat-btn" @click.stop="enterMultiChatMode" title="打开多对话模式">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/>
+              </svg>
+              <span>多对话</span>
+            </button>
+            <button class="agent-btn edit" @click.stop="editAgent(agent)" title="编辑">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+            </button>
+            <button class="agent-btn delete" @click.stop="showDeleteConfirm(agent)" title="删除">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- 普通模式的操作按钮 -->
+          <div v-else class="agent-actions">
             <button class="agent-btn edit" @click.stop="editAgent(agent)" title="编辑">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
@@ -72,6 +106,44 @@
           <div class="empty-icon">🤖</div>
           <h3>暂无智能体</h3>
           <p>点击上方按钮创建第一个智能体</p>
+        </div>
+      </div>
+
+      <!-- 对话列表（多对话模式） -->
+      <div v-else class="chat-sessions-list">
+        <div class="sessions-header">
+          <button class="exit-multi-chat-btn" @click="exitMultiChatMode" title="退出多对话模式">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+            </svg>
+          </button>
+          <span class="sessions-title">{{ currentAgent?.name }} 的对话</span>
+        </div>
+        <div
+          v-for="session in chatSessions"
+          :key="session.id"
+          :class="['session-item',
+            { active: currentChatSession?.id === session.id },
+            'hover-scale',
+            'hover-glow-enhanced']"
+          @click="switchChatSession(session.id)"
+        >
+          <div class="session-info">
+            <div class="session-name">{{ session.name }}</div>
+            <div class="session-time">{{ formatSessionTime(session.updatedAt) }}</div>
+          </div>
+          <div class="session-actions">
+            <button class="session-btn edit" @click.stop="showRenameSessionModal(session)" title="重命名对话">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+            </button>
+            <button class="session-btn delete" @click.stop="deleteChatSession(session.id)" title="删除对话">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -152,30 +224,54 @@
           </div>
           
           <div class="dynamic-island-controls" :class="{ 'show-text': showDynamicIslandContent }">
-            <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="exportCurrentAgent" :disabled="!currentAgent" title="导出智能体">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-              </svg>
-              <span v-if="showDynamicIslandContent" class="btn-text">导出</span>
-            </button>
-            <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="showManualCleanupConfirm" title="清理聊天记录">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M15 16h4v2h-4zm0-8h7v2h-6zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zM14 5h-3l-1-1H6L5 5H2v2h12z"/>
-              </svg>
-              <span v-if="showDynamicIslandContent" class="btn-text">清理</span>
-            </button>
-            <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="openAgentMemoryModal(currentAgent)" :disabled="!currentAgent" title="智能体记忆">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-              </svg>
-              <span v-if="showDynamicIslandContent" class="btn-text">记忆</span>
-            </button>
-            <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="summarizeConversation" :disabled="!currentAgent || conversations.length === 0 || isSummarizing" title="总结对话并添加到记忆">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 4v1.38c-.83-.33-1.72-.5-2.61-.5-1.79 0-3.58.68-4.95 2.05l3.33 3.33h1.11v1.11c.86.86 1.98 1.31 3.11 1.36V15H6v3c0 1.1.9 2 2 2h10c1.66 0 3-1.34 3-3V4H9zm-1.11 6.41V8.26H5.61L4.57 7.22a5.07 5.07 0 0 1 1.82-.34c1.34 0 2.59.52 3.54 1.46l1.41 1.41-.2.2a2.7 2.7 0 0 0-.79 2.31H7.89zM12 11.39c0-.67.26-1.3.73-1.77l1.41-1.41a2.5 2.5 0 0 1 3.54 0l1.41 1.41c.47.47.73 1.1.73 1.77v2.22h-8.82v-2.22z"/>
-              </svg>
-              <span v-if="showDynamicIslandContent" class="btn-text">总结</span>
-            </button>
+            <!-- 多对话模式按钮 -->
+            <template v-if="isMultiChatMode">
+              <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="exportCurrentChatSession" title="导出对话">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+                <span v-if="showDynamicIslandContent" class="btn-text">导出</span>
+              </button>
+              <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="clearCurrentChatSession" title="清理对话">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15 16h4v2h-4zm0-8h7v2h-6zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zM14 5h-3l-1-1H6L5 5H2v2h12z"/>
+                </svg>
+                <span v-if="showDynamicIslandContent" class="btn-text">清理</span>
+              </button>
+              <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="importChatSession" title="导入对话">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
+                </svg>
+                <span v-if="showDynamicIslandContent" class="btn-text">导入</span>
+              </button>
+            </template>
+            <!-- 普通模式按钮 -->
+            <template v-else>
+              <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="exportCurrentAgent" :disabled="!currentAgent" title="导出智能体">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                </svg>
+                <span v-if="showDynamicIslandContent" class="btn-text">导出</span>
+              </button>
+              <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="showManualCleanupConfirm" title="清理聊天记录">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15 16h4v2h-4zm0-8h7v2h-6zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zM14 5h-3l-1-1H6L5 5H2v2h12z"/>
+                </svg>
+                <span v-if="showDynamicIslandContent" class="btn-text">清理</span>
+              </button>
+              <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="openAgentMemoryModal(currentAgent)" :disabled="!currentAgent" title="智能体记忆">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <span v-if="showDynamicIslandContent" class="btn-text">记忆</span>
+              </button>
+              <button :class="['control-btn', 'dynamic-island-btn', { 'shine-effect': settings.enableShineEffect, 'shine-effect-colorful': settings.enableShineEffect }]" @click="summarizeConversation" :disabled="!currentAgent || conversations.length === 0 || isSummarizing" title="总结对话并添加到记忆">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 4v1.38c-.83-.33-1.72-.5-2.61-.5-1.79 0-3.58.68-4.95 2.05l3.33 3.33h1.11v1.11c.86.86 1.98 1.31 3.11 1.36V15H6v3c0 1.1.9 2 2 2h10c1.66 0 3-1.34 3-3V4H9zm-1.11 6.41V8.26H5.61L4.57 7.22a5.07 5.07 0 0 1 1.82-.34c1.34 0 2.59.52 3.54 1.46l1.41 1.41-.2.2a2.7 2.7 0 0 0-.79 2.31H7.89zM12 11.39c0-.67.26-1.3.73-1.77l1.41-1.41a2.5 2.5 0 0 1 3.54 0l1.41 1.41c.47.47.73 1.1.73 1.77v2.22h-8.82v-2.22z"/>
+                </svg>
+                <span v-if="showDynamicIslandContent" class="btn-text">总结</span>
+              </button>
+            </template>
           </div>
         </div>
         <!-- 音乐播放信息显示区域 -->
@@ -226,13 +322,41 @@
 
       <div class="chat-messages" ref="messagesContainer" @contextmenu.prevent="handleChatContextMenu($event, null)">
         <div v-if="!currentAgent" class="empty-state">
-          <div class="empty-icon"><Icon emoji="💬" size="32px" /></div>
+          <div class="empty-icon">
+            <svg viewBox="0 0 1024 1024" class="icon" version="1.1" xmlns="http://www.w3.org/2000/svg">
+              <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+              <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
+              <g id="SVGRepo_iconCarrier">
+                <path d="M114.8 561.9l-0.8 92.6 151.1-92.6h291.3c39.4 0 71.3-32.6 71.3-72.9V206c0-40.3-31.9-72.9-71.3-72.9H114.8c-39.4 0-71.3 32.6-71.3 72.9v283c0 40.3 31.9 72.9 71.3 72.9z" fill="var(--text-tertiary)"></path>
+                <path d="M114 669.1c-2.5 0-4.9-0.6-7.1-1.9-4.6-2.6-7.4-7.5-7.4-12.7l0.7-79.3C59.8 568.1 29 532.2 29 489V206c0-48.2 38.5-87.4 85.8-87.4h441.5c47.3 0 85.8 39.2 85.8 87.4v283c0 48.2-38.5 87.4-85.8 87.4H269.2l-147.6 90.5c-2.4 1.4-5 2.2-7.6 2.2z m0.8-521.5C83.5 147.6 58 173.8 58 206v283c0 32.2 25.5 58.4 56.9 58.4 3.9 0 7.6 1.5 10.3 4.3 2.7 2.7 4.2 6.5 4.2 10.3l-0.6 66.5 128.8-79c2.3-1.4 4.9-2.1 7.6-2.1h291.3c31.4 0 56.9-26.2 56.9-58.4V206c0-32.2-25.5-58.4-56.9-58.4H114.8z" fill="var(--primary-color)"></path>
+                <path d="M890.1 773.1l1.1 117.4-195.6-117.4H318.4c-51 0-92.4-41.4-92.4-92.4V322.1c0-51 41.4-92.4 92.4-92.4h571.7c51 0 92.4 41.4 92.4 92.4v358.7c0 50.9-41.3 92.3-92.4 92.3z" fill="var(--bg-primary)"></path>
+                <path d="M891.2 905c-2.6 0-5.2-0.7-7.5-2.1L691.6 787.6H318.4c-58.9 0-106.9-47.9-106.9-106.9V322.1c0-58.9 47.9-106.9 106.9-106.9h571.7c58.9 0 106.9 47.9 106.9 106.9v358.7c0 54-40.2 98.7-92.2 105.9l1 103.8c0 5.2-2.7 10.1-7.3 12.7-2.3 1.1-4.8 1.8-7.3 1.8zM318.4 244.2c-42.9 0-77.9 34.9-77.9 77.9v358.7c0 42.9 34.9 77.9 77.9 77.9h377.2c2.6 0 5.2 0.7 7.5 2.1l173.5 104.1-0.8-91.5c0-3.9 1.5-7.6 4.2-10.3 2.7-2.7 6.4-4.3 10.3-4.3 42.9 0 77.9-34.9 77.9-77.9V322.1c0-42.9-34.9-77.9-77.9-77.9H318.4z" fill="var(--primary-color)"></path>
+                <path d="M376 499.8a47.3 44.8 0 1 0 94.6 0 47.3 44.8 0 1 0-94.6 0Z" fill="var(--primary-color)"></path>
+                <path d="M557 499.8a47.3 44.8 0 1 0 94.6 0 47.3 44.8 0 1 0-94.6 0Z" fill="var(--primary-color)"></path>
+                <path d="M737.9 499.8a47.3 44.8 0 1 0 94.6 0 47.3 44.8 0 1 0-94.6 0Z" fill="var(--primary-color)"></path>
+              </g>
+            </svg>
+          </div>
           <h3>请选择一个智能体开始对话</h3>
           <p>或创建一个新的智能体</p>
         </div>
 
-        <div v-else-if="conversations.length === 0" class="empty-state">
-          <div class="empty-icon">✨</div>
+        <div v-else-if="currentAgentConversations.length === 0" class="empty-state">
+          <div class="empty-icon">
+            <svg viewBox="0 0 1024 1024" class="icon" version="1.1" xmlns="http://www.w3.org/2000/svg">
+              <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+              <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
+              <g id="SVGRepo_iconCarrier">
+                <path d="M114.8 561.9l-0.8 92.6 151.1-92.6h291.3c39.4 0 71.3-32.6 71.3-72.9V206c0-40.3-31.9-72.9-71.3-72.9H114.8c-39.4 0-71.3 32.6-71.3 72.9v283c0 40.3 31.9 72.9 71.3 72.9z" fill="var(--text-tertiary)"></path>
+                <path d="M114 669.1c-2.5 0-4.9-0.6-7.1-1.9-4.6-2.6-7.4-7.5-7.4-12.7l0.7-79.3C59.8 568.1 29 532.2 29 489V206c0-48.2 38.5-87.4 85.8-87.4h441.5c47.3 0 85.8 39.2 85.8 87.4v283c0 48.2-38.5 87.4-85.8 87.4H269.2l-147.6 90.5c-2.4 1.4-5 2.2-7.6 2.2z m0.8-521.5C83.5 147.6 58 173.8 58 206v283c0 32.2 25.5 58.4 56.9 58.4 3.9 0 7.6 1.5 10.3 4.3 2.7 2.7 4.2 6.5 4.2 10.3l-0.6 66.5 128.8-79c2.3-1.4 4.9-2.1 7.6-2.1h291.3c31.4 0 56.9-26.2 56.9-58.4V206c0-32.2-25.5-58.4-56.9-58.4H114.8z" fill="var(--primary-color)"></path>
+                <path d="M890.1 773.1l1.1 117.4-195.6-117.4H318.4c-51 0-92.4-41.4-92.4-92.4V322.1c0-51 41.4-92.4 92.4-92.4h571.7c51 0 92.4 41.4 92.4 92.4v358.7c0 50.9-41.3 92.3-92.4 92.3z" fill="var(--bg-primary)"></path>
+                <path d="M891.2 905c-2.6 0-5.2-0.7-7.5-2.1L691.6 787.6H318.4c-58.9 0-106.9-47.9-106.9-106.9V322.1c0-58.9 47.9-106.9 106.9-106.9h571.7c58.9 0 106.9 47.9 106.9 106.9v358.7c0 54-40.2 98.7-92.2 105.9l1 103.8c0 5.2-2.7 10.1-7.3 12.7-2.3 1.1-4.8 1.8-7.3 1.8zM318.4 244.2c-42.9 0-77.9 34.9-77.9 77.9v358.7c0 42.9 34.9 77.9 77.9 77.9h377.2c2.6 0 5.2 0.7 7.5 2.1l173.5 104.1-0.8-91.5c0-3.9 1.5-7.6 4.2-10.3 2.7-2.7 6.4-4.3 10.3-4.3 42.9 0 77.9-34.9 77.9-77.9V322.1c0-42.9-34.9-77.9-77.9-77.9H318.4z" fill="var(--primary-color)"></path>
+                <path d="M376 499.8a47.3 44.8 0 1 0 94.6 0 47.3 44.8 0 1 0-94.6 0Z" fill="var(--primary-color)"></path>
+                <path d="M557 499.8a47.3 44.8 0 1 0 94.6 0 47.3 44.8 0 1 0-94.6 0Z" fill="var(--primary-color)"></path>
+                <path d="M737.9 499.8a47.3 44.8 0 1 0 94.6 0 47.3 44.8 0 1 0-94.6 0Z" fill="var(--primary-color)"></path>
+              </g>
+            </svg>
+          </div>
           <h3>开始与 {{ currentAgent.name }} 对话</h3>
           <p>在下方输入框发送第一条消息</p>
         </div>
@@ -240,12 +364,12 @@
         <div v-else class="messages-container">
           <!-- 优化的消息渲染，为长对话列表做准备 -->
           <div
-            v-for="(message, index) in conversations"
+            v-for="(message, index) in currentAgentConversations"
             :key="message.id"
             :class="['message', message.role, {
               'animate-fade-in-up': message.role === 'user',
               'animate-fade-in-left': message.role === 'assistant',
-              'animate-bounce-in': index === conversations.length - 1
+              'animate-bounce-in': index === currentAgentConversations.length - 1
             }]"
             @contextmenu.prevent.stop="handleChatContextMenu($event, message)"
           >
@@ -255,12 +379,12 @@
               </div>
             </div>
             <div class="message-content-wrapper" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
-              <div class="message-content" :class="{ 'typing': isGenerating && message.role === 'assistant' }" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
+              <div class="message-content" :class="{ 'typing': currentAgentIsGenerating && message.role === 'assistant' }" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
                 <!-- 工具调用状态显示 -->
-                <div v-if="isUsingTool && isGenerating && message.role === 'assistant'" class="tool-call-status">
+                <div v-if="currentAgentIsUsingTool && currentAgentIsGenerating && message.role === 'assistant'" class="tool-call-status">
                   <div class="tool-call-indicator">
                     <span class="tool-icon"><Icon emoji="🔍" size="16px" /></span>
-                    <span class="tool-text">{{ toolCallStatus || '正在使用工具...' }}</span>
+                    <span class="tool-text">{{ currentAgentToolStatus || '正在使用工具...' }}</span>
                   </div>
                   <div class="tool-call-animation">
                     <div class="dot"></div>
@@ -396,7 +520,7 @@
             </div>
           </div>
 
-          <div v-if="isGenerating && !hasStreamingMessage" class="message assistant typing-message">
+          <div v-if="currentAgentIsGenerating && !hasStreamingMessage" class="message assistant typing-message">
             <div class="message-avatar">
               <div class="avatar assistant">AI</div>
             </div>
@@ -451,7 +575,7 @@
                       <button
                         class="action-btn ai-assistant-btn"
                         @click="toggleAIAssistantMenu"
-                        :disabled="isGenerating"
+                        :disabled="currentAgentIsGenerating"
                         :class="{ 'active': showAIAssistantMenu }"
                         title="AI辅助"
                       >
@@ -565,17 +689,17 @@
             <!-- 发送按钮 -->
             <button
               :class="['action-btn send-btn', { 
-                'active': inputMessage.trim() && !isGenerating,
-                'loading': isGenerating,
+                'active': inputMessage.trim() && !currentAgentIsGenerating,
+                'loading': currentAgentIsGenerating,
                 'shine-effect': settings.enableShineEffect,
                 'shine-effect-colorful': settings.enableShineEffect 
               }]"
               @click="sendMessage"
-              :disabled="!inputMessage.trim() || isGenerating"
+              :disabled="!inputMessage.trim() || currentAgentIsGenerating"
               title="发送消息"
             >
               <transition name="icon-fade" mode="out-in">
-                <span v-if="!isGenerating" class="send-icon" key="send">
+                <span v-if="!currentAgentIsGenerating" class="send-icon" key="send">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="22" y1="2" x2="11" y2="13"/>
                     <polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -647,6 +771,27 @@
         @notify="showNotification"
         @memory-updated="onMemoryUpdated"
       />
+    </Modal>
+
+    <!-- 重命名对话模态框 -->
+    <Modal
+      v-model:visible="showRenameDialog"
+      title="重命名对话"
+      size="small"
+      @confirm="saveSessionRename"
+      @close="cancelRenameSession"
+    >
+      <div class="form-group">
+        <label>对话名称</label>
+        <input
+          type="text"
+          class="form-control"
+          v-model="renameSessionForm.name"
+          placeholder="输入新的对话名称"
+          @keyup.enter="saveSessionRename"
+          ref="renameSessionInput"
+        >
+      </div>
     </Modal>
     </Teleport>
 
@@ -793,6 +938,7 @@
               { value: 'azure', label: 'Azure OpenAI' },
               { value: 'google', label: 'Google Gemini' },
               { value: 'siliconflow', label: '硅基流动' },
+              { value: 'vectorengine', label: '向量引擎' },
               { value: 'local', label: '本地/自定义' }
             ]"
           />
@@ -858,6 +1004,7 @@
             { value: 'azure', label: 'Azure OpenAI' },
             { value: 'google', label: 'Google Gemini' },
             { value: 'siliconflow', label: '硅基流动' },
+            { value: 'vectorengine', label: '向量引擎' },
             { value: 'local', label: '本地/自定义' }
           ]"
           @change="onProviderChange"
@@ -890,6 +1037,7 @@
           • OpenAI: https://api.openai.com/v1/chat/completions<br>
           • DeepSeek: https://api.deepseek.com/v1/chat/completions<br>
           • 硅基流动: https://api.siliconflow.cn/v1/chat/completions<br>
+          • 向量引擎: https://api.vectorengine.ai/v1/chat/completions<br>
           • Azure OpenAI: https://YOUR_RESOURCE.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT/chat/completions<br>
           • Anthropic: https://api.anthropic.com/v1/messages<br>
           • 本地部署: http://localhost:8080/v1/chat/completions
@@ -1313,8 +1461,230 @@
           />
         </div>
       </template>
+
+      <!-- 用户信息设置 -->
+      <div class="form-group">
+        <h4 class="section-title">用户信息设置</h4>
+      </div>
+
+      <div class="form-group">
+        <label>用户信息</label>
+        <textarea
+          class="form-control textarea"
+          v-model="settings.userInfo"
+          placeholder="输入您的个人信息和偏好，例如：&#10;• 职业：软件工程师&#10;• 兴趣爱好：编程、阅读、音乐&#10;• 沟通风格：喜欢简洁明了的回答&#10;• 专长领域：前端开发、Vue.js&#10;• 其他偏好：..."
+          rows="6"
+        ></textarea>
+        <div class="form-hint">
+          填写您的个人信息和偏好，当智能体启用"用户专精"技能时，这些信息将提供给智能体，以便提供更个性化的服务
+        </div>
+      </div>
       </Modal>
     </Teleport>
+
+    <!-- 导入预览弹窗 -->
+    <Modal
+      v-model:visible="showImportPreviewModal"
+      title="导入数据预览"
+      size="medium"
+      @confirm="confirmImport"
+      @close="cancelImport"
+    >
+      <div v-if="importPreviewData" class="import-preview">
+        <!-- 单个智能体预览 -->
+        <div v-if="importPreviewData.exportType === 'single_agent'" class="single-agent-preview">
+          <div class="preview-header">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            <h3>智能体信息</h3>
+          </div>
+          <div class="preview-content">
+            <div class="preview-item">
+              <label>名称：</label>
+              <span>{{ importPreviewData.agent.name }}</span>
+            </div>
+            <div class="preview-item">
+              <label>头像：</label>
+              <span class="avatar-preview">{{ importPreviewData.agent.avatar }}</span>
+            </div>
+            <div class="preview-item">
+              <label>场景：</label>
+              <span>{{ importPreviewData.agent.scenario || '无' }}</span>
+            </div>
+            <div class="preview-item">
+              <label>对话记录：</label>
+              <span>{{ importPreviewData.conversations?.length || 0 }} 条</span>
+            </div>
+            <div class="preview-item">
+              <label>导出时间：</label>
+              <span>{{ new Date(importPreviewData.exportTime).toLocaleString() }}</span>
+            </div>
+          </div>
+          <div class="preview-prompt">
+            <label>角色设定：</label>
+            <p>{{ importPreviewData.agent.prompt || '无' }}</p>
+          </div>
+        </div>
+
+        <!-- 全局数据预览 -->
+        <div v-else-if="importPreviewData.exportType === 'full_backup'" class="full-backup-preview">
+          <div class="preview-header">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <h3>全局数据备份</h3>
+          </div>
+          <div class="preview-content">
+            <div class="preview-item">
+              <label>智能体数量：</label>
+              <span>{{ importPreviewData.agents?.length || 0 }} 个</span>
+            </div>
+            <div class="preview-item">
+              <label>对话记录：</label>
+              <span>{{ Object.keys(importPreviewData.conversations || {}).length }} 个智能体</span>
+            </div>
+            <div class="preview-item">
+              <label>导出时间：</label>
+              <span>{{ new Date(importPreviewData.exportTime).toLocaleString() }}</span>
+            </div>
+          </div>
+
+          <div class="import-options">
+            <h4>选择要导入的内容：</h4>
+            <div class="option-item">
+              <CustomCheckbox
+                v-model="importOptions.agents"
+                label="智能体数据"
+              />
+              <span class="option-hint">包含所有智能体及其对话记录</span>
+            </div>
+            <div class="option-item">
+              <CustomCheckbox
+                v-model="importOptions.settings"
+                label="AI设置"
+              />
+              <span class="option-hint">包含API配置、模型选择等</span>
+            </div>
+            <div class="option-item">
+              <CustomCheckbox
+                v-model="importOptions.styleSettings"
+                label="样式设置"
+              />
+              <span class="option-hint">包含主题、字体、颜色等</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- 清除数据确认弹窗 -->
+    <Modal
+      v-model:visible="showClearDataConfirmModal"
+      title="⚠️ 清除数据"
+      type="danger"
+      @confirm="confirmClearAllData"
+      @close="cancelClearAllData"
+    >
+      <div class="clear-data-warning">
+        <p class="warning-title">请选择要清除的数据</p>
+        <p class="warning-description">勾选要删除的数据类型，未勾选的数据将被保留：</p>
+
+        <div class="clear-data-options">
+          <label class="clear-data-option">
+            <input
+              type="checkbox"
+              v-model="clearDataOptions.agents"
+              class="clear-data-checkbox"
+            >
+            <span class="option-icon">🤖</span>
+            <span class="option-text">所有智能体及其设置</span>
+          </label>
+
+          <label class="clear-data-option">
+            <input
+              type="checkbox"
+              v-model="clearDataOptions.conversations"
+              class="clear-data-checkbox"
+            >
+            <span class="option-icon">💬</span>
+            <span class="option-text">所有对话历史记录</span>
+          </label>
+
+          <label class="clear-data-option">
+            <input
+              type="checkbox"
+              v-model="clearDataOptions.images"
+              class="clear-data-checkbox"
+            >
+            <span class="option-icon">🖼️</span>
+            <span class="option-text">所有生成的图片</span>
+          </label>
+
+          <label class="clear-data-option">
+            <input
+              type="checkbox"
+              v-model="clearDataOptions.music"
+              class="clear-data-checkbox"
+            >
+            <span class="option-icon">🎵</span>
+            <span class="option-text">音乐播放器数据</span>
+          </label>
+
+          <label class="clear-data-option">
+            <input
+              type="checkbox"
+              v-model="clearDataOptions.memories"
+              class="clear-data-checkbox"
+            >
+            <span class="option-icon">📝</span>
+            <span class="option-text">智能体记忆内容</span>
+          </label>
+
+          <label class="clear-data-option">
+            <input
+              type="checkbox"
+              v-model="clearDataOptions.settings"
+              class="clear-data-checkbox"
+            >
+            <span class="option-icon">🎨</span>
+            <span class="option-text">样式设置（将恢复默认）</span>
+          </label>
+
+          <label class="clear-data-option">
+            <input
+              type="checkbox"
+              v-model="clearDataOptions.tavern"
+              class="clear-data-checkbox"
+            >
+            <span class="option-icon">🏰</span>
+            <span class="option-text">酒馆模式数据（场景、角色、对话）</span>
+          </label>
+        </div>
+
+        <div class="clear-data-actions">
+          <button
+            class="select-all-btn"
+            @click="selectAllClearOptions"
+            :disabled="allClearOptionsSelected"
+          >
+            全选
+          </button>
+          <button
+            class="deselect-all-btn"
+            @click="deselectAllClearOptions"
+            :disabled="!anyClearOptionSelected"
+          >
+            全不选
+          </button>
+        </div>
+
+        <p class="warning-note">⚠️ 此操作不可恢复，请谨慎操作！</p>
+      </div>
+    </Modal>
 
     <!-- 确认弹窗 -->
     <Modal
@@ -3657,6 +4027,8 @@ import AgentMemory from './components/AgentMemory.vue'
 
 import Tavern from './components/Tavern.vue'
 
+import { tavernDB } from './tavernDB.js'
+
 import FileDisplay from './components/FileDisplay.vue'
 
 import FileViewer from './components/FileViewer.vue'
@@ -3745,9 +4117,10 @@ export default {
       isDarkTheme: false,
       agents: [],
       currentAgent: null,
-      conversations: [],
+      conversations: [], // 已弃用，使用 agentConversations 替代
+      agentConversations: {}, // 按智能体ID存储对话历史 { agentId: [] }
       inputMessage: '',
-      isGenerating: false,
+      isGenerating: {}, // 按智能体ID存储生成状态，支持多智能体并发 { agentId: boolean }
       isUserAtBottom: true, // 用户是否在聊天界面底部
       isInputFocused: false, // 输入框是否聚焦
 
@@ -3768,6 +4141,8 @@ export default {
 
       showAgentMemoryModal: false,
 
+      showRenameDialog: false,
+
       currentMemoryAgent: null,
 
       isSummarizing: false,
@@ -3778,6 +4153,24 @@ export default {
     showNotepadModal: false,
     showImageGeneratorModal: false,
       showMusicPlayer: false,
+
+      // 导入预览
+      showImportPreviewModal: false,
+      importPreviewData: null,
+      importOptions: {
+        agents: true,
+        settings: true,
+        styleSettings: true
+      },
+
+      // 多对话模式
+      isMultiChatMode: false,
+      chatSessions: [],
+      currentChatSession: null,
+      renamingSession: null,
+      renameSessionForm: {
+        name: ''
+      },
 
       // 酒馆模式
       isTavernMode: false,
@@ -3800,9 +4193,25 @@ export default {
       uploadedFiles: [], // 已上传的文件列表
       showFileViewer: false, // 是否显示文件阅览弹窗
       viewingFile: { name: '', content: '', size: '' }, // 当前正在查看的文件信息
-      isUsingTool: false, // 是否正在使用工具
-      currentToolName: '', // 当前使用的工具名称
-      toolCallStatus: '', // 工具调用状态描述
+      isUsingTool: false, // 是否正在使用工具（已弃用，使用 agentToolStates 替代）
+      currentToolName: '', // 当前使用的工具名称（已弃用，使用 agentToolStates 替代）
+      toolCallStatus: '', // 工具调用状态描述（已弃用，使用 agentToolStates 替代）
+      agentToolStates: {}, // 按智能体ID存储工具状态 { agentId: { isUsingTool: boolean, toolName: string, toolStatus: string } }
+
+      // 长按清除数据相关
+      titlePressTimer: null,
+      showClearDataConfirmModal: false,
+
+      // 清除数据选项
+      clearDataOptions: {
+        agents: true,        // 智能体及其设置
+        conversations: true,  // 对话历史记录
+        images: true,         // 生成的图片
+        music: true,          // 音乐播放器数据
+        memories: true,       // 智能体记忆内容
+        settings: true,       // 样式设置
+        tavern: true          // 酒馆模式数据
+      },
 
       // 表单数据
       agentForm: {
@@ -4004,7 +4413,9 @@ export default {
         autoClearConversations: false,
         autoClearDays: 3,
         // 音乐API设置
-        musicApiUrl: 'https://zm.i9mr.com'
+        musicApiUrl: 'https://zm.i9mr.com',
+        // 用户信息
+        userInfo: ''
       },
 
       // 样式设置
@@ -4500,6 +4911,14 @@ export default {
 
 
   async mounted() {
+    // 初始化 IndexedDB
+    try {
+      await conversationDB.init()
+      console.log('IndexedDB 初始化成功，使用 IndexedDB 存储多对话数据')
+    } catch (error) {
+      console.error('IndexedDB 初始化失败，将使用 localStorage 作为后备存储:', error)
+    }
+
     this.storageManager = new StorageManager()
     this.aiService = new AIService(this.storageManager)
     this.themeManager = new ThemeManager(this.storageManager)
@@ -4513,6 +4932,11 @@ export default {
     this.settings = this.storageManager.getSettings()
     console.log('App mounted, settings.musicApiUrl:', this.settings.musicApiUrl)
     console.log('App mounted, full settings object:', this.settings)
+
+    // 初始化用户信息到 skillService
+    if (this.settings.userInfo) {
+      skillService.setUserInfo(this.settings.userInfo)
+    }
 
     // 确保 apiKeys 对象存在（兼容旧数据）
     if (!this.settings.apiKeys) {
@@ -4664,9 +5088,9 @@ export default {
 
     // 在组件卸载前保存当前智能体的对话（如果存在）
 
-    if (this.currentAgent && this.conversations) {
+    if (this.currentAgent && this.agentConversations[this.currentAgent.id]) {
 
-      await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+      await this.storageManager.saveConversations(this.currentAgent.id, this.agentConversations[this.currentAgent.id])
 
     }
 
@@ -4756,10 +5180,44 @@ export default {
   },
 
   computed: {
+    // 当前智能体的对话历史
+    currentAgentConversations() {
+      if (!this.currentAgent) return []
+      return this.agentConversations[this.currentAgent.id] || []
+    },
+
+    // 当前智能体是否正在生成回复
+    currentAgentIsGenerating() {
+      if (!this.currentAgent) return false
+      return this.isGenerating[this.currentAgent.id] || false
+    },
+
+    // 当前智能体是否正在使用工具
+    currentAgentIsUsingTool() {
+      if (!this.currentAgent) return false
+      return this.agentToolStates[this.currentAgent.id]?.isUsingTool || false
+    },
+
+    // 当前智能体的工具状态
+    currentAgentToolStatus() {
+      if (!this.currentAgent) return ''
+      return this.agentToolStates[this.currentAgent.id]?.toolStatus || ''
+    },
+
+    // 所有清除选项是否都被选中
+    allClearOptionsSelected() {
+      return Object.values(this.clearDataOptions).every(value => value === true)
+    },
+
+    // 是否有任何一个清除选项被选中
+    anyClearOptionSelected() {
+      return Object.values(this.clearDataOptions).some(value => value === true)
+    },
+
     hasStreamingMessage() {
       // 检查是否有正在流式输出的AI消息
       // 流式消息应该没有metadata或者metadata不完整
-      return this.conversations.some(msg =>
+      return this.currentAgentConversations.some(msg =>
         msg.role === 'assistant' &&
         (!msg.metadata || !msg.metadata.tokens || !msg.metadata.thinkingTime)
       )
@@ -4832,11 +5290,195 @@ export default {
 
     // 是否有隐藏的图片
     hasHiddenImage() {
-      const lastAIMessage = [...this.conversations].reverse().find(msg => msg.role === 'assistant')
+      const lastAIMessage = [...this.currentAgentConversations].reverse().find(msg => msg.role === 'assistant')
       return lastAIMessage && lastAIMessage.hasImage && !lastAIMessage.imageExpanded
     }
   },
   methods: {
+    // ==================== 长按清除数据相关方法 ====================
+
+    // 长按开始
+    handleTitlePressStart(event) {
+      // 阻止默认行为
+      if (event.type === 'touchstart') {
+        event.preventDefault()
+      }
+
+      console.log('长按检测开始...')
+
+      // 清除之前的定时器
+      if (this.titlePressTimer) {
+        clearTimeout(this.titlePressTimer)
+      }
+
+      // 设置5秒后触发清除数据确认弹窗
+      this.titlePressTimer = setTimeout(() => {
+        console.log('长按5秒，显示清除数据确认弹窗')
+        this.showClearDataConfirmModal = true
+
+        // 震动反馈（如果设备支持）
+        if (navigator.vibrate) {
+          navigator.vibrate(200)
+        }
+      }, 5000) // 5秒
+    },
+
+    // 长按结束
+    handleTitlePressEnd() {
+      console.log('长按检测结束')
+
+      // 清除定时器
+      if (this.titlePressTimer) {
+        clearTimeout(this.titlePressTimer)
+        this.titlePressTimer = null
+      }
+    },
+
+    // 确认清除数据
+    async confirmClearAllData() {
+      console.log('用户确认清除数据，选项:', this.clearDataOptions)
+
+      // 检查是否至少选择了一个选项
+      if (!this.anyClearOptionSelected) {
+        this.showNotification('请至少选择要清除的一项数据', 'warning')
+        return
+      }
+
+      try {
+        let clearedItems = []
+
+        // 判断是否全选
+        const isFullClear = this.allClearOptionsSelected
+        console.log('是否全选清除:', isFullClear)
+
+        // 全选时，直接清除所有 localStorage 和 IndexedDB 数据（包括版本标识）
+        if (isFullClear) {
+          console.log('执行完全清除，清除所有数据（包括 IndexedDB 版本标识）')
+
+          // 1. 清除所有 localStorage 数据
+          const allKeys = Object.keys(localStorage)
+          allKeys.forEach(key => {
+            localStorage.removeItem(key)
+            console.log('已清除 localStorage 键:', key)
+          })
+
+          // 2. 删除整个 IndexedDB 数据库（包括版本标识）
+          await conversationDB.deleteDatabase()
+
+          // 3. 重置应用状态
+          this.agents = []
+          this.currentAgent = null
+          this.agentConversations = {}
+          this.settings = this.storageManager.getSettings()
+          this.styleSettings = this.storageManager.getStyleSettings()
+
+          clearedItems = ['所有数据（localStorage + IndexedDB + 版本标识）']
+        } else {
+          // 部分清除，按选项清除
+          console.log('执行部分清除')
+
+          // 1. 清除智能体及其设置
+          if (this.clearDataOptions.agents) {
+            localStorage.removeItem('ai_agents')
+            this.agents = []
+            this.currentAgent = null
+            clearedItems.push('智能体')
+          }
+
+          // 2. 清除对话历史记录
+          if (this.clearDataOptions.conversations) {
+            await conversationDB.clearAllIndexedDBData()
+            this.agentConversations = {}
+            clearedItems.push('对话历史')
+          }
+
+          // 3. 清除生成的图片
+          if (this.clearDataOptions.images) {
+            // 清除 IndexedDB 中的图片
+            if (!conversationDB.useLocalStorage && conversationDB.db) {
+              const transaction = conversationDB.db.transaction(['images'], 'readwrite')
+              const objectStore = transaction.objectStore('images')
+              await new Promise((resolve, reject) => {
+                const request = objectStore.clear()
+                request.onsuccess = () => resolve()
+                request.onerror = () => reject(request.error)
+              })
+            }
+            // 清除 localStorage 中的图片
+            localStorage.removeItem('ai_images_fallback')
+            clearedItems.push('图片')
+          }
+
+          // 4. 清除音乐播放器数据
+          if (this.clearDataOptions.music) {
+            localStorage.removeItem('music_user_info')
+            localStorage.removeItem('music_playlists')
+            localStorage.removeItem('music_favorites')
+            localStorage.removeItem('music_current_track')
+            clearedItems.push('音乐数据')
+          }
+
+          // 5. 清除智能体记忆内容
+          if (this.clearDataOptions.memories) {
+            localStorage.removeItem('ai_agent_memories')
+            clearedItems.push('记忆内容')
+          }
+
+          // 6. 清除样式设置
+          if (this.clearDataOptions.settings) {
+            localStorage.removeItem('ai_style_settings')
+            this.styleSettings = this.storageManager.getStyleSettings()
+            clearedItems.push('样式设置')
+          }
+
+          // 7. 清除酒馆模式数据
+          if (this.clearDataOptions.tavern) {
+            await tavernDB.clearAllData()
+            clearedItems.push('酒馆数据')
+          }
+
+          // 重新加载数据
+          this.agents = this.storageManager.getAgents()
+          this.settings = this.storageManager.getSettings()
+          this.styleSettings = this.storageManager.getStyleSettings()
+        }
+
+        console.log('数据清除完成:', clearedItems)
+
+        // 关闭确认弹窗
+        this.showClearDataConfirmModal = false
+
+        // 显示成功提示
+        this.showNotification(`已清除：${clearedItems.join('、')}`, 'success')
+
+      } catch (error) {
+        console.error('清除数据失败:', error)
+        this.showNotification('清除数据失败: ' + error.message, 'danger')
+      }
+    },
+
+    // 取消清除数据
+    cancelClearAllData() {
+      console.log('用户取消清除数据')
+      this.showClearDataConfirmModal = false
+      // 重置选项为全选
+      this.selectAllClearOptions()
+    },
+
+    // 全选所有清除选项
+    selectAllClearOptions() {
+      Object.keys(this.clearDataOptions).forEach(key => {
+        this.clearDataOptions[key] = true
+      })
+    },
+
+    // 全不选所有清除选项
+    deselectAllClearOptions() {
+      Object.keys(this.clearDataOptions).forEach(key => {
+        this.clearDataOptions[key] = false
+      })
+    },
+
     // 技能相关方法
     // 切换技能选择状态
     toggleSkill(skillId) {
@@ -4937,7 +5579,7 @@ export default {
     // 处理图像生成
     handleImageGeneration() {
       // 检查最后一条 AI 消息是否有隐藏的图片
-      const lastAIMessage = [...this.conversations].reverse().find(msg => msg.role === 'assistant')
+      const lastAIMessage = [...this.currentAgentConversations].reverse().find(msg => msg.role === 'assistant')
       if (lastAIMessage && lastAIMessage.hasImage && !lastAIMessage.imageExpanded) {
         // 有隐藏的图片，直接展开
         this.toggleImageVisibility(lastAIMessage)
@@ -5187,17 +5829,23 @@ export default {
 
     async selectAgent(agent) {
 
-      // 在切换智能体前保存当前智能体的对话（如果存在）
-
-      if (this.currentAgent && this.conversations) {
-
-        await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
-
+      // 在切换智能体前保存当前对话（多对话模式保存会话对话，普通模式保存智能体对话）
+      if (this.currentAgent && this.agentConversations[this.currentAgent.id]) {
+        if (this.isMultiChatMode && this.currentChatSession) {
+          await this.saveCurrentChatSession()
+        } else {
+          await this.storageManager.saveConversations(this.currentAgent.id, this.agentConversations[this.currentAgent.id])
+        }
       }
 
       this.currentAgent = agent
 
-      this.conversations = await this.storageManager.getConversations(agent.id)
+      // 如果在多对话模式，加载该智能体的对话会话
+      if (this.isMultiChatMode) {
+        await this.loadChatSessions()
+      } else {
+        this.agentConversations[agent.id] = await this.storageManager.getConversations(agent.id)
+      }
 
       // 初始化技能服务
       skillService.initializeAgentSkills(agent)
@@ -5206,9 +5854,279 @@ export default {
       await this.loadImagesForConversations()
     },
 
+    // 进入多对话模式
+    enterMultiChatMode() {
+      if (!this.currentAgent) return
+
+      this.isMultiChatMode = true
+      this.loadChatSessions()
+    },
+
+    // 退出多对话模式
+    exitMultiChatMode() {
+      this.isMultiChatMode = false
+      this.chatSessions = []
+      this.currentChatSession = null
+    },
+
+    // 加载对话会话列表
+    async loadChatSessions() {
+      if (!this.currentAgent) return
+
+      try {
+        // 使用 IndexedDB 加载对话会话列表
+        this.chatSessions = await conversationDB.getChatSessions(this.currentAgent.id)
+
+        // 如果没有会话，创建默认会话
+        if (this.chatSessions.length === 0) {
+          await this.createChatSession('默认对话')
+        } else {
+          // 加载当前会话
+          await this.loadCurrentChatSession()
+        }
+      } catch (error) {
+        console.error('加载对话会话失败:', error)
+        this.chatSessions = []
+      }
+    },
+
+    // 创建新的对话会话
+    async createChatSession(name) {
+      if (!this.currentAgent) return
+
+      const newSession = {
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+        name: name || `对话 ${this.chatSessions.length + 1}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+
+      this.chatSessions.push(newSession)
+      await this.saveChatSessions()
+
+      // 切换到新会话
+      await this.switchChatSession(newSession.id)
+    },
+
+    // 切换对话会话
+    async switchChatSession(sessionId) {
+      if (!this.currentAgent) return
+
+      // 如果有当前会话，先保存当前对话
+      if (this.currentChatSession) {
+        await this.saveCurrentChatSession()
+      }
+
+      // 切换到新会话
+      this.currentChatSession = this.chatSessions.find(s => s.id === sessionId)
+      if (!this.currentChatSession) return
+
+      // 加载新会话的对话
+      await this.loadCurrentChatSession()
+    },
+
+    // 加载当前会话的对话
+    async loadCurrentChatSession() {
+      if (!this.currentAgent || !this.currentChatSession) return
+
+      try {
+        // 使用 IndexedDB 加载当前会话的对话
+        this.agentConversations[this.currentAgent.id] = await conversationDB.getChatSessionMessages(
+          this.currentAgent.id,
+          this.currentChatSession.id
+        )
+
+        // 加载图片数据
+        await this.loadImagesForConversations()
+      } catch (error) {
+        console.error('加载会话对话失败:', error)
+        this.agentConversations[this.currentAgent.id] = []
+      }
+    },
+
+    // 保存当前会话的对话
+    async saveCurrentChatSession() {
+      if (!this.currentAgent || !this.currentChatSession) return
+
+      try {
+        // 使用 IndexedDB 保存当前会话的对话
+        await conversationDB.saveChatSessionMessages(
+          this.currentAgent.id,
+          this.currentChatSession.id,
+          this.agentConversations[this.currentAgent.id]
+        )
+
+        // 更新会话的更新时间
+        this.currentChatSession.updatedAt = new Date().toISOString()
+        await this.saveChatSessions()
+      } catch (error) {
+        console.error('保存会话对话失败:', error)
+      }
+    },
+
+    // 删除对话会话
+    async deleteChatSession(sessionId) {
+      if (this.chatSessions.length <= 1) {
+        this.showNotification('至少保留一个对话会话', 'warning')
+        return
+      }
+
+      const index = this.chatSessions.findIndex(s => s.id === sessionId)
+      if (index === -1) return
+
+      // 使用 IndexedDB 删除会话数据
+      await conversationDB.deleteChatSession(this.currentAgent.id, sessionId)
+
+      // 从列表中移除
+      this.chatSessions.splice(index, 1)
+      await this.saveChatSessions()
+
+      // 如果删除的是当前会话，切换到第一个会话
+      if (this.currentChatSession?.id === sessionId) {
+        await this.switchChatSession(this.chatSessions[0].id)
+      }
+
+      this.showNotification('对话会话已删除', 'success')
+    },
+
+    // 显示重命名对话模态框
+    showRenameSessionModal(session) {
+      this.renamingSession = session
+      this.renameSessionForm.name = session.name
+      this.showRenameDialog = true
+
+      // 在下一个 tick 聚焦输入框
+      this.$nextTick(() => {
+        if (this.$refs.renameSessionInput) {
+          this.$refs.renameSessionInput.focus()
+          this.$refs.renameSessionInput.select()
+        }
+      })
+    },
+
+    // 保存对话重命名
+    async saveSessionRename() {
+      if (!this.renamingSession) return
+
+      const newName = this.renameSessionForm.name.trim()
+      if (!newName) {
+        this.showNotification('对话名称不能为空', 'warning')
+        return
+      }
+
+      // 更新会话名称
+      this.renamingSession.name = newName
+      this.renamingSession.updatedAt = Date.now()
+
+      // 保存到本地存储
+      await this.saveChatSessions()
+
+      this.showNotification('对话名称已更新', 'success')
+      this.cancelRenameSession()
+    },
+
+    // 取消重命名对话
+    cancelRenameSession() {
+      this.showRenameDialog = false
+      this.renamingSession = null
+      this.renameSessionForm.name = ''
+    },
+
+    // 保存对话会话列表
+    async saveChatSessions() {
+      if (!this.currentAgent) return
+
+      try {
+        // 使用 IndexedDB 保存对话会话列表
+        await conversationDB.saveChatSessions(this.currentAgent.id, this.chatSessions)
+      } catch (error) {
+        console.error('保存对话会话列表失败:', error)
+      }
+    },
+
+    // 清理当前对话会话
+    async clearCurrentChatSession() {
+      if (!this.currentChatSession) return
+
+      this.agentConversations[this.currentAgent.id] = []
+      await this.saveCurrentChatSession()
+      this.showNotification('对话已清理', 'success')
+    },
+
+    // 导出当前对话会话
+    exportCurrentChatSession() {
+      if (!this.currentAgent || !this.currentChatSession) return
+
+      const data = {
+        agent: this.currentAgent,
+        session: this.currentChatSession,
+        conversations: this.agentConversations[this.currentAgent.id],
+        exportTime: new Date().toISOString(),
+        exportType: 'chat_session'
+      }
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${this.currentAgent.name}-${this.currentChatSession.name}-${new Date().toISOString().split('T')[0]}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+
+      this.showNotification('对话已导出', 'success')
+    },
+
+    // 导入对话会话
+    importChatSession() {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.json'
+      input.onchange = async (e) => {
+        const file = e.target.files[0]
+        if (file) {
+          const reader = new FileReader()
+          reader.onload = async (event) => {
+            try {
+              const data = JSON.parse(event.target.result)
+
+              if (data.exportType === 'chat_session') {
+                // 创建新会话
+                const newSession = {
+                  id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                  name: data.session.name || '导入的对话',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                }
+
+                this.chatSessions.push(newSession)
+                await this.saveChatSessions()
+
+                // 保存导入的对话
+                const sessionKey = `chat_session_${this.currentAgent.id}_${newSession.id}`
+                localStorage.setItem(sessionKey, JSON.stringify(data.conversations))
+
+                // 切换到新会话
+                await this.switchChatSession(newSession.id)
+
+                this.showNotification('对话导入成功', 'success')
+              } else {
+                this.showNotification('导入文件格式不正确', 'danger')
+              }
+            } catch (error) {
+              console.error('导入对话失败:', error)
+              this.showNotification('导入失败', 'danger')
+            }
+          }
+          reader.readAsText(file)
+        }
+      }
+      input.click()
+    },
+
     // 加载对话中的图片数据
     async loadImagesForConversations() {
-      for (const message of this.conversations) {
+      if (!this.currentAgent) return
+      for (const message of this.agentConversations[this.currentAgent.id] || []) {
         // 如果消息有图片标记但没有图片数据，则从 IndexedDB 加载
         if (message.hasImage && !message.imageData) {
           try {
@@ -5422,7 +6340,7 @@ export default {
     },
 
     async summarizeConversation() {
-      if (!this.currentAgent || this.conversations.length === 0) {
+      if (!this.currentAgent || !this.agentConversations[this.currentAgent.id] || this.agentConversations[this.currentAgent.id].length === 0) {
         this.showNotification('没有对话内容可以总结', 'warning')
         return
       }
@@ -5431,7 +6349,7 @@ export default {
       
       try {
         // 收集对话内容
-        const conversationText = this.conversations
+        const conversationText = this.agentConversations[this.currentAgent.id]
           .map(msg => `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`)
           .join('\n\n')
 
@@ -5467,8 +6385,13 @@ ${conversationText}
 
           if (success) {
             // 清空对话记录
-            await this.storageManager.saveConversations(this.currentAgent.id, [])
-            this.conversations = []
+            if (this.isMultiChatMode) {
+              this.agentConversations[this.currentAgent.id] = []
+              await this.saveCurrentConversations()
+            } else {
+              await this.storageManager.saveConversations(this.currentAgent.id, [])
+              this.agentConversations[this.currentAgent.id] = []
+            }
             
             this.showNotification('对话已总结并保存到智能体记忆', 'success')
             
@@ -5541,16 +6464,41 @@ ${conversationText}
       const success = this.storageManager.deleteAgent(agentId)
       if (success) {
         this.agents = this.storageManager.getAgents()
+
+        // 清除 IndexedDB 中的相关数据
+        this.cleanupAgentData(agentId)
+
         // 如果删除的是当前选中的智能体，清空显示
         if (this.currentAgent && this.currentAgent.id === agentId) {
           this.currentAgent = null
-          this.conversations = []
+          this.agentConversations[agentId] = []
         }
         this.showNotification('智能体删除成功', 'success')
       } else {
         this.showNotification('删除失败', 'danger')
       }
       this.showConfirmModal = false
+    },
+
+    // 清除智能体的所有相关数据
+    async cleanupAgentData(agentId) {
+      try {
+        // 清除多对话模式数据
+        await conversationDB.clearAllChatSessions(agentId)
+
+        // 清除对话历史
+        await conversationDB.deleteAgentConversations(agentId)
+
+        // 清除图片数据
+        await conversationDB.deleteAgentImages(agentId)
+
+        // 清除头像数据
+        await conversationDB.deleteAvatar(agentId)
+
+        console.log(`智能体 ${agentId} 的所有数据已清除`)
+      } catch (error) {
+        console.error('清除智能体数据失败:', error)
+      }
     },
 
     closeModal() {
@@ -5624,7 +6572,7 @@ ${conversationText}
 
     // 对话功能
     async sendMessage() {
-      if (!this.inputMessage.trim() || !this.currentAgent || this.isGenerating) {
+      if (!this.inputMessage.trim() || !this.currentAgent || this.currentAgentIsGenerating) {
         return
       }
 
@@ -5651,15 +6599,18 @@ ${conversationText}
       })
 
       if (userMessage) {
-        this.conversations.push(userMessage)
+        this.agentConversations[this.currentAgent.id].push(userMessage)
       }
 
-      this.isGenerating = true
+      const currentAgentId = this.currentAgent.id
+      this.isGenerating[currentAgentId] = true
 
       // 初始化工具调用状态
-      this.isUsingTool = false
-      this.currentToolName = ''
-      this.toolCallStatus = ''
+      this.agentToolStates[currentAgentId] = {
+        isUsingTool: false,
+        toolName: '',
+        toolStatus: ''
+      }
 
       try {
         const settings = this.storageManager.getSettings()
@@ -5679,8 +6630,8 @@ ${conversationText}
 
         // 如果启用了网络搜索技能，显示工具调用状态
         if (skillIds.includes('webSearch')) {
-          this.isUsingTool = true
-          this.toolCallStatus = '正在分析问题...'
+          this.agentToolStates[currentAgentId].isUsingTool = true
+          this.agentToolStates[currentAgentId].toolStatus = '正在分析问题...'
           console.log(`[App] 智能体已启用网络搜索技能，准备发送消息`)
         }
 
@@ -5693,32 +6644,32 @@ ${conversationText}
           const response = await this.aiService.sendMessage(
             this.currentAgent,
             enhancedMessage,
-            this.conversations,
+            this.agentConversations[currentAgentId],
             async (progressText) => {
               // 如果启用了网络搜索技能，更新工具状态
-              if (skillIds.includes('webSearch') && this.isUsingTool) {
-                this.toolCallStatus = '正在生成回复...'
+              if (skillIds.includes('webSearch') && this.agentToolStates[currentAgentId]?.isUsingTool) {
+                this.agentToolStates[currentAgentId].toolStatus = '正在生成回复...'
               }
 
               // 更新或创建AI消息
               if (!aiMessage) {
-                aiMessage = await this.storageManager.addMessage(this.currentAgent.id, {
+                aiMessage = await this.storageManager.addMessage(currentAgentId, {
                   role: 'assistant',
                   content: progressText.response || progressText
                 })
                 if (aiMessage) {
-                  this.conversations.push(aiMessage)
+                  this.agentConversations[currentAgentId].push(aiMessage)
                 }
               } else {
                 // 更新现有消息
-                const messageIndex = this.conversations.findIndex(msg => msg.id === aiMessage.id)
+                const messageIndex = this.agentConversations[currentAgentId].findIndex(msg => msg.id === aiMessage.id)
                 if (messageIndex !== -1) {
-                  this.conversations[messageIndex].content = progressText.response || progressText
+                  this.agentConversations[currentAgentId][messageIndex].content = progressText.response || progressText
 
                   // 节流存储操作，避免频繁写入IndexedDB
                   const now = Date.now()
                   if (now - lastSaveTime >= SAVE_INTERVAL) {
-                    await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+                    await this.storageManager.saveConversations(currentAgentId, this.agentConversations[currentAgentId])
                     lastSaveTime = now
                   }
                 }
@@ -5728,19 +6679,19 @@ ${conversationText}
 
           // 最终更新消息内容和元数据
           if (aiMessage) {
-            const messageIndex = this.conversations.findIndex(msg => msg.id === aiMessage.id)
+            const messageIndex = this.agentConversations[currentAgentId].findIndex(msg => msg.id === aiMessage.id)
             if (messageIndex !== -1) {
-              this.conversations[messageIndex].content = response.response || response
-              this.conversations[messageIndex].metadata = {
+              this.agentConversations[currentAgentId][messageIndex].content = response.response || response
+              this.agentConversations[currentAgentId][messageIndex].metadata = {
                 tokens: response.tokens,
                 thinkingTime: response.thinkingTime
               }
               // 最终保存到IndexedDB
-              await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+              await this.storageManager.saveConversations(currentAgentId, this.agentConversations[currentAgentId])
             }
           } else {
             // 如果没有逐字输出，添加最终消息
-            const finalMessage = await this.storageManager.addMessage(this.currentAgent.id, {
+            const finalMessage = await this.storageManager.addMessage(currentAgentId, {
               role: 'assistant',
               content: response.response || response,
               metadata: {
@@ -5749,7 +6700,7 @@ ${conversationText}
               }
             })
             if (finalMessage) {
-              this.conversations.push(finalMessage)
+              this.agentConversations[currentAgentId].push(finalMessage)
             }
           }
         } else {
@@ -5757,11 +6708,11 @@ ${conversationText}
           const response = await this.aiService.sendMessage(
             this.currentAgent,
             enhancedMessage,
-            this.conversations
+            this.agentConversations[currentAgentId]
           )
 
           // 添加AI回复
-          const aiMessage = await this.storageManager.addMessage(this.currentAgent.id, {
+          const aiMessage = await this.storageManager.addMessage(currentAgentId, {
             role: 'assistant',
             content: response.response || response,
             metadata: {
@@ -5772,10 +6723,10 @@ ${conversationText}
 
           if (aiMessage) {
 
-            this.conversations.push(aiMessage)
+            this.agentConversations[currentAgentId].push(aiMessage)
 
             // 保存到IndexedDB
-            await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+            await this.storageManager.saveConversations(currentAgentId, this.agentConversations[currentAgentId])
 
           }
 
@@ -5787,10 +6738,12 @@ ${conversationText}
                 console.error('发送消息失败:', error)
                 this.showNotification(`发送失败: ${error.message}`, 'danger')
               } finally {
-              this.isGenerating = false
-              this.isUsingTool = false
-              this.currentToolName = ''
-              this.toolCallStatus = ''
+              this.isGenerating[currentAgentId] = false
+              this.agentToolStates[currentAgentId] = {
+                isUsingTool: false,
+                toolName: '',
+                toolStatus: ''
+              }
             }
           },
     showClearConfirm() {
@@ -5809,7 +6762,7 @@ ${conversationText}
       if (this.currentAgent) {
         const success = await this.storageManager.clearConversation(this.currentAgent.id)
         if (success) {
-          this.conversations = []
+          this.agentConversations[this.currentAgent.id] = []
           this.showNotification('对话已清除', 'success')
         } else {
           this.showNotification('清除失败', 'danger')
@@ -5843,7 +6796,7 @@ ${conversationText}
 
       const success = await this.storageManager.clearConversation(this.currentAgent.id)
       if (success) {
-        this.conversations = []
+        this.agentConversations[this.currentAgent.id] = []
         this.showNotification(`已清理智能体 "${this.currentAgent.name}" 的聊天记录`, 'success')
       } else {
         this.showNotification('清理失败', 'danger')
@@ -5860,6 +6813,12 @@ ${conversationText}
         // 同步并保存 AI 设置
         this.syncAiSettingsFromSettings()
         this.saveAiSettings()
+        // 同步用户信息到 skillService
+        if (this.settings.userInfo) {
+          skillService.setUserInfo(this.settings.userInfo)
+        } else {
+          skillService.setUserInfo('')
+        }
         this.showSettingsModal = false
         this.showNotification('设置已保存', 'success')
       } else {
@@ -5950,6 +6909,7 @@ ${conversationText}
         'azure': 'azure',
         'google': 'google',
         'siliconflow': 'siliconflow',
+        'vectorengine': 'vectorengine',
         'local': 'local',
         'network': 'openai' // network 类型映射到 openai，使用自定义 baseUrl
       }
@@ -6330,17 +7290,21 @@ ${conversationText}
 
               // 检测导入数据类型
               if (data.exportType === 'single_agent') {
-                // 导入单个智能体
-                await this.importSingleAgent(event.target.result)
-              } else {
-                // 导入完整备份数据
-                const success = await this.storageManager.importData(event.target.result)
-                if (success) {
-                  this.agents = this.storageManager.getAgents()
-                  this.showNotification('数据导入成功', 'success')
-                } else {
-                  this.showNotification('数据导入失败', 'danger')
+                // 单个智能体，直接显示预览
+                this.importPreviewData = data
+                this.showImportPreviewModal = true
+              } else if (data.exportType === 'full_backup') {
+                // 全局数据，显示预览界面让用户选择导入内容
+                this.importPreviewData = data
+                // 重置导入选项为默认全选
+                this.importOptions = {
+                  agents: true,
+                  settings: true,
+                  styleSettings: true
                 }
+                this.showImportPreviewModal = true
+              } else {
+                this.showNotification('导入文件格式不正确', 'danger')
               }
             } catch (error) {
               console.error('导入数据解析失败:', error)
@@ -6368,6 +7332,120 @@ ${conversationText}
       } catch (error) {
         console.error('导入单个智能体失败:', error)
         this.showNotification(`导入失败: ${error.message}`, 'danger')
+      }
+    },
+
+    // 确认导入
+    async confirmImport() {
+      if (!this.importPreviewData) return
+
+      try {
+        if (this.importPreviewData.exportType === 'single_agent') {
+          // 导入单个智能体
+          await this.importSingleAgent(JSON.stringify(this.importPreviewData))
+        } else if (this.importPreviewData.exportType === 'full_backup') {
+          // 选择性导入全局数据
+          const success = await this.storageManager.importDataSelective(
+            JSON.stringify(this.importPreviewData),
+            this.importOptions
+          )
+          if (success) {
+            this.agents = this.storageManager.getAgents()
+            // 如果导入了设置，重新加载设置
+            if (this.importOptions.settings) {
+              this.settings = this.storageManager.getSettings()
+            }
+            if (this.importOptions.styleSettings) {
+              this.styleSettings = this.storageManager.getStyleSettings()
+              // 刷新页面以应用样式设置
+              location.reload()
+              return
+            }
+            // 如果当前有选中的智能体，重新加载它的对话数据
+            if (this.currentAgent) {
+              const agent = this.agents.find(a => a.id === this.currentAgent.id)
+              if (agent) {
+                // 清空当前对话数据，重新加载
+                this.agentConversations[this.currentAgent.id] = []
+                await this.selectAgent(agent)
+              } else {
+                // 如果当前智能体不存在，清空当前对话
+                this.currentAgent = null
+                this.agentConversations = {}
+              }
+            } else {
+              // 清空所有对话数据
+              this.agentConversations = {}
+            }
+            this.showNotification('数据导入成功', 'success')
+          } else {
+            this.showNotification('数据导入失败', 'danger')
+          }
+        }
+      } catch (error) {
+        console.error('导入数据失败:', error)
+        this.showNotification(`导入失败: ${error.message}`, 'danger')
+      }
+
+      // 关闭预览界面
+      this.showImportPreviewModal = false
+      this.importPreviewData = null
+    },
+
+    // 取消导入
+    cancelImport() {
+      this.showImportPreviewModal = false
+      this.importPreviewData = null
+    },
+
+    // 格式化会话时间
+    formatSessionTime(timestamp) {
+      const date = new Date(timestamp)
+      const now = new Date()
+      const diff = now - date
+
+      // 小于1分钟
+      if (diff < 60000) {
+        return '刚刚'
+      }
+      // 小于1小时
+      if (diff < 3600000) {
+        return `${Math.floor(diff / 60000)}分钟前`
+      }
+      // 小于24小时
+      if (diff < 86400000) {
+        return `${Math.floor(diff / 3600000)}小时前`
+      }
+      // 小于7天
+      if (diff < 604800000) {
+        return `${Math.floor(diff / 86400000)}天前`
+      }
+      // 超过7天显示具体日期
+      return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+    },
+
+    // 保存当前对话（根据模式选择保存方式）
+    async saveCurrentConversations() {
+      if (this.isMultiChatMode && this.currentChatSession) {
+        await this.saveCurrentChatSession()
+      } else if (this.currentAgent) {
+        await this.storageManager.saveConversations(this.currentAgent.id, this.agentConversations[this.currentAgent.id])
+      }
+    },
+
+    // 去除智能体记忆
+    removeAgentMemory() {
+      if (!this.currentAgent) return
+
+      this.showConfirmModal = true
+      this.confirmModal = {
+        title: '去除智能体记忆',
+        message: `确定要去除智能体 "${this.currentAgent.name}" 的记忆吗？此操作不可撤销。`,
+        type: 'danger',
+        action: () => {
+          this.storageManager.clearAgentMemory(this.currentAgent.id)
+          this.showNotification('智能体记忆已清除', 'success')
+        }
       }
     },
 
@@ -6426,9 +7504,9 @@ ${conversationText}
 
     async handlePageUnload() {
 
-      if (this.currentAgent && this.conversations) {
+      if (this.currentAgent && this.agentConversations[this.currentAgent.id]) {
 
-        await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+        await this.saveCurrentConversations()
 
       }
 
@@ -6485,16 +7563,19 @@ ${conversationText}
     formatMessageContent(content) {
       if (!content) return ''
       
+      // 确保 content 是字符串类型
+      const contentStr = typeof content === 'string' ? content : String(content)
+      
       // 检查内容是否包含思考标记（思考内容和普通内容已经组合在一起）
       // 如果内容以特定的标记开头，说明包含思考内容
-      const hasReasoning = content.includes('__REASONING_START__') && content.includes('__REASONING_END__')
+      const hasReasoning = contentStr.includes('__REASONING_START__') && contentStr.includes('__REASONING_END__')
       
       if (hasReasoning) {
         // 提取思考内容和普通内容
-        const reasoningStart = content.indexOf('__REASONING_START__') + '__REASONING_START__'.length
-        const reasoningEnd = content.indexOf('__REASONING_END__')
-        const reasoningContent = content.substring(reasoningStart, reasoningEnd)
-        const normalContent = content.substring(reasoningEnd + '__REASONING_END__'.length)
+        const reasoningStart = contentStr.indexOf('__REASONING_START__') + '__REASONING_START__'.length
+        const reasoningEnd = contentStr.indexOf('__REASONING_END__')
+        const reasoningContent = contentStr.substring(reasoningStart, reasoningEnd)
+        const normalContent = contentStr.substring(reasoningEnd + '__REASONING_END__'.length)
         
         // 格式化思考内容和普通内容
         const formattedReasoning = MarkdownParser.formatAIOutput(reasoningContent, this.settings.enableFormatting)
@@ -6505,7 +7586,7 @@ ${conversationText}
       }
       
       // 如果没有思考内容，直接格式化
-      return MarkdownParser.formatAIOutput(content, this.settings.enableFormatting)
+      return MarkdownParser.formatAIOutput(contentStr, this.settings.enableFormatting)
     },
 
     // 处理文件点击事件
@@ -6516,7 +7597,7 @@ ${conversationText}
 
     // 推荐回复相关方法
     async showSuggestions() {
-      if (!this.currentAgent || this.isGenerating) {
+      if (!this.currentAgent || this.isGenerating[this.currentAgent.id]) {
         return
       }
 
@@ -6528,7 +7609,7 @@ ${conversationText}
         const settings = this.storageManager.getSettings()
         this.suggestedReplies = await this.aiService.generateSuggestedReplies(
           this.currentAgent,
-          this.conversations,
+          this.agentConversations[this.currentAgent.id],
           settings
         )
       } catch (error) {
@@ -6570,7 +7651,7 @@ ${conversationText}
         const settings = this.storageManager.getSettings()
         this.suggestedReplies = await this.aiService.generateSuggestedReplies(
           this.currentAgent,
-          this.conversations,
+          this.agentConversations[this.currentAgent.id],
           settings
         )
       } catch (error) {
@@ -6703,7 +7784,7 @@ ${conversationText}
         const result = await this.aiService.expandText(
           this.inputMessage,
           this.currentAgent,
-          this.conversations,
+          this.agentConversations[this.currentAgent.id],
           settings
         )
         this.inputMessage = result
@@ -6733,7 +7814,7 @@ ${conversationText}
         const result = await this.aiService.optimizeText(
           this.inputMessage,
           this.currentAgent,
-          this.conversations,
+          this.agentConversations[this.currentAgent.id],
           settings
         )
         this.inputMessage = result
@@ -6764,7 +7845,7 @@ ${conversationText}
         const result = await this.aiService.translateText(
           this.inputMessage,
           this.currentAgent,
-          this.conversations,
+          this.agentConversations[this.currentAgent.id],
           settings,
           this.selectedTargetLanguage
         )
@@ -6861,10 +7942,10 @@ ${conversationText}
 
     // 删除消息
     deleteMessage(message) {
-      const index = this.conversations.findIndex(m => m.id === message.id)
+      const index = this.agentConversations[this.currentAgent.id].findIndex(m => m.id === message.id)
       if (index !== -1) {
-        this.conversations.splice(index, 1)
-        this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+        this.agentConversations[this.currentAgent.id].splice(index, 1)
+        this.saveCurrentConversations()
         this.showNotification('消息已删除', 'success')
       }
     },
@@ -6882,13 +7963,13 @@ ${conversationText}
 
       if (this.selectedMessageIds.size > 0) {
         // 如果有选中的消息，预览选中的消息
-        messagesToPreview = this.conversations.filter(msg => this.selectedMessageIds.has(msg.id))
+        messagesToPreview = this.agentConversations[this.currentAgent.id].filter(msg => this.selectedMessageIds.has(msg.id))
       } else if (this.chatContextMenuMessage) {
         // 如果右键点击了消息，预览该消息
         messagesToPreview = [this.chatContextMenuMessage]
       } else {
         // 否则预览所有消息
-        messagesToPreview = this.conversations
+        messagesToPreview = this.agentConversations[this.currentAgent.id]
       }
 
       switch (this.exportFormat) {
@@ -7244,13 +8325,13 @@ ${conversationText}
 
       if (this.selectedMessageIds.size > 0) {
         // 如果有选中的消息，导出选中的消息
-        messagesToExport = this.conversations.filter(msg => this.selectedMessageIds.has(msg.id))
+        messagesToExport = this.agentConversations[this.currentAgent.id].filter(msg => this.selectedMessageIds.has(msg.id))
       } else if (this.chatContextMenuMessage) {
         // 如果右键点击了消息，导出该消息
         messagesToExport = [this.chatContextMenuMessage]
       } else {
         // 否则导出所有消息
-        messagesToExport = this.conversations
+        messagesToExport = this.agentConversations[this.currentAgent.id]
       }
 
       if (messagesToExport.length === 0) {
@@ -7461,7 +8542,7 @@ ${conversationText}
 
     // 全选消息
     selectAllMessages() {
-      this.conversations.forEach(msg => this.selectedMessageIds.add(msg.id))
+      this.agentConversations[this.currentAgent.id].forEach(msg => this.selectedMessageIds.add(msg.id))
       this.selectedMessageIds = new Set(this.selectedMessageIds)
     },
 
@@ -7473,7 +8554,7 @@ ${conversationText}
 
     // 处理多选操作
     handleMultiSelectAction(action) {
-      const selectedMessages = this.conversations.filter(msg => this.selectedMessageIds.has(msg.id))
+      const selectedMessages = this.agentConversations[this.currentAgent.id].filter(msg => this.selectedMessageIds.has(msg.id))
 
       switch (action) {
         case 'copy':
@@ -7488,12 +8569,12 @@ ${conversationText}
           break
         case 'delete':
           selectedMessages.forEach(msg => {
-            const index = this.conversations.findIndex(m => m.id === msg.id)
+            const index = this.agentConversations[this.currentAgent.id].findIndex(m => m.id === msg.id)
             if (index !== -1) {
-              this.conversations.splice(index, 1)
+              this.agentConversations[this.currentAgent.id].splice(index, 1)
             }
           })
-          this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+          this.saveCurrentConversations()
           this.showNotification(`已删除 ${selectedMessages.length} 条消息`, 'success')
           break
       }
@@ -7555,21 +8636,21 @@ ${conversationText}
 
       // 找到要编辑的消息
 
-      const messageIndex = this.conversations.findIndex(msg => msg.id === this.editingMessage.id)
+      const messageIndex = this.agentConversations[this.currentAgent.id].findIndex(msg => msg.id === this.editingMessage.id)
 
       if (messageIndex !== -1) {
 
         // 更新消息内容
 
-        this.conversations[messageIndex].content = this.editingMessageContent
+        this.agentConversations[this.currentAgent.id][messageIndex].content = this.editingMessageContent
 
         // 更新时间戳
 
-        this.conversations[messageIndex].timestamp = Date.now()
+        this.agentConversations[this.currentAgent.id][messageIndex].timestamp = Date.now()
 
         // 保存到本地存储
 
-        await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+        await this.saveCurrentConversations()
 
         this.showNotification('消息已更新', 'success')
 
@@ -7598,107 +8679,226 @@ ${conversationText}
     },
 
     async regenerateMessage(message) {
-      if (!this.currentAgent || this.isGenerating) {
-        return
-      }
 
-      this.isGenerating = true
+          if (!this.currentAgent || this.isGenerating[this.currentAgent.id]) {
 
-      try {
-        // 找到该消息的索引
-        const messageIndex = this.conversations.findIndex(msg => msg.id === message.id)
-        if (messageIndex === -1) {
-          throw new Error('未找到消息')
-        }
+            return
 
-        // 获取该消息之前的所有消息作为上下文
-        const context = this.conversations.slice(0, messageIndex)
-
-        // 如果前一条消息是用户消息，则使用它作为输入
-        let inputMessage = "重新生成回复"
-        if (messageIndex > 0 && this.conversations[messageIndex - 1].role === 'user') {
-          inputMessage = this.conversations[messageIndex - 1].content
-        }
-
-        const settings = this.storageManager.getSettings()
-
-        if (settings.wordByWordOutput) {
-          // 逐字输出模式
-          let aiMessage = null
-          let lastSaveTime = 0
-          const SAVE_INTERVAL = 1000
-
-          const response = await this.aiService.sendMessage(
-            this.currentAgent,
-            inputMessage,
-            context,
-            async (progressText) => {
-              if (!aiMessage) {
-                // 创建新消息
-                aiMessage = {
-                  id: message.id, // 保持相同ID
-                  role: 'assistant',
-                  content: progressText.response || progressText,
-                  timestamp: Date.now()
-                }
-                // 替换原消息
-                this.conversations[messageIndex] = aiMessage
-              } else {
-                // 更新现有消息
-                this.conversations[messageIndex].content = progressText.response || progressText
-
-                const now = Date.now()
-                if (now - lastSaveTime >= SAVE_INTERVAL) {
-                  await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
-                  lastSaveTime = now
-                }
-              }
-            }
-          )
-
-          // 最终更新消息内容和元数据
-          this.conversations[messageIndex].content = response.response || response
-          this.conversations[messageIndex].metadata = {
-            tokens: response.tokens,
-            thinkingTime: response.thinkingTime
           }
-          await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
-        } else {
-          // 普通模式
-          const response = await this.aiService.sendMessage(
-            this.currentAgent,
-            inputMessage,
-            context
-          )
 
-          // 更新消息内容
+    
 
-                    this.conversations[messageIndex].content = response.response || response
+          const currentAgentId = this.currentAgent.id
 
-                    this.conversations[messageIndex].metadata = {
+          this.isGenerating[currentAgentId] = true
 
-                      tokens: response.tokens,
+    
 
-                      thinkingTime: response.thinkingTime
+          try {
+
+            // 找到该消息的索引
+
+            const messageIndex = this.agentConversations[currentAgentId].findIndex(msg => msg.id === message.id)
+
+            if (messageIndex === -1) {
+
+              throw new Error('未找到消息')
+
+            }
+
+    
+
+            // 获取该消息之前的所有消息作为上下文
+
+            const context = this.agentConversations[currentAgentId].slice(0, messageIndex)
+
+    
+
+            // 如果前一条消息是用户消息，则使用它作为输入
+
+            let inputMessage = "重新生成回复"
+
+            if (messageIndex > 0 && this.agentConversations[currentAgentId][messageIndex - 1].role === 'user') {
+
+              inputMessage = this.agentConversations[currentAgentId][messageIndex - 1].content
+
+            }
+
+    
+
+            const settings = this.storageManager.getSettings()
+
+    
+
+            if (settings.wordByWordOutput) {
+
+              // 逐字输出模式
+
+              let aiMessage = null
+
+              let lastSaveTime = 0
+
+              const SAVE_INTERVAL = 1000
+
+    
+
+              const response = await this.aiService.sendMessage(
+
+                this.currentAgent,
+
+                inputMessage,
+
+                context,
+
+                async (progressText) => {
+
+                  if (!aiMessage) {
+
+                    // 创建新消息
+
+                    aiMessage = {
+
+                      id: message.id, // 保持相同ID
+
+                      role: 'assistant',
+
+                      content: progressText.response || progressText,
+
+                      timestamp: Date.now()
 
                     }
 
-          
+                    // 替换原消息
 
-                    this.conversations[messageIndex].timestamp = Date.now()
+                    this.agentConversations[currentAgentId][messageIndex] = aiMessage
 
-                    await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+                    // 触发响应式更新
+
+                    this.agentConversations[currentAgentId] = [...this.agentConversations[currentAgentId]]
+
+                  } else {
+
+                    // 更新现有消息
+
+                    this.agentConversations[currentAgentId][messageIndex].content = progressText.response || progressText
+
+    
+
+                    const now = Date.now()
+
+                    if (now - lastSaveTime >= SAVE_INTERVAL) {
+
+                      // 触发响应式更新
+
+                      this.agentConversations[currentAgentId] = [...this.agentConversations[currentAgentId]]
+
+                      await this.storageManager.saveConversations(currentAgentId, this.agentConversations[currentAgentId])
+
+                      lastSaveTime = now
+
+                    }
 
                   }
 
-        this.showNotification('消息已重新生成', 'success')
-      } catch (error) {
-        console.error('重新生成消息失败:', error)
-        this.showNotification(`重新生成失败: ${error.message}`, 'danger')
-      } finally {
-        this.isGenerating = false
-      }
-    },
+                }
+
+              )
+
+    
+
+              // 最终更新消息内容和元数据
+
+              this.agentConversations[currentAgentId][messageIndex].content = response.response || response
+
+              this.agentConversations[currentAgentId][messageIndex].metadata = {
+
+                tokens: response.tokens,
+
+                thinkingTime: response.thinkingTime
+
+              }
+
+              // 触发响应式更新
+
+              this.agentConversations[currentAgentId] = [...this.agentConversations[currentAgentId]]
+
+              await this.storageManager.saveConversations(currentAgentId, this.agentConversations[currentAgentId])
+
+            } else {
+
+              // 普通模式
+
+              const response = await this.aiService.sendMessage(
+
+                this.currentAgent,
+
+                inputMessage,
+
+                context
+
+              )
+
+    
+
+              // 更新消息内容
+
+    
+
+                        this.agentConversations[currentAgentId][messageIndex].content = response.response || response
+
+    
+
+                        this.agentConversations[currentAgentId][messageIndex].metadata = {
+
+    
+
+                          tokens: response.tokens,
+
+    
+
+                          thinkingTime: response.thinkingTime
+
+    
+
+                        }
+
+    
+
+              
+
+    
+
+                        this.agentConversations[currentAgentId][messageIndex].timestamp = Date.now()
+
+    
+
+                        // 触发响应式更新
+
+                        this.agentConversations[currentAgentId] = [...this.agentConversations[currentAgentId]]
+
+    
+
+                        await this.storageManager.saveConversations(currentAgentId, this.agentConversations[currentAgentId])
+
+    
+
+                      }
+
+            this.showNotification('消息已重新生成', 'success')
+
+          } catch (error) {
+
+            console.error('重新生成消息失败:', error)
+
+            this.showNotification(`重新生成失败: ${error.message}`, 'danger')
+
+          } finally {
+
+            this.isGenerating[currentAgentId] = false
+
+          }
+
+        },
 
     // SD图像生成相关方法
     async refreshSDModels() {
@@ -7744,12 +8944,14 @@ ${conversationText}
         return
       }
 
+      const currentAgentId = this.currentAgent.id
+
       // 更新消息状态为正在生成图片
-      const messageIndex = this.conversations.findIndex(msg => msg.id === message.id)
+      const messageIndex = this.agentConversations[currentAgentId].findIndex(msg => msg.id === message.id)
       if (messageIndex !== -1) {
-        this.conversations[messageIndex].isGeneratingImage = true
-        this.conversations[messageIndex].imageProgress = 0
-        this.conversations = [...this.conversations]
+        this.agentConversations[currentAgentId][messageIndex].isGeneratingImage = true
+        this.agentConversations[currentAgentId][messageIndex].imageProgress = 0
+        this.agentConversations[currentAgentId] = [...this.agentConversations[currentAgentId]]
       }
 
       try {
@@ -7760,25 +8962,25 @@ ${conversationText}
         const imageData = await this.generateImageWithSD(prompt, (progress) => {
           // 更新进度
           if (messageIndex !== -1) {
-            this.conversations[messageIndex].imageProgress = progress
-            this.conversations = [...this.conversations]
+            this.agentConversations[currentAgentId][messageIndex].imageProgress = progress
+            this.agentConversations[currentAgentId] = [...this.agentConversations[currentAgentId]]
           }
         })
 
         // 保存生成的图片
         if (messageIndex !== -1) {
-          this.conversations[messageIndex].isGeneratingImage = false
-          this.conversations[messageIndex].hasImage = true
-          this.conversations[messageIndex].imageData = imageData
-          this.conversations[messageIndex].imageProgress = 100
-          this.conversations[messageIndex].imageExpanded = true
-          this.conversations = [...this.conversations]
+          this.agentConversations[currentAgentId][messageIndex].isGeneratingImage = false
+          this.agentConversations[currentAgentId][messageIndex].hasImage = true
+          this.agentConversations[currentAgentId][messageIndex].imageData = imageData
+          this.agentConversations[currentAgentId][messageIndex].imageProgress = 100
+          this.agentConversations[currentAgentId][messageIndex].imageExpanded = true
+          this.agentConversations[currentAgentId] = [...this.agentConversations[currentAgentId]]
 
           // 保存图片到 IndexedDB
-          await conversationDB.saveImage(message.id, this.currentAgent.id, imageData)
+          await conversationDB.saveImage(message.id, currentAgentId, imageData)
 
           // 保存对话状态（不包含图片数据）
-          await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+          await this.storageManager.saveConversations(currentAgentId, this.agentConversations[currentAgentId])
         }
 
         this.showNotification('图片生成成功', 'success')
@@ -7793,9 +8995,9 @@ ${conversationText}
 
         // 重置状态
         if (messageIndex !== -1) {
-          this.conversations[messageIndex].isGeneratingImage = false
-          this.conversations[messageIndex].imageProgress = 0
-          this.conversations = [...this.conversations]
+          this.agentConversations[currentAgentId][messageIndex].isGeneratingImage = false
+          this.agentConversations[currentAgentId][messageIndex].imageProgress = 0
+          this.agentConversations[currentAgentId] = [...this.agentConversations[currentAgentId]]
         }
 
         this.showNotification(errorMessage, 'danger')
@@ -7820,10 +9022,16 @@ ${conversationText}
 9. 对于人名，仅在该人物为知名人物（如蕾姆，刻晴，御坂美琴）才将人名添加到提示词中
 10. 注意使用泛指年龄的词语代替具体年龄，如8-12岁 → loli, 13-15岁 → early teen, 16-20岁 → teen, <21 → adult
 11. 注意人物表情与动作的准确性，如区分哭泣crying与啜泣tear与要哭的表情tearing up
+12. 可用的性相关词语库：pussy,pussy juice,pubic hair,spread pussy,spreading own pussy,spreading another's pussy,cum in pussy,cum,facial,cum on body,cum on breasts,cum on hair,cum on clothes,cum on crotch,anus,cum in ass,spread anus,spread anus under clothes,spread pussy under clothes,half-spread pussy,anal,thigh sex,fellatio,footjob,two-footed footjob,simulated footjob,after footjob,penis,vaginal,sex from behind,group sex,sex,masturbation,smelling penis,smelling ass,smelling pussy,smelling pantyhose,smelling armpit,condom,used condom,condom in mouth,holding condom,bondage,licking penis,licking nipple,licking armpit,dark labia,pussy press, pussy peek, anus peek, handjob, reach-around, double handjob, gloved handjob, nursing handjob, fingering, anal fingering, fingering through clothes, fingering through panties, implied fingering
+13. 注意区分动作主体，若有多个人物则在人物部分依次添加，如：1girl, black hair, blue eyes, school uniform, sitting on bed, 1 girl, white hair, maid, standing, bedroom, front view, close-up
 
 格式要求：
 - 使用英文关键词
 - 按重要性排序：人物主体（性别，年龄层，身材） → 人物服饰 → 人物表情 → 人物动作 → 场景（物品，背景） → 视角
+- 如有多个人物：人数（如2girls, 3girls） → 
+              人物1主体（性别，年龄层，身材） → 人物1服饰 → 人物1表情 → 人物1动作 →
+              人物2主体（性别，年龄层，身材） → 人物2服饰 → 人物2表情 → 人物2动作 →
+              场景（物品，背景） → 视角
 - 使用逗号分隔，不要编号
 
 示例格式：
@@ -8128,19 +9336,19 @@ ${conversationText}
 
     async toggleImageVisibility(message) {
 
-      const messageIndex = this.conversations.findIndex(msg => msg.id === message.id)
+      const messageIndex = this.agentConversations[this.currentAgent.id].findIndex(msg => msg.id === message.id)
 
       if (messageIndex !== -1) {
 
-        this.conversations[messageIndex].imageExpanded = !this.conversations[messageIndex].imageExpanded
+        this.agentConversations[this.currentAgent.id][messageIndex].imageExpanded = !this.agentConversations[this.currentAgent.id][messageIndex].imageExpanded
 
-        this.conversations = [...this.conversations]
+        this.agentConversations[this.currentAgent.id] = [...this.agentConversations[this.currentAgent.id]]
 
 
 
         // 保存到本地存储
 
-        await this.storageManager.saveConversations(this.currentAgent.id, this.conversations)
+        await this.saveCurrentConversations()
 
       }
 
@@ -9907,21 +11115,23 @@ ${conversationText}
   border-radius: 4px;
   opacity: 0.7;
   transition: all 0.2s ease;
-  color: #666;
+  color: var(--text-tertiary);
 }
 
 .action-btn:hover {
   opacity: 1;
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* 暗色主题下的操作按钮适配 */
 .theme-dark .action-btn {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-tertiary);
 }
 
 .theme-dark .action-btn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* 移动端特定样式 */
@@ -13131,6 +14341,147 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 
 [data-theme="dark"] .file-item:hover {
   background: var(--bg-tertiary);
+}
+
+/* ========== 清除数据确认弹窗样式 ========== */
+.clear-data-warning {
+  padding: 10px 0;
+}
+
+.warning-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--danger-color, #ef4444);
+  margin: 0 0 15px 0;
+  text-align: center;
+}
+
+.warning-description {
+  font-size: 14px;
+  color: var(--text-color);
+  margin: 0 0 20px 0;
+  text-align: center;
+}
+
+/* 清除数据选项容器 */
+.clear-data-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+/* 清除数据选项 */
+.clear-data-option {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.clear-data-option:hover {
+  border-color: var(--primary-color);
+  background: var(--bg-tertiary);
+  transform: translateX(4px);
+}
+
+.clear-data-option:active {
+  transform: translateX(2px);
+}
+
+/* 复选框样式 */
+.clear-data-checkbox {
+  width: 20px;
+  height: 20px;
+  margin-right: 12px;
+  cursor: pointer;
+  accent-color: var(--danger-color, #ef4444);
+  flex-shrink: 0;
+}
+
+/* 选项图标 */
+.option-icon {
+  font-size: 20px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+/* 选项文本 */
+.option-text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+/* 清除数据操作按钮 */
+.clear-data-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  justify-content: center;
+}
+
+.select-all-btn,
+.deselect-all-btn {
+  padding: 8px 20px;
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-color);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.select-all-btn:hover:not(:disabled),
+.deselect-all-btn:hover:not(:disabled) {
+  border-color: var(--primary-color);
+  background: var(--bg-tertiary);
+  transform: translateY(-1px);
+}
+
+.select-all-btn:disabled,
+.deselect-all-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.warning-note {
+  font-size: 13px;
+  color: var(--danger-color, #ef4444);
+  margin: 0;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* 暗色主题适配 */
+.theme-dark .clear-data-option {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+.theme-dark .clear-data-option:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--primary-color);
+}
+
+.theme-dark .select-all-btn,
+.theme-dark .deselect-all-btn {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+.theme-dark .select-all-btn:hover:not(:disabled),
+.theme-dark .deselect-all-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  border-color: var(--primary-color);
 }
 
 </style>

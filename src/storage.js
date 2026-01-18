@@ -388,6 +388,19 @@ export class StorageManager {
         }
     }
 
+    getStyleSettings() {
+        try {
+            const styleSettings = localStorage.getItem('ai_style_settings')
+            if (styleSettings) {
+                return JSON.parse(styleSettings)
+            }
+            return {}
+        } catch (error) {
+            console.error('获取样式设置失败:', error)
+            return {}
+        }
+    }
+
     // 工具函数
     generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2)
@@ -477,12 +490,16 @@ export class StorageManager {
     async exportData() {
         try {
             const conversations = await conversationDB.getAllConversations()
+            const chatSessions = await conversationDB.getAllChatSessions()
 
             const data = {
                 agents: this.getAgents(),
                 conversations: conversations,
+                chatSessions: chatSessions,
                 agentContexts: JSON.parse(localStorage.getItem('ai_agent_contexts') || '{}'),
                 agentMemories: this.getAllAgentMemories(),
+                settings: this.getSettings(),
+                styleSettings: this.getStyleSettings(),
                 settings: this.getSettings(),
                 exportTime: new Date().toISOString(),
                 exportType: 'full_backup'
@@ -495,40 +512,100 @@ export class StorageManager {
     }
 
     // 导出单个智能体（仅基本信息）
-    async exportSingleAgent(agentId) {
-        try {
-            const agents = this.getAgents()
-            const agent = agents.find(a => a.id === agentId)
 
-            if (!agent) {
-                throw new Error('智能体不存在')
+        async exportSingleAgent(agentId) {
+
+            try {
+
+                const agents = this.getAgents()
+
+                const agent = agents.find(a => a.id === agentId)
+
+    
+
+                if (!agent) {
+
+                    throw new Error('智能体不存在')
+
+                }
+
+    
+
+                // 仅导出智能体的基本信息和聊天记录
+
+                const conversations = await conversationDB.getConversations(agentId)
+
+                const chatSessions = await conversationDB.getChatSessions(agentId)
+
+                const chatSessionsMessages = {}
+
+    
+
+                // 获取每个会话的消息
+
+                for (const session of chatSessions) {
+
+                    const messages = await conversationDB.getChatSessionMessages(agentId, session.id)
+
+                    chatSessionsMessages[session.id] = messages
+
+                }
+
+    
+
+                const data = {
+
+                    agent: {
+
+                        id: agent.id,
+
+                        name: agent.name,
+
+                        avatar: agent.avatar,
+
+                        scenario: agent.scenario,
+
+                        prompt: agent.prompt,
+
+                        keyPoints: agent.keyPoints,
+
+                        createdAt: agent.createdAt,
+
+                        updatedAt: agent.updatedAt
+
+                    },
+
+                    conversations: conversations,
+
+                    chatSessions: {
+
+                        sessions: chatSessions,
+
+                        messages: chatSessionsMessages
+
+                    },
+
+                    exportTime: new Date().toISOString(),
+
+                    exportType: 'single_agent'
+
+    
+
+                }
+
+    
+
+                return JSON.stringify(data, null, 2)
+
+            } catch (error) {
+
+                console.error('导出单个智能体失败:', error)
+
+                throw error
+
             }
 
-            // 仅导出智能体的基本信息和聊天记录
-            const conversations = await conversationDB.getConversations(agentId)
-
-            const data = {
-                agent: {
-                    id: agent.id,
-                    name: agent.name,
-                    avatar: agent.avatar,
-                    scenario: agent.scenario,
-                    prompt: agent.prompt,
-                    keyPoints: agent.keyPoints,
-                    createdAt: agent.createdAt,
-                    updatedAt: agent.updatedAt
-                },
-                conversations: conversations,
-                exportTime: new Date().toISOString(),
-                exportType: 'single_agent'
-            }
-
-            return JSON.stringify(data, null, 2)
-        } catch (error) {
-            console.error('导出单个智能体失败:', error)
-            throw error
         }
-    }
 
     // 导入单个智能体
     async importSingleAgent(jsonData) {
@@ -557,6 +634,23 @@ export class StorageManager {
                 await conversationDB.saveConversations(newAgent.id, data.conversations)
             }
 
+            // 保存多对话数据
+            if (data.chatSessions && data.chatSessions.sessions && data.chatSessions.sessions.length > 0) {
+                // 保存会话列表
+                await conversationDB.saveChatSessions(newAgent.id, data.chatSessions.sessions)
+
+                // 保存每个会话的消息
+                for (const session of data.chatSessions.sessions) {
+                    if (data.chatSessions.messages[session.id]) {
+                        await conversationDB.saveChatSessionMessages(
+                            newAgent.id,
+                            session.id,
+                            data.chatSessions.messages[session.id]
+                        )
+                    }
+                }
+            }
+
             return newAgent
         } catch (error) {
             console.error('导入单个智能体失败:', error)
@@ -577,6 +671,10 @@ export class StorageManager {
                 await conversationDB.saveAllConversations(data.conversations)
             }
 
+            if (data.chatSessions) {
+                await conversationDB.saveAllChatSessions(data.chatSessions)
+            }
+
             if (data.agentContexts) {
                 localStorage.setItem('ai_agent_contexts', JSON.stringify(data.agentContexts))
             }
@@ -592,6 +690,53 @@ export class StorageManager {
             return true
         } catch (error) {
             console.error('导入数据失败:', error)
+            return false
+        }
+    }
+
+    // 选择性导入数据
+    async importDataSelective(jsonData, options) {
+        try {
+            const data = JSON.parse(jsonData)
+
+            // 导入智能体数据
+            if (options.agents && data.agents) {
+                this.saveAgents(data.agents)
+            }
+
+            // 导入对话记录（如果导入智能体，则同时导入对话记录）
+            if (options.agents && data.conversations) {
+                await conversationDB.saveAllConversations(data.conversations)
+            }
+
+            // 导入多对话数据（如果导入智能体，则同时导入多对话数据）
+            if (options.agents && data.chatSessions) {
+                await conversationDB.saveAllChatSessions(data.chatSessions)
+            }
+
+            // 导入智能体上下文和记忆（如果导入智能体）
+            if (options.agents) {
+                if (data.agentContexts) {
+                    localStorage.setItem('ai_agent_contexts', JSON.stringify(data.agentContexts))
+                }
+                if (data.agentMemories) {
+                    localStorage.setItem('ai_agent_memories', JSON.stringify(data.agentMemories))
+                }
+            }
+
+            // 导入AI设置
+            if (options.settings && data.settings) {
+                this.saveSettings(data.settings)
+            }
+
+            // 导入样式设置
+            if (options.styleSettings && data.styleSettings) {
+                localStorage.setItem('ai_style_settings', JSON.stringify(data.styleSettings))
+            }
+
+            return true
+        } catch (error) {
+            console.error('选择性导入数据失败:', error)
             return false
         }
     }

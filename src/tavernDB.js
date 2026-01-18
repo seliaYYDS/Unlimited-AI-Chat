@@ -583,6 +583,113 @@ export class TavernDB {
         return Date.now().toString(36) + Math.random().toString(36).substr(2)
     }
 
+    // 清除所有 IndexedDB 数据
+    async clearAllIndexedDBData() {
+        if (!this.db) {
+            await this.init()
+        }
+
+        // 如果降级到 localStorage，跳过 IndexedDB 清除
+        if (this.useLocalStorage) {
+            console.log('IndexedDB 不可用，跳过清除')
+            return true
+        }
+
+        return new Promise((resolve, reject) => {
+            const storeNames = [this.configStoreName, this.messagesStoreName]
+
+            let clearedCount = 0
+            const totalStores = storeNames.length
+
+            storeNames.forEach(storeName => {
+                try {
+                    const transaction = this.db.transaction([storeName], 'readwrite')
+                    const objectStore = transaction.objectStore(storeName)
+                    const request = objectStore.clear()
+
+                    request.onsuccess = () => {
+                        console.log(`已清除酒馆对象存储: ${storeName}`)
+                        clearedCount++
+                        if (clearedCount === totalStores) {
+                            resolve(true)
+                        }
+                    }
+
+                    request.onerror = () => {
+                        console.error(`清除酒馆对象存储失败: ${storeName}`, request.error)
+                        reject(request.error)
+                    }
+                } catch (error) {
+                    console.error(`清除酒馆对象存储时出错: ${storeName}`, error)
+                    clearedCount++
+                    if (clearedCount === totalStores) {
+                        resolve(true)
+                    }
+                }
+            })
+        })
+    }
+
+    // 清除所有 localStorage 数据
+    clearAllLocalStorageData() {
+        try {
+            localStorage.removeItem(this.configsKey)
+            localStorage.removeItem(this.messagesKey)
+            console.log('已清除所有酒馆 localStorage 数据')
+            return true
+        } catch (error) {
+            console.error('清除酒馆 localStorage 数据失败:', error)
+            return false
+        }
+    }
+
+    // 删除整个酒馆 IndexedDB 数据库（包括版本标识）
+    async deleteDatabase() {
+        if (!this.isIndexedDBAvailable()) {
+            console.log('IndexedDB 不可用，跳过数据库删除')
+            return true
+        }
+
+        // 关闭当前数据库连接
+        if (this.db) {
+            this.db.close()
+            this.db = null
+        }
+
+        return new Promise((resolve, reject) => {
+            const deleteRequest = indexedDB.deleteDatabase(this.dbName)
+
+            deleteRequest.onsuccess = () => {
+                console.log(`已删除酒馆 IndexedDB 数据库: ${this.dbName}`)
+                resolve(true)
+            }
+
+            deleteRequest.onerror = () => {
+                console.error('删除酒馆 IndexedDB 数据库失败:', deleteRequest.error)
+                reject(deleteRequest.error)
+            }
+
+            deleteRequest.onblocked = () => {
+                console.warn('删除酒馆 IndexedDB 数据库被阻塞')
+            }
+        })
+    }
+
+    // 清除所有数据（IndexedDB + localStorage）
+    async clearAllData() {
+        console.log('开始清除酒馆所有数据...')
+
+        const indexedDBCleared = await this.clearAllIndexedDBData()
+        const localStorageCleared = this.clearAllLocalStorageData()
+
+        console.log('酒馆数据清除完成:', {
+            indexedDB: indexedDBCleared,
+            localStorage: localStorageCleared
+        })
+
+        return indexedDBCleared && localStorageCleared
+    }
+
     // 关闭数据库连接
     close() {
         if (this.db) {

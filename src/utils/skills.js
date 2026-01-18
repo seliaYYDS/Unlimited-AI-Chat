@@ -76,6 +76,15 @@ export const SKILL_DEFINITIONS = {
     category: 'content',
     features: ['多语言支持', '上下文理解', '专业术语'],
     uiComponents: [] // 不需要特殊UI组件
+  },
+  userExpertise: {
+    id: 'userExpertise',
+    name: '用户专精',
+    description: '根据用户个人偏好和专长领域提供个性化服务',
+    icon: '👤',
+    category: 'user',
+    features: ['个性化理解', '偏好适配', '专属服务'],
+    uiComponents: [] // 不需要特殊UI组件
   }
 };
 
@@ -105,6 +114,11 @@ export const SKILL_CATEGORIES = {
     id: 'creative',
     name: '创意能力',
     description: '创意和艺术相关的技能'
+  },
+  user: {
+    id: 'user',
+    name: '用户相关',
+    description: '与用户个人信息和偏好相关的技能'
   }
 };
 

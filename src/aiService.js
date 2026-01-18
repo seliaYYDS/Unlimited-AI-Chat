@@ -171,6 +171,74 @@ export class AIService {
                 defaultModel: 'Qwen/Qwen2.5-7B-Instruct',
                 supportsCustomModel: true
             },
+            vectorengine: {
+                name: '向量引擎',
+                baseUrl: 'https://api.vectorengine.ai/v1',
+                chatEndpoint: '/chat/completions',
+                models: [
+                    // GPT 系列
+                    'gpt-4o',
+                    'gpt-4o-mini',
+                    'gpt-4-turbo',
+                    'gpt-4-turbo-preview',
+                    'gpt-4-vision-preview',
+                    'gpt-4-1106-preview',
+                    'gpt-4-0125-preview',
+                    'gpt-3.5-turbo',
+                    'gpt-3.5-turbo-16k',
+                    'gpt-3.5-turbo-1106',
+                    'gpt-3.5-turbo-0125',
+                    
+                    // Claude 系列
+                    'claude-3-5-sonnet-20241022',
+                    'claude-3-5-haiku-20241022',
+                    'claude-3-opus-20240229',
+                    'claude-3-sonnet-20240229',
+                    'claude-3-haiku-20240307',
+                    
+                    // Gemini 系列
+                    'gemini-1.5-pro',
+                    'gemini-1.5-flash',
+                    'gemini-2.0-flash-exp',
+                    'gemini-pro',
+                    'gemini-pro-vision',
+                    
+                    // DeepSeek 系列
+                    'deepseek-chat',
+                    'deepseek-reasoner',
+                    'deepseek-ai/DeepSeek-V3',
+                    'deepseek-ai/DeepSeek-R1',
+                    
+                    // Qwen 系列
+                    'Qwen/Qwen2.5-72B-Instruct',
+                    'Qwen/Qwen2.5-7B-Instruct',
+                    'Qwen/Qwen3-32B',
+                    
+                    // GLM 系列
+                    'THUDM/glm-4-9b-chat',
+                    'zai-org/GLM-4.5',
+                    
+                    // Kimi 系列
+                    'moonshotai/Kimi-Dev-72B',
+                    
+                    // 其他模型
+                    '01-ai/Yi-1.5-34B-Chat',
+                    'mistralai/Mistral-7B-Instruct-v0.3',
+                    'meta-llama/Meta-Llama-3.1-70B-Instruct',
+                    'meta-llama/Meta-Llama-3.1-8B-Instruct'
+                ],
+                recommendedModels: [
+                    'gpt-4o', // 推荐：最新 GPT-4o 模型
+                    'gpt-4o-mini', // 推荐：轻量级 GPT-4o
+                    'claude-3-5-sonnet-20241022', // 推荐：最新 Claude
+                    'gemini-1.5-pro', // 推荐：最新 Gemini
+                    'deepseek-ai/DeepSeek-V3', // 推荐：最新 DeepSeek
+                    'Qwen/Qwen2.5-72B-Instruct' // 推荐：Qwen 2.5
+                ],
+                authHeader: 'Bearer',
+                defaultModel: 'gpt-4o',
+                supportsCustomModel: true
+            },
             local: {
                 name: '本地部署',
                 baseUrl: 'http://localhost:8080/v1',
@@ -779,6 +847,8 @@ export class AIService {
             return 'google'
         } else if (endpoint.includes('siliconflow.cn')) {
             return 'siliconflow'
+        } else if (endpoint.includes('vectorengine.ai') || endpoint.includes('vectorengine.com')) {
+            return 'vectorengine'
         } else if (endpoint.includes('localhost') || endpoint.includes('127.0.0.1')) {
             return 'local'
         } else {
@@ -1053,251 +1123,399 @@ export class AIService {
         return headers
     }
 
-    // 解析错误响应
+    // 解析错误响应 - 泛用版本
     async parseErrorResponse(response, provider) {
         let errorMessage = `API请求失败: ${response.status} ${response.statusText}`
+        let errorDetails = {}
 
         try {
             const errorData = await response.json()
-            console.log('🔍 错误响应数据:', errorData)
+            console.log('🔍 错误响应数据:', { provider, status: response.status, errorData })
 
-            if (errorData.error && errorData.error.message) {
-                errorMessage = `${errorData.error.message}`
-                        } else if (errorData.message) {
-                            errorMessage = `${errorData.message}`
-                        } else if (errorData.detail) {
-                            errorMessage = `${errorData.detail}`            }
+            // 定义错误消息提取策略
+            const errorStrategies = [
+                // 策略1: OpenAI 格式 (error.message)
+                {
+                    name: 'OpenAI错误格式',
+                    check: (d) => d.error?.message,
+                    extract: (d) => ({
+                        message: d.error.message,
+                        type: d.error.type,
+                        code: d.error.code,
+                        param: d.error.param
+                    })
+                },
+                // 策略2: 顶层 message
+                {
+                    name: '顶层message格式',
+                    check: (d) => d.message,
+                    extract: (d) => ({
+                        message: d.message,
+                        type: d.type,
+                        code: d.code
+                    })
+                },
+                // 策略3: detail 字段
+                {
+                    name: 'detail格式',
+                    check: (d) => d.detail,
+                    extract: (d) => ({
+                        message: d.detail,
+                        type: d.type
+                    })
+                },
+                // 策略4: error 字段直接是字符串
+                {
+                    name: 'error字符串格式',
+                    check: (d) => typeof d.error === 'string',
+                    extract: (d) => ({
+                        message: d.error
+                    })
+                },
+                // 策略5: errors 数组
+                {
+                    name: 'errors数组格式',
+                    check: (d) => Array.isArray(d.errors) && d.errors.length > 0,
+                    extract: (d) => ({
+                        message: d.errors.map(e => e.message || e).join('; ')
+                    })
+                },
+                // 策略6: description 字段
+                {
+                    name: 'description格式',
+                    check: (d) => d.description,
+                    extract: (d) => ({
+                        message: d.description
+                    })
+                },
+                // 策略7: msg 字段
+                {
+                    name: 'msg格式',
+                    check: (d) => d.msg,
+                    extract: (d) => ({
+                        message: d.msg
+                    })
+                }
+            ]
 
-            // 常见错误代码处理
-            if (response.status === 401) {
-                errorMessage += '\n认证失败，请检查API密钥是否正确'
-            } else if (response.status === 403) {
-                errorMessage += '\n权限不足，请检查API密钥权限'
-            } else if (response.status === 404) {
-                errorMessage += '\n资源未找到，请检查API端点是否正确'
-            } else if (response.status === 429) {
-                errorMessage += '\n请求频率超限，请稍后重试'
-            } else if (response.status >= 500) {
-                errorMessage += '\n服务器内部错误，请稍后重试'
+            // 尝试所有策略
+            for (const strategy of errorStrategies) {
+                if (strategy.check(errorData)) {
+                    errorDetails = strategy.extract(errorData)
+                    errorMessage = errorDetails.message
+                    console.log(`✅ 使用错误策略 "${strategy.name}" 解析成功:`, errorDetails)
+                    break
+                }
             }
 
-        } catch {
+            // 常见错误代码处理
+            const errorHints = {
+                400: '请求参数错误，请检查请求格式和参数',
+                401: '认证失败，请检查API密钥是否正确',
+                403: '权限不足，请检查API密钥权限或账户状态',
+                404: '资源未找到，请检查API端点是否正确',
+                429: '请求频率超限，请稍后重试',
+                500: '服务器内部错误，请稍后重试',
+                502: '网关错误，服务暂时不可用',
+                503: '服务暂时不可用，请稍后重试',
+                504: '网关超时，请稍后重试'
+            }
+
+            if (errorHints[response.status]) {
+                errorMessage += `\n\n💡 提示: ${errorHints[response.status]}`
+            }
+
+            // 添加提供商特定的提示
+            const providerHints = {
+                openai: '\n\n📌 OpenAI 提示: 请确保 API Key 有效且有足够的配额',
+                deepseek: '\n\n📌 DeepSeek 提示: 请检查 API Key 和模型名称是否正确',
+                anthropic: '\n\n📌 Anthropic 提示: 请确保 API Key 有效且账户状态正常',
+                azure: '\n\n📌 Azure 提示: 请检查资源名称、部署名称和 API Key 是否正确',
+                google: '\n\n📌 Google 提示: 请确保 API Key 有效且已启用 Gemini API',
+                siliconflow: '\n\n📌 硅基流动提示: 请检查 API Key 和模型名称是否正确',
+                custom: '\n\n📌 自定义API提示: 请检查API端点、认证方式和请求格式是否正确'
+            }
+
+            if (providerHints[provider]) {
+                errorMessage += providerHints[provider]
+            }
+
+            // 添加调试信息
+            if (errorDetails.type || (errorDetails.code && errorDetails.code !== '')) {
+                errorMessage += `\n\n🔍 调试信息:`
+                if (errorDetails.type) errorMessage += `\n   类型: ${errorDetails.type}`
+                if (errorDetails.code && errorDetails.code !== '') errorMessage += `\n   代码: ${errorDetails.code}`
+                if (errorDetails.param) errorMessage += `\n   参数: ${errorDetails.param}`
+            }
+
+            // 特殊处理 rix_api_error 类型
+            if (errorDetails.type === 'rix_api_error') {
+                errorMessage += '\n\n⚠️ 这是一个 RIX API 错误，通常表示认证或授权问题'
+            }
+
+        } catch (parseError) {
             // 如果无法解析错误响应，使用默认错误信息
-            console.warn('⚠️ 无法解析错误响应')
+            console.warn('⚠️ 无法解析错误响应:', parseError)
+            errorMessage += `\n\n⚠️ 无法解析错误详情，原始响应: ${await response.text()}`
         }
 
         return errorMessage
     }
 
-    // 解析流式响应内容
+    // 解析流式响应内容 - 泛用版本
     parseStreamResponseContent(data, provider) {
-        console.log('🔍 解析流式数据:', data)
+        console.log('🔍 解析流式数据:', { provider, data })
 
-        // 兼容不同API提供商的流式响应格式
-        switch (provider) {
-            case 'openai':
-            case 'deepseek':
-            case 'azure':
-            case 'local':
-            case 'siliconflow':
-                if (data.choices && data.choices[0] && data.choices[0].delta) {
-                    const delta = data.choices[0].delta
-                    // 返回包含内容和思考内容的对象
+        // 定义解析策略列表，按优先级排序
+        const strategies = [
+            // 策略1: OpenAI 兼容格式 (choices[0].delta)
+            {
+                name: 'OpenAI兼容格式',
+                check: (d) => d.choices?.[0]?.delta,
+                extract: (d) => {
+                    const delta = d.choices[0].delta
                     return {
                         content: delta.content || '',
-                        reasoning_content: delta.reasoning_content || ''
+                        reasoning_content: delta.reasoning_content || delta.thinking || '',
+                        finish_reason: d.choices[0]?.finish_reason
                     }
                 }
-                break
+            },
+            // 策略2: Anthropic 格式 (content_block_delta)
+            {
+                name: 'Anthropic格式',
+                check: (d) => d.type === 'content_block_delta' && d.delta?.text,
+                extract: (d) => ({
+                    content: d.delta.text,
+                    reasoning_content: '',
+                    finish_reason: d.type === 'content_block_stop' ? 'stop' : null
+                })
+            },
+            // 策略3: Google Gemini 格式 (candidates[0])
+            {
+                name: 'Google Gemini格式',
+                check: (d) => d.candidates?.[0]?.content?.parts?.[0]?.text,
+                extract: (d) => ({
+                    content: d.candidates[0].content.parts[0].text,
+                    reasoning_content: '',
+                    finish_reason: d.candidates[0]?.finishReason
+                })
+            },
+            // 策略4: 顶层 delta 格式
+            {
+                name: '顶层delta格式',
+                check: (d) => d.delta?.content || d.delta?.text,
+                extract: (d) => ({
+                    content: d.delta.content || d.delta.text || '',
+                    reasoning_content: d.delta.reasoning_content || d.delta.thinking || '',
+                    finish_reason: d.delta?.finish_reason
+                })
+            },
+            // 策略5: 顶层 content/text 格式
+            {
+                name: '顶层content/text格式',
+                check: (d) => d.content || d.text || d.output || d.reply || d.answer,
+                extract: (d) => ({
+                    content: d.content || d.text || d.output || d.reply || d.answer || '',
+                    reasoning_content: d.reasoning_content || d.thinking || '',
+                    finish_reason: d.finish_reason
+                })
+            },
+            // 策略6: message.delta 格式
+            {
+                name: 'message.delta格式',
+                check: (d) => d.message?.delta?.content || d.message?.delta?.text,
+                extract: (d) => ({
+                    content: d.message.delta.content || d.message.delta.text || '',
+                    reasoning_content: d.message.delta.reasoning_content || '',
+                    finish_reason: d.message?.finish_reason
+                })
+            },
+            // 策略7: result 格式
+            {
+                name: 'result格式',
+                check: (d) => d.result?.content || d.result?.text || d.result,
+                extract: (d) => ({
+                    content: typeof d.result === 'string' ? d.result : (d.result.content || d.result.text || ''),
+                    reasoning_content: d.result?.reasoning_content || '',
+                    finish_reason: d.result?.finish_reason
+                })
+            },
+            // 策略8: data 内容直接是文本
+            {
+                name: '直接文本格式',
+                check: (d) => typeof d === 'string',
+                extract: (d) => ({
+                    content: d,
+                    reasoning_content: '',
+                    finish_reason: null
+                })
+            }
+        ]
 
-            case 'anthropic':
-                if (data.type === 'content_block_delta' && data.delta && data.delta.text) {
-                    return {
-                        content: data.delta.text,
-                        reasoning_content: ''
-                    }
-                }
-                break
-
-            case 'google':
-                if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                    return {
-                        content: data.candidates[0].content.parts[0].text,
-                        reasoning_content: ''
-                    }
-                }
-                break
-
-            case 'custom':
-                // 尝试多种常见格式
-                if (data.choices?.[0]?.delta) {
-                    const delta = data.choices[0].delta
-                    return {
-                        content: delta.content || '',
-                        reasoning_content: delta.reasoning_content || ''
-                    }
-                } else if (data.delta?.content) {
-                    return {
-                        content: data.delta.content,
-                        reasoning_content: data.delta.reasoning_content || ''
-                    }
-                } else if (data.content) {
-                    return {
-                        content: data.content,
-                        reasoning_content: ''
-                    }
-                }
-                break
+        // 尝试所有策略
+        for (const strategy of strategies) {
+            if (strategy.check(data)) {
+                const result = strategy.extract(data)
+                console.log(`✅ 使用策略 "${strategy.name}" 解析成功:`, result)
+                return result
+            }
         }
+
+        // 所有策略都失败，记录警告
+        console.warn('⚠️ 未知的API响应格式，无法解析:', {
+            provider,
+            dataKeys: Object.keys(data),
+            data
+        })
 
         return {
             content: '',
-            reasoning_content: ''
+            reasoning_content: '',
+            finish_reason: null
         }
     }
 
-    // 解析响应内容
-
+    // 解析响应内容 - 泛用版本
         parseResponseContent(data, provider) {
-
-            console.log('🔍 解析响应数据:', data)
-
+            console.log('🔍 解析响应数据:', { provider, data })
     
-
-            // 兼容不同API提供商的响应格式
-
-            switch (provider) {
-
-                case 'openai':
-
-                case 'deepseek':
-
-                case 'azure':
-
-                case 'local':
-
-                case 'siliconflow':
-
-                    if (data.choices && data.choices[0] && data.choices[0].message) {
-
-                        const message = data.choices[0].message
-
+            // 定义解析策略列表，按优先级排序
+            const strategies = [
+                // 策略1: OpenAI 兼容格式 (choices[0].message)
+                {
+                    name: 'OpenAI兼容格式',
+                    check: (d) => d.choices?.[0]?.message,
+                    extract: (d) => {
+                        const message = d.choices[0].message
                         return {
-
                             content: message.content || '',
-
-                            reasoning_content: message.reasoning_content || ''
-
+                            reasoning_content: message.reasoning_content || message.thinking || '',
+                            finish_reason: d.choices[0]?.finish_reason,
+                            usage: d.usage
                         }
-
                     }
-
-                    break
-
+                },
+                // 策略2: Anthropic 格式 (content[0].text)
+                {
+                    name: 'Anthropic格式',
+                    check: (d) => d.content?.[0]?.text,
+                    extract: (d) => ({
+                        content: d.content[0].text,
+                        reasoning_content: '',
+                        finish_reason: d.stop_reason,
+                        usage: d.usage
+                    })
+                },
+                // 策略3: Google Gemini 格式 (candidates[0])
+                {
+                    name: 'Google Gemini格式',
+                    check: (d) => d.candidates?.[0]?.content?.parts?.[0]?.text,
+                    extract: (d) => ({
+                        content: d.candidates[0].content.parts[0].text,
+                        reasoning_content: '',
+                        finish_reason: d.candidates[0]?.finishReason,
+                        usage: d.usageMetadata
+                    })
+                },
+                // 策略4: 顶层 message 格式
+                {
+                    name: '顶层message格式',
+                    check: (d) => d.message?.content || d.message?.text,
+                    extract: (d) => ({
+                        content: d.message.content || d.message.text || '',
+                        reasoning_content: d.message.reasoning_content || d.message.thinking || '',
+                        finish_reason: d.message?.finish_reason,
+                        usage: d.usage
+                    })
+                },
+                // 策略5: 顶层 content/text/output/reply/answer 格式
+                {
+                    name: '顶层content/text格式',
+                    check: (d) => d.content || d.text || d.output || d.reply || d.answer,
+                    extract: (d) => ({
+                        content: d.content || d.text || d.output || d.reply || d.answer || '',
+                        reasoning_content: d.reasoning_content || d.thinking || '',
+                        finish_reason: d.finish_reason,
+                        usage: d.usage
+                    })
+                },
+                // 策略6: result 格式
+                {
+                    name: 'result格式',
+                    check: (d) => d.result?.content || d.result?.text || d.result,
+                    extract: (d) => ({
+                        content: typeof d.result === 'string' ? d.result : (d.result.content || d.result.text || ''),
+                        reasoning_content: d.result?.reasoning_content || '',
+                        finish_reason: d.result?.finish_reason,
+                        usage: d.usage
+                    })
+                },
+                // 策略7: response 格式
+                {
+                    name: 'response格式',
+                    check: (d) => d.response?.content || d.response?.text || d.response,
+                    extract: (d) => ({
+                        content: typeof d.response === 'string' ? d.response : (d.response.content || d.response.text || ''),
+                        reasoning_content: d.response?.reasoning_content || '',
+                        finish_reason: d.response?.finish_reason,
+                        usage: d.usage
+                    })
+                },
+                // 策略8: data 内容直接是文本
+                {
+                    name: '直接文本格式',
+                    check: (d) => typeof d === 'string',
+                    extract: (d) => ({
+                        content: d,
+                        reasoning_content: '',
+                        finish_reason: null,
+                        usage: null
+                    })
+                },
+                // 策略9: data 是数组，取第一个元素的文本
+                {
+                    name: '数组格式',
+                    check: (d) => Array.isArray(d) && d[0]?.content,
+                    extract: (d) => ({
+                        content: d[0].content,
+                        reasoning_content: d[0]?.reasoning_content || '',
+                        finish_reason: d[0]?.finish_reason,
+                        usage: d[0]?.usage
+                    })
+                }
+            ]
     
-
-                case 'anthropic':
-
-                    if (data.content && data.content[0] && data.content[0].text) {
-
-                        return {
-
-                            content: data.content[0].text,
-
-                            reasoning_content: ''
-
-                        }
-
-                    }
-
-                    break
-
-    
-
-                case 'google':
-
-                    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-
-                        return {
-
-                            content: data.candidates[0].content.parts[0].text,
-
-                            reasoning_content: ''
-
-                        }
-
-                    }
-
-                    break
-
-    
-
-                case 'custom':
-
-                    // 尝试多种常见格式
-
-                    if (data.choices?.[0]?.message) {
-
-                        const message = data.choices[0].message
-
-                        return {
-
-                            content: message.content || '',
-
-                            reasoning_content: message.reasoning_content || ''
-
-                        }
-
-                    } else if (data.content) {
-
-                        return {
-
-                            content: data.content,
-
-                            reasoning_content: ''
-
-                        }
-
-                    } else if (data.result) {
-
-                        return {
-
-                            content: data.result,
-
-                            reasoning_content: ''
-
-                        }
-
-                    } else if (data.text) {
-
-                        return {
-
-                            content: data.text,
-
-                            reasoning_content: ''
-
-                        }
-
-                    }
-
-                    break
-
+            // 尝试所有策略
+            for (const strategy of strategies) {
+                if (strategy.check(data)) {
+                    const result = strategy.extract(data)
+                    console.log(`✅ 使用策略 "${strategy.name}" 解析成功:`, {
+                        content: result.content.substring(0, 100) + (result.content.length > 100 ? '...' : ''),
+                        hasReasoning: !!result.reasoning_content,
+                        finishReason: result.finish_reason,
+                        usage: result.usage
+                    })
+                    return result
+                }
             }
-
     
-
-            console.warn('⚠️ 未知的API响应格式:', data)
-
+            // 所有策略都失败，记录警告
+            console.warn('⚠️ 未知的API响应格式，无法解析:', {
+                provider,
+                dataKeys: Object.keys(data),
+                data,
+                dataType: typeof data,
+                isArray: Array.isArray(data)
+            })
+    
             return {
-
                 content: '',
-
-                reasoning_content: ''
-
+                reasoning_content: '',
+                finish_reason: null,
+                usage: null
             }
-
         }
-
     // 获取支持的模型列表
     getSupportedModels(apiEndpoint) {
         const provider = this.detectAPIProvider(apiEndpoint)

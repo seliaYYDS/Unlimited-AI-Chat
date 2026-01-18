@@ -2,13 +2,15 @@
 export class ConversationDB {
     constructor() {
         this.dbName = 'AIConversationDB'
-        this.dbVersion = 2
+        this.dbVersion = 3
         this.storeName = 'conversations'
         this.db = null
         this.useLocalStorage = false
         this.conversationsKey = 'ai_conversations_fallback'
         this.imagesKey = 'ai_images_fallback'
         this.avatarsKey = 'ai_avatars_fallback'
+        this.chatSessionsKey = 'ai_chat_sessions_fallback'
+        this.chatSessionMessagesKey = 'ai_chat_session_messages_fallback'
     }
 
     // 检查 IndexedDB 是否可用
@@ -103,6 +105,23 @@ export class ConversationDB {
                     const avatarStore = db.createObjectStore(avatarStoreName, { keyPath: 'agentId' })
                     avatarStore.createIndex('agentId', 'agentId', { unique: true })
                     avatarStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+                }
+
+                // 创建对话会话对象存储，使用复合键 agentId_sessionId
+                const sessionsStoreName = 'chatSessions'
+                if (!db.objectStoreNames.contains(sessionsStoreName)) {
+                    const sessionsStore = db.createObjectStore(sessionsStoreName, { keyPath: 'id' })
+                    sessionsStore.createIndex('agentId', 'agentId', { unique: false })
+                    sessionsStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+                }
+
+                // 创建对话会话消息对象存储，使用复合键 agentId_sessionId
+                const sessionMessagesStoreName = 'chatSessionMessages'
+                if (!db.objectStoreNames.contains(sessionMessagesStoreName)) {
+                    const sessionMessagesStore = db.createObjectStore(sessionMessagesStoreName, { keyPath: 'id' })
+                    sessionMessagesStore.createIndex('agentId', 'agentId', { unique: false })
+                    sessionMessagesStore.createIndex('sessionId', 'sessionId', { unique: false })
+                    sessionMessagesStore.createIndex('agentId_sessionId', ['agentId', 'sessionId'], { unique: true })
                 }
             }
         })
@@ -950,6 +969,788 @@ export class ConversationDB {
             this.db.close()
             this.db = null
         }
+    }
+
+    // ==================== 多对话模式存储方法 ====================
+
+    // 获取指定智能体的所有对话会话
+    async getChatSessions(agentId) {
+        if (this.useLocalStorage) {
+            return this.getChatSessionsFromLocalStorage(agentId)
+        }
+
+        if (!this.db) {
+            await this.init()
+        }
+
+        // 如果初始化后降级到 localStorage
+        if (this.useLocalStorage) {
+            return this.getChatSessionsFromLocalStorage(agentId)
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['chatSessions'], 'readonly')
+            const objectStore = transaction.objectStore('chatSessions')
+            const index = objectStore.index('agentId')
+            const request = index.getAll(agentId)
+
+            request.onerror = () => {
+                console.error('获取对话会话列表失败:', request.error)
+                reject(request.error)
+            }
+
+            request.onsuccess = () => {
+                const results = request.result
+                // 按更新时间降序排序
+                results.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+                resolve(results)
+            }
+        })
+    }
+
+    // 保存指定智能体的对话会话列表
+    async saveChatSessions(agentId, sessions) {
+        if (this.useLocalStorage) {
+            return this.saveChatSessionsToLocalStorage(agentId, sessions)
+        }
+
+        if (!this.db) {
+            await this.init()
+        }
+
+        // 如果初始化后降级到 localStorage
+        if (this.useLocalStorage) {
+            return this.saveChatSessionsToLocalStorage(agentId, sessions)
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['chatSessions'], 'readwrite')
+            const objectStore = transaction.objectStore('chatSessions')
+
+            // 先删除该智能体的所有会话
+            const index = objectStore.index('agentId')
+            const getAllRequest = index.getAllKeys(agentId)
+
+            getAllRequest.onsuccess = () => {
+                const keys = getAllRequest.result
+
+                // 删除旧会话
+                keys.forEach(key => {
+                    objectStore.delete(key)
+                })
+
+                // 添加新会话
+                let addedCount = 0
+                const total = sessions.length
+
+                if (total === 0) {
+                    resolve(true)
+                    return
+                }
+
+                sessions.forEach(session => {
+                    const data = {
+                        id: session.id,
+                        agentId: agentId,
+                        name: session.name,
+                        updatedAt: session.updatedAt || new Date().toISOString()
+                    }
+
+                    const request = objectStore.put(data)
+
+                    request.onsuccess = () => {
+                        addedCount++
+                        if (addedCount === total) {
+                            resolve(true)
+                        }
+                    }
+
+                    request.onerror = () => {
+                        console.error('保存对话会话失败:', request.error)
+                        reject(request.error)
+                    }
+                })
+            }
+
+            getAllRequest.onerror = () => {
+                console.error('获取对话会话键失败:', getAllRequest.error)
+                reject(getAllRequest.error)
+            }
+        })
+    }
+
+    // 获取指定会话的对话消息
+    async getChatSessionMessages(agentId, sessionId) {
+        if (this.useLocalStorage) {
+            return this.getChatSessionMessagesFromLocalStorage(agentId, sessionId)
+        }
+
+        if (!this.db) {
+            await this.init()
+        }
+
+        // 如果初始化后降级到 localStorage
+        if (this.useLocalStorage) {
+            return this.getChatSessionMessagesFromLocalStorage(agentId, sessionId)
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['chatSessionMessages'], 'readonly')
+            const objectStore = transaction.objectStore('chatSessionMessages')
+            const index = objectStore.index('agentId_sessionId')
+            const request = index.get([agentId, sessionId])
+
+            request.onerror = () => {
+                console.error('获取对话会话消息失败:', request.error)
+                reject(request.error)
+            }
+
+            request.onsuccess = () => {
+                const result = request.result
+                resolve(result ? result.messages : [])
+            }
+        })
+    }
+
+    // 保存指定会话的对话消息
+    async saveChatSessionMessages(agentId, sessionId, messages) {
+        if (this.useLocalStorage) {
+            return this.saveChatSessionMessagesToLocalStorage(agentId, sessionId, messages)
+        }
+
+        if (!this.db) {
+            await this.init()
+        }
+
+        // 如果初始化后降级到 localStorage
+        if (this.useLocalStorage) {
+            return this.saveChatSessionMessagesToLocalStorage(agentId, sessionId, messages)
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['chatSessionMessages'], 'readwrite')
+            const objectStore = transaction.objectStore('chatSessionMessages')
+
+            // 清理消息对象
+            let cleanedMessages
+            try {
+                const jsonStr = JSON.stringify(messages)
+                cleanedMessages = JSON.parse(jsonStr)
+            } catch (error) {
+                cleanedMessages = messages.map(msg => this.cleanMessageObject(msg))
+            }
+
+            const data = {
+                id: `${agentId}_${sessionId}`,
+                agentId: agentId,
+                sessionId: sessionId,
+                messages: cleanedMessages,
+                updatedAt: new Date().toISOString()
+            }
+
+            const request = objectStore.put(data)
+
+            request.onerror = () => {
+                console.error('保存对话会话消息失败，降级到 localStorage:', request.error)
+                // 降级到 localStorage
+                this.useLocalStorage = true
+                const result = this.saveChatSessionMessagesToLocalStorage(agentId, sessionId, messages)
+                resolve(result)
+            }
+
+            request.onsuccess = () => {
+                resolve(true)
+            }
+        })
+    }
+
+    // 删除指定会话
+    async deleteChatSession(agentId, sessionId) {
+        if (this.useLocalStorage) {
+            return this.deleteChatSessionFromLocalStorage(agentId, sessionId)
+        }
+
+        if (!this.db) {
+            await this.init()
+        }
+
+        // 如果初始化后降级到 localStorage
+        if (this.useLocalStorage) {
+            return this.deleteChatSessionFromLocalStorage(agentId, sessionId)
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['chatSessions', 'chatSessionMessages'], 'readwrite')
+
+            // 删除会话记录
+            const sessionsStore = transaction.objectStore('chatSessions')
+            const deleteSessionRequest = sessionsStore.delete(sessionId)
+
+            // 删除会话消息（使用游标）
+            const messagesStore = transaction.objectStore('chatSessionMessages')
+            const messagesIndex = messagesStore.index('agentId_sessionId')
+            const keyRange = IDBKeyRange.only([agentId, sessionId])
+            const messagesRequest = messagesIndex.openCursor(keyRange)
+
+            messagesRequest.onsuccess = (event) => {
+                const cursor = event.target.result
+                if (cursor) {
+                    cursor.delete()
+                    cursor.continue()
+                }
+            }
+
+            transaction.oncomplete = () => {
+                resolve(true)
+            }
+
+            transaction.onerror = () => {
+                console.error('删除对话会话失败:', transaction.error)
+                reject(transaction.error)
+            }
+        })
+    }
+
+    // 清空指定智能体的所有对话会话
+    async clearAllChatSessions(agentId) {
+        if (this.useLocalStorage) {
+            return this.clearAllChatSessionsFromLocalStorage(agentId)
+        }
+
+        if (!this.db) {
+            await this.init()
+        }
+
+        // 如果初始化后降级到 localStorage
+        if (this.useLocalStorage) {
+            return this.clearAllChatSessionsFromLocalStorage(agentId)
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['chatSessions', 'chatSessionMessages'], 'readwrite')
+
+            // 删除所有会话记录
+            const sessionsStore = transaction.objectStore('chatSessions')
+            const sessionsIndex = sessionsStore.index('agentId')
+            const sessionsRequest = sessionsIndex.getAllKeys(agentId)
+
+            // 删除所有会话消息
+            const messagesStore = transaction.objectStore('chatSessionMessages')
+            const messagesIndex = messagesStore.index('agentId')
+            const messagesRequest = messagesIndex.getAllKeys(agentId)
+
+            let deletedSessions = 0
+            let deletedMessages = 0
+            let totalSessions = 0
+            let totalMessages = 0
+
+            sessionsRequest.onsuccess = () => {
+                const sessionKeys = sessionsRequest.result
+                totalSessions = sessionKeys.length
+
+                sessionKeys.forEach(key => {
+                    const deleteRequest = sessionsStore.delete(key)
+                    deleteRequest.onsuccess = () => {
+                        deletedSessions++
+                        checkComplete()
+                    }
+                })
+            }
+
+            messagesRequest.onsuccess = () => {
+                const messageKeys = messagesRequest.result
+                totalMessages = messageKeys.length
+
+                messageKeys.forEach(key => {
+                    const deleteRequest = messagesStore.delete(key)
+                    deleteRequest.onsuccess = () => {
+                        deletedMessages++
+                        checkComplete()
+                    }
+                })
+            }
+
+            function checkComplete() {
+                if (deletedSessions === totalSessions && deletedMessages === totalMessages) {
+                    resolve(true)
+                }
+            }
+
+            transaction.onerror = () => {
+                console.error('清空对话会话失败:', transaction.error)
+                reject(transaction.error)
+            }
+        })
+    }
+
+    // ==================== 多对话模式 localStorage 后备方法 ====================
+
+    getChatSessionsFromLocalStorage(agentId) {
+        try {
+            const allSessions = localStorage.getItem(this.chatSessionsKey)
+            const sessionsData = allSessions ? JSON.parse(allSessions) : {}
+            return sessionsData[agentId] || []
+        } catch (error) {
+            console.error('从 localStorage 获取对话会话列表失败:', error)
+            return []
+        }
+    }
+
+    saveChatSessionsToLocalStorage(agentId, sessions) {
+        try {
+            const allSessions = JSON.parse(localStorage.getItem(this.chatSessionsKey) || '{}')
+            allSessions[agentId] = sessions
+            localStorage.setItem(this.chatSessionsKey, JSON.stringify(allSessions))
+            return true
+        } catch (error) {
+            console.error('保存对话会话列表到 localStorage 失败:', error)
+            return false
+        }
+    }
+
+    getChatSessionMessagesFromLocalStorage(agentId, sessionId) {
+        try {
+            const allMessages = localStorage.getItem(this.chatSessionMessagesKey)
+            const messagesData = allMessages ? JSON.parse(allMessages) : {}
+            const key = `${agentId}_${sessionId}`
+            return messagesData[key] || []
+        } catch (error) {
+            console.error('从 localStorage 获取对话会话消息失败:', error)
+            return []
+        }
+    }
+
+    saveChatSessionMessagesToLocalStorage(agentId, sessionId, messages) {
+        try {
+            const allMessages = JSON.parse(localStorage.getItem(this.chatSessionMessagesKey) || '{}')
+            const key = `${agentId}_${sessionId}`
+            allMessages[key] = messages
+            localStorage.setItem(this.chatSessionMessagesKey, JSON.stringify(allMessages))
+            return true
+        } catch (error) {
+            console.error('保存对话会话消息到 localStorage 失败:', error)
+            return false
+        }
+    }
+
+    deleteChatSessionFromLocalStorage(agentId, sessionId) {
+        try {
+            // 删除会话记录
+            const allSessions = JSON.parse(localStorage.getItem(this.chatSessionsKey) || '{}')
+            if (allSessions[agentId]) {
+                allSessions[agentId] = allSessions[agentId].filter(s => s.id !== sessionId)
+                localStorage.setItem(this.chatSessionsKey, JSON.stringify(allSessions))
+            }
+
+            // 删除会话消息
+            const allMessages = JSON.parse(localStorage.getItem(this.chatSessionMessagesKey) || '{}')
+            const key = `${agentId}_${sessionId}`
+            delete allMessages[key]
+            localStorage.setItem(this.chatSessionMessagesKey, JSON.stringify(allMessages))
+
+            return true
+        } catch (error) {
+            console.error('从 localStorage 删除对话会话失败:', error)
+            return false
+        }
+    }
+
+    clearAllChatSessionsFromLocalStorage(agentId) {
+        try {
+            // 删除所有会话记录
+            const allSessions = JSON.parse(localStorage.getItem(this.chatSessionsKey) || '{}')
+            delete allSessions[agentId]
+            localStorage.setItem(this.chatSessionsKey, JSON.stringify(allSessions))
+
+            // 删除所有会话消息
+            const allMessages = JSON.parse(localStorage.getItem(this.chatSessionMessagesKey) || '{}')
+            Object.keys(allMessages).forEach(key => {
+                if (key.startsWith(`${agentId}_`)) {
+                    delete allMessages[key]
+                }
+            })
+            localStorage.setItem(this.chatSessionMessagesKey, JSON.stringify(allMessages))
+
+            return true
+        } catch (error) {
+            console.error('从 localStorage 清空对话会话失败:', error)
+            return false
+        }
+    }
+
+    // 获取所有智能体的多对话数据（用于导出）
+    async getAllChatSessions() {
+        if (this.useLocalStorage) {
+            return this.getAllChatSessionsFromLocalStorage()
+        }
+
+        if (!this.db) {
+            await this.init()
+        }
+
+        // 如果初始化后降级到 localStorage
+        if (this.useLocalStorage) {
+            return this.getAllChatSessionsFromLocalStorage()
+        }
+
+        return new Promise((resolve, reject) => {
+        const transaction = this.db.transaction(['chatSessions', 'chatSessionMessages'], 'readonly')
+        const sessionsStore = transaction.objectStore('chatSessions')
+        const messagesStore = transaction.objectStore('chatSessionMessages')
+
+        // 获取所有会话
+        const sessionsRequest = sessionsStore.getAll()
+
+        sessionsRequest.onerror = () => {
+            console.error('获取所有对话会话失败:', sessionsRequest.error)
+            reject(sessionsRequest.error)
+        }
+
+        sessionsRequest.onsuccess = () => {
+            const sessions = sessionsRequest.result
+            const result = {}
+
+            // 为每个会话获取消息
+            let loadedCount = 0
+            const total = sessions.length
+
+            if (total === 0) {
+                resolve(result)
+                return
+            }
+
+            sessions.forEach(session => {
+                const agentId = session.agentId
+                const sessionId = session.id
+
+                if (!result[agentId]) {
+                    result[agentId] = {
+                        sessions: [],
+                        messages: {}
+                    }
+                }
+
+                // 添加会话信息
+                result[agentId].sessions.push({
+                    id: session.id,
+                    name: session.name,
+                    updatedAt: session.updatedAt
+                })
+
+                // 获取该会话的消息
+                const messagesRequest = messagesStore.index('agentId_sessionId').get([agentId, sessionId])
+
+                messagesRequest.onsuccess = () => {
+                    const messageData = messagesRequest.result
+                    if (messageData) {
+                        result[agentId].messages[sessionId] = messageData.messages
+                    }
+
+                    loadedCount++
+                    if (loadedCount === total) {
+                        resolve(result)
+                    }
+                }
+
+                messagesRequest.onerror = () => {
+                    console.error(`获取会话 ${sessionId} 的消息失败:`, messagesRequest.error)
+                    loadedCount++
+                    if (loadedCount === total) {
+                        resolve(result)
+                    }
+                }
+            })
+            }
+        })
+    }
+
+    // localStorage 后备方法：获取所有多对话数据
+    getAllChatSessionsFromLocalStorage() {
+        try {
+            const allSessions = localStorage.getItem(this.chatSessionsKey)
+            const allMessages = localStorage.getItem(this.chatSessionMessagesKey)
+
+            const sessionsData = allSessions ? JSON.parse(allSessions) : {}
+            const messagesData = allMessages ? JSON.parse(allMessages) : {}
+
+            const result = {}
+
+        // 整理数据格式
+        Object.keys(sessionsData).forEach(agentId => {
+            result[agentId] = {
+                sessions: sessionsData[agentId],
+                messages: {}
+            }
+
+            // 获取该智能体所有会话的消息
+            sessionsData[agentId].forEach(session => {
+                const key = `${agentId}_${session.id}`
+                if (messagesData[key]) {
+                    result[agentId].messages[session.id] = messagesData[key]
+                }
+            })
+        })
+
+        return result
+    } catch (error) {
+        console.error('从 localStorage 获取所有多对话数据失败:', error)
+        return {}
+    }
+    }
+
+    // 批量保存多对话数据（用于导入）
+    async saveAllChatSessions(chatSessionsData) {
+        if (this.useLocalStorage) {
+            return this.saveAllChatSessionsToLocalStorage(chatSessionsData)
+        }
+
+        if (!this.db) {
+            await this.init()
+        }
+
+        // 如果初始化后降级到 localStorage
+        if (this.useLocalStorage) {
+            return this.saveAllChatSessionsToLocalStorage(chatSessionsData)
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['chatSessions', 'chatSessionMessages'], 'readwrite')
+            const sessionsStore = transaction.objectStore('chatSessions')
+            const messagesStore = transaction.objectStore('chatSessionMessages')
+
+            let savedCount = 0
+            let totalItems = 0
+
+            // 计算需要保存的项目总数
+            Object.keys(chatSessionsData).forEach(agentId => {
+                const agentData = chatSessionsData[agentId]
+                totalItems += agentData.sessions.length
+                totalItems += Object.keys(agentData.messages).length
+            })
+
+            if (totalItems === 0) {
+                resolve(true)
+                return
+            }
+
+            // 保存每个智能体的数据
+            Object.keys(chatSessionsData).forEach(agentId => {
+                const agentData = chatSessionsData[agentId]
+
+                // 保存会话列表
+                agentData.sessions.forEach(session => {
+                    const sessionData = {
+                        id: session.id,
+                        agentId: agentId,
+                        name: session.name,
+                        updatedAt: session.updatedAt
+                    }
+
+                    const sessionRequest = sessionsStore.put(sessionData)
+
+                    sessionRequest.onsuccess = () => {
+                        savedCount++
+                        if (savedCount === totalItems) {
+                            resolve(true)
+                        }
+                    }
+
+                    sessionRequest.onerror = () => {
+                        console.error('保存会话失败:', sessionRequest.error)
+                        reject(sessionRequest.error)
+                    }
+                })
+
+                // 保存会话消息
+                Object.keys(agentData.messages).forEach(sessionId => {
+                    const messages = agentData.messages[sessionId]
+                    const messageData = {
+                        id: `${agentId}_${sessionId}`,
+                        agentId: agentId,
+                        sessionId: sessionId,
+                        messages: messages,
+                        updatedAt: new Date().toISOString()
+                    }
+
+                    const messageRequest = messagesStore.put(messageData)
+
+                    messageRequest.onsuccess = () => {
+                        savedCount++
+                        if (savedCount === totalItems) {
+                            resolve(true)
+                        }
+                    }
+
+                    messageRequest.onerror = () => {
+                        console.error('保存会话消息失败:', messageRequest.error)
+                        reject(messageRequest.error)
+                    }
+                })
+            })
+        })
+    }
+
+    // localStorage 后备方法：批量保存多对话数据
+    saveAllChatSessionsToLocalStorage(chatSessionsData) {
+        try {
+            const allSessions = JSON.parse(localStorage.getItem(this.chatSessionsKey) || '{}')
+            const allMessages = JSON.parse(localStorage.getItem(this.chatSessionMessagesKey) || '{}')
+
+            // 合并数据
+            Object.keys(chatSessionsData).forEach(agentId => {
+                const agentData = chatSessionsData[agentId]
+
+                // 保存会话列表
+                allSessions[agentId] = agentData.sessions
+
+                // 保存会话消息
+                Object.keys(agentData.messages).forEach(sessionId => {
+                    const key = `${agentId}_${sessionId}`
+                    allMessages[key] = agentData.messages[sessionId]
+                })
+            })
+
+            localStorage.setItem(this.chatSessionsKey, JSON.stringify(allSessions))
+            localStorage.setItem(this.chatSessionMessagesKey, JSON.stringify(allMessages))
+
+            return true
+        } catch (error) {
+            console.error('批量保存多对话数据到 localStorage 失败:', error)
+            return false
+        }
+    }
+
+    // ==================== 清除所有数据 ====================
+
+    // 清除所有 IndexedDB 数据
+    async clearAllIndexedDBData() {
+        if (!this.db) {
+            await this.init()
+        }
+
+        // 如果降级到 localStorage，跳过 IndexedDB 清除
+        if (this.useLocalStorage) {
+            console.log('IndexedDB 不可用，跳过清除')
+            return true
+        }
+
+        return new Promise((resolve, reject) => {
+            // 获取所有对象存储的名称
+            const storeNames = [
+                this.storeName, // conversations
+                'images',
+                'avatars',
+                'chatSessions',
+                'chatSessionMessages'
+            ]
+
+            let clearedCount = 0
+            const totalStores = storeNames.length
+
+            // 逐个清除每个对象存储
+            storeNames.forEach(storeName => {
+                try {
+                    const transaction = this.db.transaction([storeName], 'readwrite')
+                    const objectStore = transaction.objectStore(storeName)
+                    const request = objectStore.clear()
+
+                    request.onsuccess = () => {
+                        console.log(`已清除对象存储: ${storeName}`)
+                        clearedCount++
+                        if (clearedCount === totalStores) {
+                            resolve(true)
+                        }
+                    }
+
+                    request.onerror = () => {
+                        console.error(`清除对象存储失败: ${storeName}`, request.error)
+                        reject(request.error)
+                    }
+                } catch (error) {
+                    console.error(`清除对象存储时出错: ${storeName}`, error)
+                    clearedCount++
+                    if (clearedCount === totalStores) {
+                        resolve(true)
+                    }
+                }
+            })
+        })
+    }
+
+    // 清除所有 localStorage 数据
+    clearAllLocalStorageData() {
+        try {
+            // 清除对话历史
+            localStorage.removeItem(this.conversationsKey)
+
+            // 清除图片数据
+            localStorage.removeItem(this.imagesKey)
+
+            // 清除头像数据
+            localStorage.removeItem(this.avatarsKey)
+
+            // 清除对话会话数据
+            localStorage.removeItem(this.chatSessionsKey)
+
+            // 清除对话会话消息数据
+            localStorage.removeItem(this.chatSessionMessagesKey)
+
+            console.log('已清除所有 localStorage 数据')
+            return true
+        } catch (error) {
+            console.error('清除 localStorage 数据失败:', error)
+            return false
+        }
+    }
+
+    // 删除整个 IndexedDB 数据库（包括版本标识）
+    async deleteDatabase() {
+        if (!this.isIndexedDBAvailable()) {
+            console.log('IndexedDB 不可用，跳过数据库删除')
+            return true
+        }
+
+        // 关闭当前数据库连接
+        if (this.db) {
+            this.db.close()
+            this.db = null
+        }
+
+        return new Promise((resolve, reject) => {
+            const deleteRequest = indexedDB.deleteDatabase(this.dbName)
+
+            deleteRequest.onsuccess = () => {
+                console.log(`已删除 IndexedDB 数据库: ${this.dbName}`)
+                resolve(true)
+            }
+
+            deleteRequest.onerror = () => {
+                console.error('删除 IndexedDB 数据库失败:', deleteRequest.error)
+                reject(deleteRequest.error)
+            }
+
+            deleteRequest.onblocked = () => {
+                console.warn('删除 IndexedDB 数据库被阻塞，请关闭所有连接')
+            }
+        })
+    }
+
+    // 清除所有数据（IndexedDB + localStorage）
+    async clearAllData() {
+        console.log('开始清除所有数据...')
+
+        // 清除 IndexedDB 数据
+        const indexedDBCleared = await this.clearAllIndexedDBData()
+
+        // 清除 localStorage 数据
+        const localStorageCleared = this.clearAllLocalStorageData()
+
+        console.log('数据清除完成:', {
+            indexedDB: indexedDBCleared,
+            localStorage: localStorageCleared
+        })
+
+        return indexedDBCleared && localStorageCleared
     }
 }
 
