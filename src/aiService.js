@@ -1,5 +1,7 @@
 // AI模型服务兼容层 - 增强版本
 import { toolRegistry } from './utils/toolRegistry.js'
+import { parseComponentReferences, getComponent } from './utils/agentComponents.js'
+import { generateComponentUsageGuide } from './utils/agentComponents.js'
 
 export class AIService {
     constructor(storageManager) {
@@ -293,25 +295,16 @@ export class AIService {
             const startTime = Date.now()
             let thinkingTime = 0
 
-            console.log(`[AI Service] 开始处理请求 - 智能体: ${request.agent.name}, ID: ${request.agent.id}`)
-
             // 获取智能体记忆并添加到对话历史中
             let enhancedConversationHistory = [...request.conversationHistory]
-            
+
             // 获取智能体记忆
             const agentMemory = this.storageManager.getAgentMemory(request.agent.id)
-            console.log(`[AI Service] 获取智能体记忆:`, {
-                agentId: request.agent.id,
-                hasMemory: !!agentMemory,
-                memoryLength: agentMemory?.content?.length || 0,
-                conversationHistoryLength: enhancedConversationHistory.length
-            })
 
             // 检查对话历史中是否已经包含记忆系统消息
             const hasMemoryMessage = enhancedConversationHistory.some(
                 msg => msg.role === 'system' && msg.content && msg.content.includes('智能体记忆')
             )
-            console.log(`[AI Service] 对话历史中是否已包含记忆消息:`, hasMemoryMessage)
 
             // 如果智能体有记忆且对话历史中还没有记忆消息，则注入记忆
             if (agentMemory && agentMemory.content && agentMemory.content.trim() && !hasMemoryMessage) {
@@ -320,24 +313,10 @@ export class AIService {
                     content: `智能体记忆（用于提供上下文信息）:\n${agentMemory.content}\n\n请基于以上记忆内容与用户进行自然的对话，不要明确提及这些记忆信息。`
                 }
                 enhancedConversationHistory.unshift(memorySystemMessage)
-                console.log(`[AI Service] 已注入智能体记忆到对话历史开头`, {
-                    memoryContentLength: agentMemory.content.length,
-                    newHistoryLength: enhancedConversationHistory.length
-                })
-            } else if (hasMemoryMessage) {
-                console.log(`[AI Service] 对话历史中已存在记忆消息，跳过注入`)
-            } else if (!agentMemory || !agentMemory.content) {
-                console.log(`[AI Service] 智能体无记忆内容，跳过注入`)
             }
 
             // 合并设置：智能体级别的设置优先于全局设置
             const mergedSettings = this.mergeAgentSettings(settings, request.agent)
-            console.log(`[AI Service] 使用设置:`, {
-                hasCustomApi: !!request.agent.useCustomApi,
-                apiType: mergedSettings.apiType,
-                apiEndpoint: mergedSettings.apiEndpoint ? '已配置' : '未配置',
-                modelName: mergedSettings.modelName
-            })
 
             let response
             if (mergedSettings.apiType === 'network') {
@@ -418,33 +397,13 @@ export class AIService {
 
         // 检查是否需要启用工具调用
         const enableTools = agent.skills && agent.skills.includes('webSearch')
-        console.log(`[AI Service] 流式请求 - 工具调用检查:`, {
-            agentName: agent.name,
-            hasSkills: !!agent.skills,
-            skills: agent.skills,
-            enableTools
-        })
 
         // 构建请求体，启用流式输出
         const requestBody = this.buildRequestBody(agent, message, conversationHistory, settings, provider, enableTools)
         requestBody.stream = true
 
-        console.log(`[AI Service] 发送流式网络API请求:`, {
-            provider,
-            url: fullUrl,
-            model: modelName,
-            messageLength: message.length,
-            conversationHistoryLength: conversationHistory.length,
-            requestBodyMessages: requestBody.messages ? requestBody.messages.length : 'N/A',
-            enableTools,
-            hasTools: !!requestBody.tools,
-            toolsCount: requestBody.tools ? requestBody.tools.length : 0
-        });
-
         // 构建请求头
         const headers = this.buildRequestHeaders(apiKey, provider)
-
-        console.log(`🔍 发送流式请求到: ${fullUrl}`)
 
         try {
             const response = await fetch(fullUrl, {
@@ -468,12 +427,6 @@ export class AIService {
             // 根据 maxTokens 计算最大响应长度（估算：1 token ≈ 4 字符）
             const MAX_RESPONSE_LENGTH = (maxTokens || 2000) * 4
             const MAX_CHUNKS = 10000 // 大幅增加 chunk 数量限制
-
-            console.log(`[AI Service] 流式输出长度控制:`, {
-                maxTokens,
-                MAX_RESPONSE_LENGTH,
-                MAX_CHUNKS
-            })
 
             let lastUpdateTime = 0
             const UPDATE_INTERVAL = 50 // 最小更新间隔(ms)
@@ -512,7 +465,6 @@ export class AIService {
 
                                 // 检查tool_calls
                                 if (delta.tool_calls) {
-                                    console.log(`[AI Service] 流式响应中检测到工具调用:`, delta.tool_calls)
                                     hasToolCalls = true
 
                                     if (!toolCallsBuffer) {
@@ -572,8 +524,6 @@ export class AIService {
 
             // 如果检测到工具调用，处理工具调用
             if (hasToolCalls && toolCallsBuffer && toolCallsBuffer.length > 0) {
-                console.log(`[AI Service] 流式响应完成，检测到 ${toolCallsBuffer.length} 个工具调用`)
-                console.log(`[AI Service] 工具调用详情:`, toolCallsBuffer)
 
                 // 构建完整的工具调用响应
                 const toolCallsResponse = {
@@ -594,15 +544,6 @@ export class AIService {
                 `__REASONING_START__${fullReasoning}__REASONING_END__${fullResponse}` : 
                 fullResponse
             onProgress(combinedResponse)
-
-            console.log(`[AI Service] 流式输出完成:`, {
-                总chunk数: chunkCount,
-                响应长度: fullResponse.length,
-                思考内容长度: fullReasoning.length,
-                总长度: combinedResponse.length,
-                最大限制: MAX_RESPONSE_LENGTH,
-                令牌数: totalTokens
-            })
 
             // 返回响应和令牌数
             return {
@@ -648,21 +589,8 @@ export class AIService {
         // 构建请求体
         const requestBody = this.buildRequestBody(agent, message, conversationHistory, settings, provider, enableTools)
 
-        console.log(`[AI Service] 发送网络API请求:`, {
-            provider,
-            url: fullUrl,
-            model: modelName,
-            messageLength: message.length,
-            conversationHistoryLength: conversationHistory.length,
-            requestBodyMessages: requestBody.messages ? requestBody.messages.length : 'N/A',
-            enableTools,
-            hasTools: !!requestBody.tools
-        });
-
         // 构建请求头
         const headers = this.buildRequestHeaders(apiKey, provider)
-
-        console.log(`🔍 发送请求到: ${fullUrl}`)
 
         try {
             const response = await fetch(fullUrl, {
@@ -671,19 +599,15 @@ export class AIService {
                 body: JSON.stringify(requestBody)
             })
 
-            console.log(`📡 响应状态: ${response.status} ${response.statusText}`)
-
             if (!response.ok) {
                 const errorInfo = await this.parseErrorResponse(response, provider)
                 throw new Error(errorInfo)
             }
 
             const data = await response.json()
-            console.log(`✅ 响应数据:`, data)
 
             // 检查是否有工具调用
             if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.tool_calls) {
-                console.log(`[AI Service] 检测到工具调用请求`)
                 return await this.handleToolCalls(agent, message, conversationHistory, settings, provider, data)
             }
 
@@ -747,16 +671,8 @@ export class AIService {
             const functionName = toolCall.function.name
             const functionArgs = JSON.parse(toolCall.function.arguments)
 
-            console.log(`[AI Service] ---------- 执行工具 ${i + 1}/${toolCalls.length} ----------`)
-            console.log(`[AI Service] 工具名称: ${functionName}`)
-            console.log(`[AI Service] 工具参数:`, functionArgs)
-
             try {
-                console.log(`[AI Service] 调用工具注册表执行工具...`)
                 const result = await this.toolRegistry.executeTool(functionName, functionArgs)
-
-                console.log(`[AI Service] 工具执行结果:`, result)
-                console.log(`[AI Service] 工具执行成功: ${functionName}`)
 
                 toolResults.push({
                     tool_call_id: toolCall.id,
@@ -765,9 +681,6 @@ export class AIService {
                     content: JSON.stringify(result)
                 })
             } catch (error) {
-                console.error(`[AI Service] 工具执行失败: ${functionName}`, error)
-                console.error(`[AI Service] 错误详情:`, error.message, error.stack)
-
                 toolResults.push({
                     tool_call_id: toolCall.id,
                     role: 'tool',
@@ -777,30 +690,18 @@ export class AIService {
             }
         }
 
-        console.log(`[AI Service] 所有工具执行完成，共 ${toolResults.length} 个结果`)
-        console.log(`[AI Service] 工具结果:`, toolResults)
-
         // 将工具结果添加到消息历史
         const updatedConversationHistory = [
             ...newConversationHistory,
             ...toolResults
         ]
 
-        console.log(`[AI Service] 更新后的消息历史长度: ${updatedConversationHistory.length}`)
-
         // 再次调用API，让模型基于工具结果生成最终回复
-        console.log(`[AI Service] ========== 基于工具结果生成最终回复 ==========`)
-
         const { apiEndpoint, apiKey, modelName, temperature, maxTokens } = settings
         const fullUrl = this.buildRequestUrl(apiEndpoint, provider)
 
-        console.log(`[AI Service] 请求URL: ${fullUrl}`)
-        console.log(`[AI Service] 请求模型: ${modelName}`)
-
         const requestBody = this.buildRequestBody(agent, '', updatedConversationHistory, settings, provider, false)
         const headers = this.buildRequestHeaders(apiKey, provider)
-
-        console.log(`[AI Service] 请求体:`, JSON.stringify(requestBody, null, 2))
 
         try {
             const response = await fetch(fullUrl, {
@@ -809,24 +710,16 @@ export class AIService {
                 body: JSON.stringify(requestBody)
             })
 
-            console.log(`[AI Service] 最终响应状态: ${response.status} ${response.statusText}`)
-
             if (!response.ok) {
                 const errorInfo = await this.parseErrorResponse(response, provider)
-                console.error(`[AI Service] 最终请求失败:`, errorInfo)
                 throw new Error(errorInfo)
             }
 
             const data = await response.json()
-            console.log(`[AI Service] 最终响应数据:`, data)
-
             const content = this.parseResponseContent(data, provider)
-            console.log(`[AI Service] 解析后的内容:`, content)
-            console.log(`[AI Service] ========== 工具调用流程完成 ==========`)
 
             return content
         } catch (error) {
-            console.error(`[AI Service] 最终请求异常:`, error)
             throw error
         }
     }
@@ -1264,8 +1157,6 @@ export class AIService {
 
     // 解析流式响应内容 - 泛用版本
     parseStreamResponseContent(data, provider) {
-        console.log('🔍 解析流式数据:', { provider, data })
-
         // 定义解析策略列表，按优先级排序
         const strategies = [
             // 策略1: OpenAI 兼容格式 (choices[0].delta)
@@ -1357,7 +1248,6 @@ export class AIService {
         for (const strategy of strategies) {
             if (strategy.check(data)) {
                 const result = strategy.extract(data)
-                console.log(`✅ 使用策略 "${strategy.name}" 解析成功:`, result)
                 return result
             }
         }
@@ -1490,12 +1380,6 @@ export class AIService {
             for (const strategy of strategies) {
                 if (strategy.check(data)) {
                     const result = strategy.extract(data)
-                    console.log(`✅ 使用策略 "${strategy.name}" 解析成功:`, {
-                        content: result.content.substring(0, 100) + (result.content.length > 100 ? '...' : ''),
-                        hasReasoning: !!result.reasoning_content,
-                        finishReason: result.finish_reason,
-                        usage: result.usage
-                    })
                     return result
                 }
             }
@@ -1724,9 +1608,64 @@ export class AIService {
 
         // 系统提示词
         if (agent.prompt) {
+            // 解析提示词中的组件引用
+            const componentReferences = parseComponentReferences(agent.prompt)
+
+            // 添加组件使用说明到系统提示词
+            let enhancedPrompt = agent.prompt
+
+            if (componentReferences.length > 0) {
+                enhancedPrompt += '\n\n=== 组件使用说明 ===\n'
+                enhancedPrompt += '你可以在回复中使用以下组件来丰富内容展示。\n\n'
+                enhancedPrompt += '组件调用格式：@<!组件名~参数1,参数2,...>\n'
+                enhancedPrompt += '注意：\n'
+                enhancedPrompt += '- 组件名必须与下方列出的组件名完全一致\n'
+                enhancedPrompt += '- 使用波浪号(~)分隔组件名和参数\n'
+                enhancedPrompt += '- 多个参数之间使用逗号(,)分隔\n'
+                enhancedPrompt += '- 参数值不要包含逗号、波浪号或特殊符号\n'
+                enhancedPrompt += '- 必填参数必须提供，可选参数可以省略\n\n'
+
+                componentReferences.forEach(ref => {
+                    const component = getComponent(ref.name)
+                    if (component) {
+                        enhancedPrompt += `【${component.name}】\n`
+                        enhancedPrompt += `功能：${component.description}\n`
+                        if (component.params.length > 0) {
+                            enhancedPrompt += `参数列表（共${component.params.length}个）：\n`
+                            component.params.forEach((p, index) => {
+                                const requiredMark = p.required ? '【必填】' : '【可选】'
+                                enhancedPrompt += `  ${index + 1}. ${p.name} ${requiredMark}\n`
+                                enhancedPrompt += `     说明：${p.description}\n`
+                                if (p.type) {
+                                    const typeNames = {
+                                        'string': '字符串',
+                                        'number': '数值',
+                                        'boolean': '布尔值',
+                                        'array': '数组',
+                                        'object': '对象'
+                                    }
+                                    enhancedPrompt += `     类型：${typeNames[p.type] || p.type}\n`
+                                }
+                                if (p.defaultValue !== undefined) {
+                                    enhancedPrompt += `     默认值：${p.defaultValue}\n`
+                                }
+                            })
+                        } else {
+                            enhancedPrompt += `参数：无（该组件不需要参数）\n`
+                        }
+                        if (component.example) {
+                            enhancedPrompt += `调用示例：@<!${component.name}~${component.example}>\n`
+                        } else {
+                            enhancedPrompt += `调用示例：@<!${component.name}>\n`
+                        }
+                        enhancedPrompt += '\n'
+                    }
+                })
+            }
+
             messages.push({
                 role: 'system',
-                content: agent.prompt
+                content: enhancedPrompt
             })
         }
 

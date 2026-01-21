@@ -1,3 +1,6 @@
+/* 导入组件样式 */
+@import './components.css';
+
 /* 全局样式和CSS变量 */
 :root {
   /* 亮色主题变量 */
@@ -771,6 +774,72 @@ body {
   min-width: 0;
   max-width: 100%;
   width: 100%;
+  position: relative;
+}
+
+/* 回到底部按钮 */
+.scroll-to-bottom-btn {
+  position: fixed;
+  bottom: 120px;
+  right: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
+  z-index: 1000;
+  animation: slideUpFadeIn 0.3s ease;
+}
+
+.scroll-to-bottom-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.scroll-to-bottom-btn:active {
+  transform: scale(0.95);
+}
+
+/* 向上渐入动画 */
+@keyframes slideUpFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 滚动动画 */
+.chat-messages {
+  scroll-behavior: smooth;
+}
+
+/* 渐变模式下的回到底部按钮 */
+[data-color-mode="gradient"] .scroll-to-bottom-btn {
+  background: var(--gradient-primary);
+}
+
+[data-color-mode="gradient"] .scroll-to-bottom-btn:hover {
+  filter: brightness(1.1);
+}
+
+/* 高级渐变模式下的回到底部按钮 */
+[data-color-mode="advanced-gradient"] .scroll-to-bottom-btn {
+  background: var(--gradient-primary);
+}
+
+[data-color-mode="advanced-gradient"] .scroll-to-bottom-btn:hover {
+  filter: brightness(1.1);
 }
 
 .messages-container {
@@ -2982,43 +3051,64 @@ body {
   padding-right: 50px; /* 为AI按钮留出空间 */
 }
 
-.ai-fill-btn {
+.smart-fill-btn {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
-  padding: 0 12px;
-  border-radius: 6px;
+  padding: 10px 16px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
-  min-width: 60px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  height: calc(100% - 8px);
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+  margin-top: 8px;
+  position: relative;
+  overflow: hidden;
 }
 
-.ai-fill-btn:hover:not(:disabled) {
+.smart-fill-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-primary);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.smart-fill-btn:hover:not(:disabled) {
   background: var(--bg-hover);
   border-color: var(--primary-color);
   color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.ai-fill-btn:disabled {
-  opacity: 0.6;
+.smart-fill-btn:hover:not(:disabled)::before {
+  opacity: 0.08;
+}
+
+.smart-fill-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.smart-fill-btn:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
-  transform: translateY(-50%);
+  background: var(--bg-tertiary);
 }
 
-.ai-fill-btn.loading {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
+.smart-fill-btn svg {
+  transition: transform 0.3s ease;
+}
+
+.smart-fill-btn:hover:not(:disabled) svg {
+  transform: scale(1.1);
 }
 
 /* 消息图片操作按钮样式 */

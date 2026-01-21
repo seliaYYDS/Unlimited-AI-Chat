@@ -2,7 +2,7 @@
 export class ConversationDB {
     constructor() {
         this.dbName = 'AIConversationDB'
-        this.dbVersion = 3
+        this.dbVersion = 4
         this.storeName = 'conversations'
         this.db = null
         this.useLocalStorage = false
@@ -11,6 +11,7 @@ export class ConversationDB {
         this.avatarsKey = 'ai_avatars_fallback'
         this.chatSessionsKey = 'ai_chat_sessions_fallback'
         this.chatSessionMessagesKey = 'ai_chat_session_messages_fallback'
+        this.customComponentsKey = 'ai_custom_components_fallback'
     }
 
     // 检查 IndexedDB 是否可用
@@ -27,40 +28,6 @@ export class ConversationDB {
             return true
         }
 
-        // 检查旧版本数据库是否存在，只有在存在时才删除
-        try {
-            await new Promise((resolve, reject) => {
-                const checkRequest = indexedDB.open(this.dbName)
-                checkRequest.onsuccess = () => {
-                    const db = checkRequest.result
-                    const oldVersion = db.version
-                    db.close()
-
-                    // 只有当旧版本低于当前版本时才删除
-                    if (oldVersion < this.dbVersion) {
-                        const deleteRequest = indexedDB.deleteDatabase(this.dbName)
-                        deleteRequest.onsuccess = () => {
-                            console.log(`旧版 IndexedDB (版本 ${oldVersion}) 已删除，将升级到版本 ${this.dbVersion}`)
-                            resolve()
-                        }
-                        deleteRequest.onerror = () => {
-                            console.warn('删除旧版 IndexedDB 失败')
-                            resolve()
-                        }
-                    } else {
-                        // 版本相同或更高，不需要删除
-                        resolve()
-                    }
-                }
-                checkRequest.onerror = () => {
-                    // 数据库不存在，不需要删除
-                    resolve()
-                }
-            })
-        } catch (error) {
-            console.warn('检查旧版 IndexedDB 时出错:', error)
-        }
-
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(this.dbName, this.dbVersion)
 
@@ -73,6 +40,8 @@ export class ConversationDB {
             request.onsuccess = () => {
                 this.db = request.result
                 this.useLocalStorage = false
+                console.log('[IndexedDB] 数据库打开成功，版本:', this.db.version)
+                console.log('[IndexedDB] 所有对象存储:', Array.from(this.db.objectStoreNames))
                 resolve(this.db)
             }
 
@@ -123,6 +92,22 @@ export class ConversationDB {
                     sessionMessagesStore.createIndex('sessionId', 'sessionId', { unique: false })
                     sessionMessagesStore.createIndex('agentId_sessionId', ['agentId', 'sessionId'], { unique: true })
                 }
+
+                // 创建自定义组件对象存储，使用组件 ID 作为键
+                const componentsStoreName = 'customComponents'
+                console.log('[IndexedDB] 检查 customComponents 对象存储:', db.objectStoreNames.contains(componentsStoreName))
+                if (!db.objectStoreNames.contains(componentsStoreName)) {
+                    console.log('[IndexedDB] 创建 customComponents 对象存储')
+                    const componentsStore = db.createObjectStore(componentsStoreName, { keyPath: 'id' })
+                    componentsStore.createIndex('name', 'name', { unique: false })
+                    componentsStore.createIndex('createdAt', 'createdAt', { unique: false })
+                    componentsStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+                    console.log('[IndexedDB] customComponents 对象存储创建成功')
+                } else {
+                    console.log('[IndexedDB] customComponents 对象存储已存在')
+                }
+                
+                console.log('[IndexedDB] 所有对象存储:', Array.from(db.objectStoreNames))
             }
         })
     }
@@ -1751,6 +1736,222 @@ export class ConversationDB {
         })
 
         return indexedDBCleared && localStorageCleared
+    }
+
+    // ==================== 自定义组件管理 ====================
+
+    // 保存自定义组件
+    async saveCustomComponent(component) {
+        console.log('[IndexedDB] 开始保存自定义组件:', component)
+        
+        if (this.useLocalStorage) {
+            console.log('[IndexedDB] 使用 localStorage 保存')
+            return this.saveCustomComponentToLocalStorage(component)
+        }
+
+        if (!this.db) {
+            console.log('[IndexedDB] 数据库未初始化，正在初始化...')
+            await this.init()
+        }
+
+        if (this.useLocalStorage) {
+            console.log('[IndexedDB] 初始化后降级到 localStorage')
+            return this.saveCustomComponentToLocalStorage(component)
+        }
+
+        console.log('[IndexedDB] 数据库已初始化，使用 IndexedDB 保存')
+        
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['customComponents'], 'readwrite')
+            const objectStore = transaction.objectStore('customComponents')
+
+            const data = {
+                id: component.id || Date.now().toString(36) + Math.random().toString(36).substr(2),
+                name: component.name,
+                description: component.description || '',
+                code: component.code || '',
+                createdAt: component.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }
+
+            console.log('[IndexedDB] 准备保存的数据:', data)
+
+            const request = objectStore.put(data)
+
+            request.onerror = () => {
+                console.error('[IndexedDB] 保存自定义组件失败:', request.error)
+                reject(request.error)
+            }
+
+            request.onsuccess = () => {
+                console.log('[IndexedDB] 自定义组件保存成功:', data)
+                resolve(data)
+            }
+        })
+    }
+
+    // 获取所有自定义组件
+    async getAllCustomComponents() {
+        console.log('[IndexedDB] 开始获取所有自定义组件')
+        
+        if (this.useLocalStorage) {
+            console.log('[IndexedDB] 使用 localStorage 获取')
+            return this.getAllCustomComponentsFromLocalStorage()
+        }
+
+        if (!this.db) {
+            console.log('[IndexedDB] 数据库未初始化，正在初始化...')
+            await this.init()
+        }
+
+        if (this.useLocalStorage) {
+            console.log('[IndexedDB] 初始化后降级到 localStorage')
+            return this.getAllCustomComponentsFromLocalStorage()
+        }
+
+        console.log('[IndexedDB] 数据库已初始化，使用 IndexedDB 获取')
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['customComponents'], 'readonly')
+            const objectStore = transaction.objectStore('customComponents')
+            const request = objectStore.getAll()
+
+            request.onerror = () => {
+                console.error('[IndexedDB] 获取自定义组件失败:', request.error)
+                reject(request.error)
+            }
+
+            request.onsuccess = () => {
+                console.log('[IndexedDB] 获取到的自定义组件:', request.result)
+                resolve(request.result || [])
+            }
+        })
+    }
+
+    // 获取单个自定义组件
+    async getCustomComponent(id) {
+        if (this.useLocalStorage) {
+            return this.getCustomComponentFromLocalStorage(id)
+        }
+
+        if (!this.db) {
+            await this.init()
+        }
+
+        if (this.useLocalStorage) {
+            return this.getCustomComponentFromLocalStorage(id)
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['customComponents'], 'readonly')
+            const objectStore = transaction.objectStore('customComponents')
+            const request = objectStore.get(id)
+
+            request.onerror = () => {
+                console.error('获取自定义组件失败:', request.error)
+                reject(request.error)
+            }
+
+            request.onsuccess = () => {
+                resolve(request.result || null)
+            }
+        })
+    }
+
+    // 删除自定义组件
+    async deleteCustomComponent(id) {
+        if (this.useLocalStorage) {
+            return this.deleteCustomComponentFromLocalStorage(id)
+        }
+
+        if (!this.db) {
+            await this.init()
+        }
+
+        if (this.useLocalStorage) {
+            return this.deleteCustomComponentFromLocalStorage(id)
+        }
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['customComponents'], 'readwrite')
+            const objectStore = transaction.objectStore('customComponents')
+            const request = objectStore.delete(id)
+
+            request.onerror = () => {
+                console.error('删除自定义组件失败:', request.error)
+                reject(request.error)
+            }
+
+            request.onsuccess = () => {
+                resolve(true)
+            }
+        })
+    }
+
+    // ==================== localStorage 后备存储 ====================
+
+    // 保存自定义组件到 localStorage
+    saveCustomComponentToLocalStorage(component) {
+        try {
+            const components = this.getAllCustomComponentsFromLocalStorage()
+            const existingIndex = components.findIndex(c => c.id === component.id)
+
+            const data = {
+                id: component.id || Date.now().toString(36) + Math.random().toString(36).substr(2),
+                name: component.name,
+                description: component.description || '',
+                code: component.code || '',
+                createdAt: component.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }
+
+            if (existingIndex !== -1) {
+                components[existingIndex] = data
+            } else {
+                components.push(data)
+            }
+
+            localStorage.setItem('custom_components', JSON.stringify(components))
+            return Promise.resolve(data)
+        } catch (error) {
+            console.error('保存自定义组件到 localStorage 失败:', error)
+            return Promise.reject(error)
+        }
+    }
+
+    // 从 localStorage 获取所有自定义组件
+    getAllCustomComponentsFromLocalStorage() {
+        try {
+            const data = localStorage.getItem('custom_components')
+            return data ? JSON.parse(data) : []
+        } catch (error) {
+            console.error('从 localStorage 获取自定义组件失败:', error)
+            return []
+        }
+    }
+
+    // 从 localStorage 获取单个自定义组件
+    getCustomComponentFromLocalStorage(id) {
+        try {
+            const components = this.getAllCustomComponentsFromLocalStorage()
+            return components.find(c => c.id === id) || null
+        } catch (error) {
+            console.error('从 localStorage 获取自定义组件失败:', error)
+            return null
+        }
+    }
+
+    // 从 localStorage 删除自定义组件
+    deleteCustomComponentFromLocalStorage(id) {
+        try {
+            const components = this.getAllCustomComponentsFromLocalStorage()
+            const filtered = components.filter(c => c.id !== id)
+            localStorage.setItem('custom_components', JSON.stringify(filtered))
+            return Promise.resolve(true)
+        } catch (error) {
+            console.error('从 localStorage 删除自定义组件失败:', error)
+            return Promise.reject(error)
+        }
     }
 }
 
