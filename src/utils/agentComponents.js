@@ -147,6 +147,33 @@ function parseParams(paramsString, paramDefinitions) {
   // 使用更智能的分隔符处理，支持嵌套结构
   const params = smartSplit(paramsString, ',')
   
+  // 特殊处理：如果只有一个参数定义且类型为ARRAY，将所有参数作为数组返回
+  if (paramDefinitions.length === 1 && paramDefinitions[0].type === PARAM_TYPES.ARRAY) {
+    return [params.map(p => parseValue(p, PARAM_TYPES.STRING))]
+  }
+  
+  // 特殊处理：如果只有一个参数定义且类型为OBJECT，尝试解析为对象
+  if (paramDefinitions.length === 1 && paramDefinitions[0].type === PARAM_TYPES.OBJECT) {
+    return [parseValue(paramsString, PARAM_TYPES.OBJECT)]
+  }
+  
+  // 特殊处理：如果有两个参数定义且都是ARRAY类型
+  // 假设格式为：前半部分是第一个数组，后半部分是第二个数组
+  if (paramDefinitions.length === 2 && 
+      paramDefinitions[0].type === PARAM_TYPES.ARRAY && 
+      paramDefinitions[1].type === PARAM_TYPES.ARRAY) {
+    // 尝试智能分割：前半部分是维度名称（字符串），后半部分是数值
+    const midpoint = Math.floor(params.length / 2)
+    const firstArray = params.slice(0, midpoint)
+    const secondArray = params.slice(midpoint)
+    
+    return [
+      firstArray.map(p => parseValue(p, PARAM_TYPES.STRING)),
+      secondArray.map(p => parseValue(p, PARAM_TYPES.NUMBER))
+    ]
+  }
+  
+  // 默认处理：逐个解析参数
   return params.map((param, index) => {
     const definition = paramDefinitions[index]
     
@@ -230,28 +257,36 @@ function parseValue(value, type) {
     case PARAM_TYPES.ARRAY:
       // 尝试解析 JSON 数组
       try {
-        if (value.startsWith('[') && value.endsWith(']')) {
-          return JSON.parse(value)
+        const trimmed = value.trim()
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          return JSON.parse(trimmed)
         }
-        // 否则按逗号分割
-        return value.split(',').map(v => v.trim())
+        // 否则按逗号分割（使用智能分割以支持嵌套）
+        return smartSplit(value, ',').map(v => v.trim())
       } catch (e) {
-        return [value]
+        // 如果 JSON 解析失败，尝试按逗号分割
+        return smartSplit(value, ',').map(v => v.trim())
       }
       
     case PARAM_TYPES.OBJECT:
       // 尝试解析 JSON 对象
       try {
-        if (value.startsWith('{') && value.endsWith('}')) {
-          return JSON.parse(value)
+        const trimmed = value.trim()
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          return JSON.parse(trimmed)
         }
         // 尝试解析键值对格式：key1:value1,key2:value2
         const obj = {}
-        const pairs = value.split(',')
+        const pairs = smartSplit(value, ',')
         pairs.forEach(pair => {
-          const [key, val] = pair.split(':').map(v => v.trim())
-          if (key) {
-            obj[key] = val
+          const colonIndex = pair.indexOf(':')
+          if (colonIndex > 0) {
+            const key = pair.slice(0, colonIndex).trim()
+            const val = pair.slice(colonIndex + 1).trim()
+            if (key) {
+              // 尝试解析值（可能是数字、布尔值、字符串、数组、对象）
+              obj[key] = parseValue(val, detectValueType(val))
+            }
           }
         })
         return obj
@@ -262,12 +297,45 @@ function parseValue(value, type) {
     case PARAM_TYPES.STRING:
     default:
       // 移除字符串两端的引号
-      if ((value.startsWith('"') && value.endsWith('"')) || 
-          (value.startsWith("'") && value.endsWith("'"))) {
-        return value.slice(1, -1)
+      const trimmed = value.trim()
+      if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || 
+          (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        return trimmed.slice(1, -1)
       }
-      return value
+      return trimmed
   }
+}
+
+/**
+ * 检测值的类型
+ * @param {string} value - 字符串值
+ * @returns {string} 检测到的类型
+ */
+function detectValueType(value) {
+  const trimmed = value.trim()
+  
+  // 检查是否为布尔值
+  if (trimmed.toLowerCase() === 'true' || trimmed.toLowerCase() === 'false') {
+    return PARAM_TYPES.BOOLEAN
+  }
+  
+  // 检查是否为数字
+  if (!isNaN(parseFloat(trimmed)) && isFinite(trimmed)) {
+    return PARAM_TYPES.NUMBER
+  }
+  
+  // 检查是否为数组
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    return PARAM_TYPES.ARRAY
+  }
+  
+  // 检查是否为对象
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    return PARAM_TYPES.OBJECT
+  }
+  
+  // 默认为字符串
+  return PARAM_TYPES.STRING
 }
 
 /**
@@ -336,6 +404,8 @@ registerComponent('bar', {
   ],
   example: '月份,10,20,30,40,50',
   render: (params) => {
+    console.log('柱状图渲染参数:', params)
+    
     // 兼容新旧两种参数格式
     let label, values
     
@@ -343,12 +413,12 @@ registerComponent('bar', {
       // 新格式：[label, [values]]
       label = params[0]
       values = params[1]
-    } else if (Array.isArray(params)) {
+    } else if (Array.isArray(params) && params.length >= 2) {
       // 旧格式：[label, value1, value2, ...]
       label = params[0]
       values = params.slice(1)
     } else {
-      return { type: 'error', data: '无效的参数格式' }
+      return { type: 'error', data: '无效的参数格式，需要：标签,值1,值2,...' }
     }
 
     if (!label || !values || values.length === 0) {
@@ -393,6 +463,8 @@ registerComponent('radar', {
   ],
   example: '速度,力量,防御,智力,敏捷,80,70,60,90,75',
   render: (params) => {
+    console.log('雷达图渲染参数:', params)
+    
     // 兼容新旧两种参数格式
     let dimensions, values
     
@@ -405,13 +477,13 @@ registerComponent('radar', {
       dimensions = params.slice(0, 5)
       values = params.slice(5, 10)
     } else {
-      return { type: 'error', data: '雷达图需要5个维度名称和5个数值' }
+      return { type: 'error', data: '雷达图需要5个维度名称和5个数值，格式：维度1,维度2,维度3,维度4,维度5,数值1,数值2,数值3,数值4,数值5' }
     }
 
     const numericValues = values.map(v => parseFloat(v)).filter(v => !isNaN(v))
 
     if (numericValues.length !== 5) {
-      return { type: 'error', data: '需要提供5个有效的数值' }
+      return { type: 'error', data: `需要提供5个有效的数值，当前只有${numericValues.length}个` }
     }
 
     const data = dimensions.map((dim, i) => ({
@@ -748,17 +820,19 @@ registerComponent('list', {
   ],
   example: '完成需求分析,编写代码,测试功能,部署上线',
   render: (params) => {
+    console.log('列表组件渲染参数:', params)
+    
     // 兼容新旧两种参数格式
     let items
     
-    if (Array.isArray(params[0])) {
+    if (Array.isArray(params[0]) && params.length === 1) {
       // 新格式：[[item1, item2, ...]]
       items = params[0]
     } else if (Array.isArray(params)) {
       // 旧格式：[item1, item2, ...]
       items = params
     } else {
-      return { type: 'error', data: '无效的参数格式' }
+      return { type: 'error', data: '无效的参数格式，需要：项1,项2,项3,...' }
     }
 
     if (items.length === 0) {
@@ -791,10 +865,16 @@ registerComponent('config', {
   ],
   example: 'name:app,version:1.0,enabled:true',
   render: (params) => {
+    console.log('配置组件渲染参数:', params)
+    
     const config = params[0]
 
-    if (!config || typeof config !== 'object') {
-      return { type: 'error', data: '配置需要有效的对象格式' }
+    if (!config) {
+      return { type: 'error', data: '配置对象不能为空' }
+    }
+
+    if (typeof config !== 'object') {
+      return { type: 'error', data: '配置必须是对象类型' }
     }
 
     return {

@@ -174,10 +174,10 @@
 
     <!-- 自定义组件 -->
     <div v-else-if="component.type === 'custom'" class="custom-component-wrapper">
-      <div 
+      <div
         v-if="component.data && component.data.template"
         class="custom-component-container"
-        :style="component.data.style ? component.data.style : ''"
+        ref="customComponentContainer"
       >
         <div v-html="renderCustomTemplate(component.data.template, component.data.props || {})"></div>
       </div>
@@ -203,19 +203,290 @@ export default {
       required: true
     }
   },
+  data() {
+    return {
+      styleElement: null
+    }
+  },
+  watch: {
+    'component.data.style': {
+      handler(newStyle) {
+        this.updateCustomStyle(newStyle)
+      },
+      immediate: true
+    }
+  },
+  mounted() {
+    this.updateCustomStyle(this.component?.data?.style)
+  },
+  beforeUnmount() {
+    this.removeCustomStyle()
+  },
   methods: {
+    // 更新自定义组件样式
+    updateCustomStyle(style) {
+      // 先移除旧的样式
+      this.removeCustomStyle()
+
+      // 如果有新样式，创建并添加
+      if (style && this.component.type === 'custom') {
+        // 替换样式中的模板变量
+        let processedStyle = style
+        if (this.component.data.props) {
+          Object.keys(this.component.data.props).forEach(key => {
+            const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g')
+            processedStyle = processedStyle.replace(regex, this.component.data.props[key])
+          })
+        }
+
+        const styleElement = document.createElement('style')
+        styleElement.textContent = processedStyle
+        styleElement.setAttribute('data-component-style', this.component.type)
+        document.head.appendChild(styleElement)
+        this.styleElement = styleElement
+      }
+    },
+
+    // 移除自定义组件样式
+    removeCustomStyle() {
+      if (this.styleElement) {
+        document.head.removeChild(this.styleElement)
+        this.styleElement = null
+      }
+    },
+
     // 渲染自定义组件模板
     renderCustomTemplate(template, props) {
       if (!template) return ''
-      
-      // 替换模板中的变量 {{ variable }}
+
       let rendered = template
+
+      // 创建一个包含所有 props 属性的函数参数
+      const propKeys = Object.keys(props)
+      const propValues = propKeys.map(key => props[key])
+
+      // 1. 处理 :style 绑定
+      // 格式：:style="{ width: percent + '%' }"
+      rendered = rendered.replace(/:style="([^"]+)"/g, (match, styleExpression) => {
+        try {
+          // 创建一个安全的函数来计算样式表达式
+          // 将 props 中的所有属性作为独立变量传递
+          const styleFunc = new Function(...propKeys, `return ${styleExpression}`)
+          const styleObj = styleFunc(...propValues)
+          
+          // 将样式对象转换为内联样式字符串
+          if (typeof styleObj === 'object' && styleObj !== null) {
+            const styleStr = Object.entries(styleObj)
+              .map(([key, value]) => {
+                // 转换驼峰命名为连字符命名
+                const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase()
+                return `${cssKey}: ${value}`
+              })
+              .join('; ')
+            return `style="${styleStr}"`
+          }
+          return ''
+        } catch (error) {
+          console.error('解析 :style 失败:', error)
+          return ''
+        }
+      })
+
+      // 2. 处理 :class 绑定
+      // 格式：:class="{ active: isActive }" 或 :class="className"
+      rendered = rendered.replace(/:class="([^"]+)"/g, (match, classExpression) => {
+        try {
+          const classFunc = new Function(...propKeys, `return ${classExpression}`)
+          const classValue = classFunc(...propValues)
+          
+          let className = ''
+          if (typeof classValue === 'string') {
+            className = classValue
+          } else if (typeof classValue === 'object' && classValue !== null) {
+            // 对象格式：{ active: true, disabled: false }
+            className = Object.entries(classValue)
+              .filter(([_, value]) => value)
+              .map(([key, _]) => key)
+              .join(' ')
+          } else if (Array.isArray(classValue)) {
+            // 数组格式：['class1', 'class2']
+            className = classValue.join(' ')
+          }
+          
+          return className ? `class="${className}"` : ''
+        } catch (error) {
+          console.error('解析 :class 失败:', error)
+          return ''
+        }
+      })
+
+      // 3. 处理其他属性绑定，如 :href、:src 等
+      rendered = rendered.replace(/:([a-zA-Z-]+)="([^"]+)"/g, (match, attrName, expression) => {
+        try {
+          const attrFunc = new Function(...propKeys, `return ${expression}`)
+          const value = attrFunc(...propValues)
+          return `${attrName}="${value}"`
+        } catch (error) {
+          console.error(`解析 :${attrName} 失败:`, error)
+          return ''
+        }
+      })
+
+      // 4. 处理 v-if 指令
+      // 格式：v-if="condition"
+      rendered = rendered.replace(/v-if="([^"]+)"/g, (match, condition) => {
+        try {
+          const conditionFunc = new Function(...propKeys, `return ${condition}`)
+          const result = conditionFunc(...propValues)
+          return result ? 'v-if-true' : 'v-if-false'
+        } catch (error) {
+          console.error('解析 v-if 失败:', error)
+          return 'v-if-false'
+        }
+      })
+
+      // 移除 v-if-false 的元素
+      rendered = rendered.replace(/<[^>]*v-if-false[^>]*>[\s\S]*?<\/[^>]*v-if-false[^>]*>/g, '')
+      rendered = rendered.replace(/<[^>]*v-if-false[^>]*\/>/g, '')
+
+      // 清理 v-if-true 标记
+      rendered = rendered.replace(/v-if-true/g, '')
+
+      // 5. 处理 v-for 指令
+      // 支持多种格式：
+      // - v-for="(item, index) in items" - 遍历数组
+      // - v-for="item in items" - 遍历数组（不需要索引）
+      // - v-for="(value, key) in object" - 遍历对象
+      // - v-for="(value, key, index) in object" - 遍历对象（带索引）
+      const vForRegex = /<([a-zA-Z][a-zA-Z0-9]*)[^>]*v-for="([^"]+)"[^>]*>([\s\S]*?)<\/\1>/g
+      rendered = rendered.replace(vForRegex, (match, tagName, forExpression, content) => {
+        try {
+          // 解析 v-for 表达式
+          const forMatch = forExpression.match(/\(([^,]+)(?:,\s*([^,]+))?(?:,\s*([^)]+))?\)\s+in\s+(.+)/)
+          
+          if (!forMatch) {
+            // 尝试简单格式：v-for="item in items"
+            const simpleMatch = forExpression.match(/(\w+)\s+in\s+(.+)/)
+            if (!simpleMatch) return match
+            
+            const [, itemVar, arrayExpr] = simpleMatch
+            return this.renderVForSimple(itemVar, null, arrayExpr, content, propKeys, propValues, props)
+          }
+
+          const [, itemVar, indexOrKeyVar, indexVar, sourceExpr] = forMatch
+          
+          const sourceFunc = new Function(...propKeys, `return ${sourceExpr}`)
+          const source = sourceFunc(...propValues)
+          
+          if (!source) return match
+
+          // 判断是数组还是对象
+          if (Array.isArray(source)) {
+            return this.renderVForArray(itemVar, indexOrKeyVar, source, content, propKeys, propValues, props)
+          } else if (typeof source === 'object' && source !== null) {
+            return this.renderVForObject(itemVar, indexOrKeyVar, indexVar, source, content, propKeys, propValues, props)
+          }
+
+          return match
+        } catch (error) {
+          console.error('解析 v-for 失败:', error)
+          return match
+        }
+      })
+
+      // 6. 最后处理普通的 {{ variable }} 变量替换
       Object.keys(props).forEach(key => {
         const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g')
         rendered = rendered.replace(regex, props[key])
       })
-      
+
       return rendered
+    },
+
+    // 渲染简单的 v-for（不带索引）
+    renderVForSimple(itemVar, indexVar, arrayExpr, content, propKeys, propValues, props) {
+      const arrayFunc = new Function(...propKeys, `return ${arrayExpr}`)
+      const array = arrayFunc(...propValues)
+      
+      if (!Array.isArray(array)) return content
+
+      return array.map((item) => {
+        let itemContent = content
+        itemContent = itemContent.replace(/\{\{\s*item\s*\}\}/g, item)
+        itemContent = itemContent.replace(/\{\{\s*index\s*\}\}/g, '')
+        
+        // 替换其他 props 变量
+        Object.keys(props).forEach(key => {
+          const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g')
+          itemContent = itemContent.replace(regex, props[key])
+        })
+        
+        return itemContent
+      }).join('')
+    },
+
+    // 渲染数组的 v-for
+    renderVForArray(itemVar, indexVar, array, content, propKeys, propValues, props) {
+      return array.map((item, index) => {
+        let itemContent = content
+        
+        // 替换 {{ item }} 和 {{ index }}
+        itemContent = itemContent.replace(/\{\{\s*item\s*\}\}/g, item)
+        if (indexVar) {
+          itemContent = itemContent.replace(/\{\{\s*index\s*\}\}/g, index)
+          itemContent = itemContent.replace(new RegExp(`\\{\\{\\s*${indexVar}\\s*\\}\\}`, 'g'), index)
+        }
+        
+        // 如果 item 是对象，支持访问属性 {{ item.name }}
+        if (typeof item === 'object' && item !== null) {
+          Object.keys(item).forEach(key => {
+            const regex = new RegExp(`\\{\\{\\s*item\\.${key}\\s*\\}\\}`, 'g')
+            itemContent = itemContent.replace(regex, item[key])
+          })
+        }
+        
+        // 替换其他 props 变量
+        Object.keys(props).forEach(key => {
+          const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g')
+          itemContent = itemContent.replace(regex, props[key])
+        })
+        
+        return itemContent
+      }).join('')
+    },
+
+    // 渲染对象的 v-for
+    renderVForObject(valueVar, keyVar, indexVar, object, content, propKeys, propValues, props) {
+      return Object.entries(object).map(([key, value], index) => {
+        let itemContent = content
+        
+        // 替换 {{ value }} 和 {{ key }}
+        itemContent = itemContent.replace(/\{\{\s*value\s*\}\}/g, value)
+        if (keyVar) {
+          itemContent = itemContent.replace(/\{\{\s*key\s*\}\}/g, key)
+          itemContent = itemContent.replace(new RegExp(`\\{\\{\\s*${keyVar}\\s*\\}\\}`, 'g'), key)
+        }
+        if (indexVar) {
+          itemContent = itemContent.replace(/\{\{\s*index\s*\}\}/g, index)
+          itemContent = itemContent.replace(new RegExp(`\\{\\{\\s*${indexVar}\\s*\\}\\}`, 'g'), index)
+        }
+        
+        // 如果 value 是对象，支持访问属性 {{ value.name }}
+        if (typeof value === 'object' && value !== null) {
+          Object.keys(value).forEach(prop => {
+            const regex = new RegExp(`\\{\\{\\s*value\\.${prop}\\s*\\}\\}`, 'g')
+            itemContent = itemContent.replace(regex, value[prop])
+          })
+        }
+        
+        // 替换其他 props 变量
+        Object.keys(props).forEach(key => {
+          const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g')
+          itemContent = itemContent.replace(regex, props[key])
+        })
+        
+        return itemContent
+      }).join('')
     },
     
     // 雷达图计算方法
@@ -324,6 +595,40 @@ export default {
   background: var(--component-bg, rgba(255, 255, 255, 0.05));
   border-radius: 12px;
   border: 1px solid var(--component-border, rgba(255, 255, 255, 0.1));
+  /* 样式隔离：重置可能继承的样式 */
+  box-sizing: border-box;
+  font-family: var(--font-family, system-ui);
+  font-size: var(--font-size, 14px);
+  line-height: 1.5;
+  color: var(--text-color, #333);
+  text-align: left;
+  /* 确保不受父级flex布局影响 */
+  align-self: flex-start;
+  width: 100%;
+  max-width: 100%;
+}
+
+.component-renderer :deep(*) {
+  box-sizing: border-box;
+}
+
+.component-renderer :deep(div),
+.component-renderer :deep(span),
+.component-renderer :deep(p),
+.component-renderer :deep(h1),
+.component-renderer :deep(h2),
+.component-renderer :deep(h3),
+.component-renderer :deep(h4),
+.component-renderer :deep(h5),
+.component-renderer :deep(h6) {
+  margin: 0;
+  padding: 0;
+}
+
+.component-renderer :deep(img),
+.component-renderer :deep(svg) {
+  display: block;
+  max-width: 100%;
 }
 
 .chart-title {
@@ -474,6 +779,10 @@ export default {
 /* 进度条样式 */
 .progress-bar {
   padding: 8px;
+  /* 确保进度条不受父级flex影响 */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .progress-label {
@@ -486,10 +795,12 @@ export default {
 
 .progress-track {
   height: 24px;
+  width: 100%;
   background: var(--progress-track-bg, rgba(0, 0, 0, 0.05));
   border-radius: 12px;
   overflow: hidden;
   position: relative;
+  box-sizing: border-box;
 }
 
 .progress-fill {
@@ -544,11 +855,26 @@ export default {
 /* 自定义组件样式 */
 .custom-component-wrapper {
   padding: 8px;
+  /* 样式隔离 */
+  isolation: isolate;
+  contain: layout style;
 }
 
 .custom-component-container {
   border-radius: 8px;
   overflow: hidden;
+  /* 确保自定义组件不受外部影响 */
+  all: initial;
+  font-family: var(--font-family, system-ui);
+  font-size: var(--font-size, 14px);
+  line-height: 1.5;
+  color: var(--text-color, #333);
+}
+
+/* 重置自定义组件内的所有元素 */
+.custom-component-container :deep(*) {
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .custom-component-placeholder {

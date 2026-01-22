@@ -3902,7 +3902,7 @@
           </div>
 
           <div class="component-editor-body">
-            <!-- 左侧：AI 辅助区域 -->
+            <!-- 左侧：组件信息和AI聊天 -->
             <div class="editor-sidebar">
               <div class="sidebar-section">
                 <h4>组件信息</h4>
@@ -3926,50 +3926,48 @@
                 </div>
               </div>
 
-              <div class="sidebar-section">
-                <h4>AI 辅助</h4>
-                <p class="sidebar-desc">让 AI 帮助你生成组件代码</p>
-                <div class="form-group">
-                  <label class="form-label">描述你想要的组件</label>
-                  <textarea
-                    v-model="componentEditor.aiPrompt"
-                    class="form-control textarea"
-                    placeholder="例如：创建一个显示温度计的组件，接受温度值作为参数"
-                    rows="4"
-                  ></textarea>
-                </div>
-                <button
-                  class="btn btn-primary"
-                  @click="generateComponentWithAI"
-                  :disabled="isGeneratingComponent"
-                >
-                  <span v-if="isGeneratingComponent">生成中...</span>
-                  <span v-else>生成组件代码</span>
-                </button>
-              </div>
-
-              <div class="sidebar-section">
-                <h4>组件示例</h4>
-                <div class="example-component">
-                  <p class="example-title">示例：柱状图组件</p>
-                  <pre class="example-code"><code>// 组件渲染函数
-// 参数：values - 数值数组
-export function render(values) {
-  const maxValue = Math.max(...values)
-  
-  return {
-    type: 'custom',
-    data: {
-      values: values.map(v => ({
-        value: v,
-        percentage: maxValue > 0 ? (v / maxValue * 100) : 0
-      }))
-    }
-  }
-}
-
-// 组件模板（在 ComponentRenderer 中使用）
-// 使用 this.component.data 访问数据</code></pre>
+              <div class="sidebar-section ai-chat-section">
+                <h4>AI 助手</h4>
+                <p class="sidebar-desc">描述需求，AI会自动创建完整的组件代码（含HTML/CSS/JS）</p>
+                <div class="ai-chat-container">
+                  <div class="ai-chat-messages" ref="aiChatMessages">
+                    <div
+                      v-for="(message, index) in componentEditor.aiChatHistory"
+                      :key="index"
+                      :class="['ai-chat-message', message.role, message.type]"
+                    >
+                      <div v-if="message.type === 'tool'" class="tool-message">
+                        <span class="tool-icon">{{ getToolIcon(message.tool) }}</span>
+                        <span class="tool-name">{{ message.tool }}</span>
+                        <span class="tool-content">{{ message.content }}</span>
+                      </div>
+                      <div v-else class="message-content">{{ message.content }}</div>
+                    </div>
+                    <div v-if="isAiThinking" class="ai-chat-message ai">
+                      <div class="message-content component-editor-typing-indicator">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ai-chat-input">
+                    <input
+                      v-model="componentEditor.aiInput"
+                      type="text"
+                      class="form-control"
+                      placeholder="输入你的需求..."
+                      @keyup.enter="sendAiMessage"
+                      :disabled="isAiThinking"
+                    />
+                    <button
+                      class="btn btn-primary btn-sm"
+                      @click="sendAiMessage"
+                      :disabled="isAiThinking || !componentEditor.aiInput.trim()"
+                    >
+                      发送
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3979,7 +3977,9 @@ export function render(values) {
               <div class="editor-toolbar">
                 <span class="editor-title">组件代码</span>
                 <div class="editor-actions">
-                  <button class="btn btn-secondary btn-sm" @click="formatCode">格式化代码</button>
+                  <button class="btn btn-secondary btn-sm" @click="showComponentPreview">
+                    <span>预览</span>
+                  </button>
                   <button class="btn btn-primary btn-sm" @click="saveComponent" :disabled="!componentEditor.name">
                     保存组件
                   </button>
@@ -4004,6 +4004,57 @@ function render(params) {
             </div>
           </div>
         </div>
+
+        <!-- 组件预览弹窗 -->
+        <Teleport to="body">
+          <div v-if="showComponentPreviewModal" class="component-preview-modal-overlay show" @click="closeComponentPreview">
+            <div class="component-preview-modal-content" @click.stop>
+              <div class="component-preview-header">
+                <h3>组件预览</h3>
+                <button class="close-btn" @click="closeComponentPreview">×</button>
+              </div>
+              <div class="component-preview-body">
+                <div class="preview-sidebar">
+                  <h4>参数设置</h4>
+                  <div class="preview-params">
+                    <div
+                      v-for="(param, index) in componentPreview.params"
+                      :key="index"
+                      class="param-item"
+                    >
+                      <label class="param-label">{{ param.name || `参数 ${index + 1}` }}</label>
+                      <input
+                        v-model="componentPreview.values[index]"
+                        type="text"
+                        class="form-control"
+                        :placeholder="param.description || '输入参数值'"
+                      />
+                      <div v-if="param.description" class="param-desc">{{ param.description }}</div>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary btn-sm" @click="refreshComponentPreview">
+                    刷新预览
+                  </button>
+                </div>
+                <div class="preview-main">
+                  <h4>预览效果</h4>
+                  <div class="preview-container">
+                    <div v-if="componentPreview.error" class="preview-error">
+                      {{ componentPreview.error }}
+                    </div>
+                    <ComponentRenderer
+                      v-else-if="componentPreview.component"
+                      :component="componentPreview.component"
+                    />
+                    <div v-else class="preview-empty">
+                      点击"刷新预览"查看组件效果
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Teleport>
       </div>
     </Teleport>
 
@@ -4745,9 +4796,27 @@ export default {
         name: '',
         description: '',
         code: '',
-        aiPrompt: ''
+        aiPrompt: '',
+        aiChatHistory: [],
+        aiInput: '',
+        workflowState: {
+          isRunning: false,
+          currentStep: null,
+          steps: [],
+          tasks: []
+        },
+        isGeneratingComponent: false
       },
-      isGeneratingComponent: false,
+      isAiThinking: false,
+      showComponentPreviewModal: false,
+      componentPreview: {
+        params: [],
+        values: [],
+        component: null,
+        error: null
+      },
+
+
 
     // 颜色变化处理
 
@@ -4998,320 +5067,90 @@ export default {
             suggestedReplies: [],
 
             selectedReplyIndex: -1,
-
-      
-
             // AI辅助菜单相关状态
 
-      
 
                   showAIAssistantMenu: false,
 
-      
-
                   isGeneratingAIAssistant: false,
-
-      
 
                   aiAssistantResult: '',
 
-      
-
                   currentAIAssistantAction: '',
-
-      
-
-            
-
-      
 
                   // 翻译相关状态
 
-      
-
-            
-
-      
-
                         showTranslateModal: false,
-
-      
-
-            
-
-      
 
                         selectedTargetLanguage: 'en',
 
-      
-
-            
-
-      
-
                         targetLanguageOptions: [
-
-      
-
-            
-
-      
 
                           { value: 'en', label: '英语' },
 
-      
-
-            
-
-      
-
                           { value: 'zh', label: '中文' },
 
-      
-
-            
-
-      
 
                           { value: 'ja', label: '日语' },
 
       
 
-            
-
-      
-
                           { value: 'ko', label: '韩语' },
 
-      
-
-            
-
-      
 
                           { value: 'fr', label: '法语' },
 
       
 
-            
-
-      
-
                           { value: 'de', label: '德语' },
-
-      
-
-            
-
-      
 
                           { value: 'es', label: '西班牙语' },
 
-      
-
-            
-
-      
-
                           { value: 'ru', label: '俄语' }
-
-      
-
-            
-
-      
 
                         ],
 
       
-
-            
-
-      
-
-                  
-
-      
-
-            
-
-      
-
                         // 聊天界面右键菜单状态
-
-      
-
-            
-
-      
 
                         chatContextMenuVisible: false,
 
-      
-
-            
-
-      
-
                         chatContextMenuPosition: { x: 0, y: 0 },
-
-      
-
-            
-
-      
 
                         chatContextMenuMessage: null,
 
-      
-
-            
-
-      
-
                         chatContextMenuType: 'message', // 'message' 或 'background'
-
-      
-
-            
-
-      
-
-                  
-
-      
-
-            
-
-      
 
                         // 导出对话状态
 
-      
-
-            
-
-      
-
                         showExportConversationModal: false,
 
-      
-
-            
-
-      
 
                         exportFormat: 'markdown',
 
-      
-
-            
-
-      
-
                         exportFormats: [
 
-      
-
-            
-
-      
 
                           { value: 'markdown', label: 'Markdown', icon: '📝' },
 
-      
-
-            
-
-      
 
                           { value: 'html', label: 'HTML', icon: '🌐' },
 
       
-
-            
-
-      
-
                           { value: 'pdf', label: 'PDF', icon: '📄' },
-
-      
-
-            
-
-      
 
                           { value: 'json', label: 'JSON', icon: '📋' },
 
-      
-
-            
-
-      
-
                           { value: 'image', label: '图片', icon: '🖼️' }
 
-      
-
-            
-
-      
-
                         ],
-
-      
-
-            
-
-      
-
                         exportPreviewContent: '',
-
-      
-
-            
-
-      
-
-                  
-
-      
-
-            
-
-      
 
                         // 多选对话状态
 
-      
-
-            
-
-      
-
                         showMultiSelectModal: false,
 
-      
-
-            
-
-      
-
                         selectedMessageIds: new Set(),
-
-      
-
-            
-
-      
-
-                  
-
-      
-
-            
-
-      
 
                               // SD图像生成相关状态
 
@@ -5431,11 +5270,7 @@ export default {
         placeholderIndex: -1,
         originalOrder: []
       }
-
     }
-
-
-
   },
 
 
@@ -6871,11 +6706,89 @@ export default {
         
         console.log('处理后的代码:', codeWithoutExport)
         
+        // 创建组件上下文对象
+        const componentContext = {
+          // 样式设置接口
+          styles: {
+            theme: this.settings.theme || 'light',
+            primaryColor: this.settings.primaryColor || '#ec4899',
+            fontSize: this.settings.fontSize || 14,
+            borderRadius: this.settings.borderRadius || 8,
+            fontFamily: this.settings.fontFamily || 'system-ui',
+            enableAnimations: this.settings.enableAnimations !== false,
+            enableShineEffect: this.settings.enableShineEffect || false,
+            shineOpacity: this.settings.shineOpacity || 0.4,
+            // 获取CSS变量值
+            getCSSVar: (varName) => {
+              const value = getComputedStyle(document.documentElement).getPropertyValue(varName)
+              return value ? value.trim() : null
+            },
+            // 获取所有CSS变量
+            getAllCSSVars: () => {
+              const styles = getComputedStyle(document.documentElement)
+              const vars = {}
+              for (let i = 0; i < styles.length; i++) {
+                const name = styles[i]
+                if (name.startsWith('--')) {
+                  vars[name] = styles.getPropertyValue(name).trim()
+                }
+              }
+              return vars
+            }
+          },
+          
+          // AI请求接口
+          ai: {
+            // 发送AI请求
+            request: async (prompt, options = {}) => {
+              try {
+                const response = await this.aiService.sendMessage(
+                  {
+                    name: component.name + '组件',
+                    prompt: '你是' + component.name + '组件的AI助手'
+                  },
+                  prompt,
+                  options.chatHistory || []
+                )
+                return response.response || response
+              } catch (error) {
+                console.error('组件AI请求失败:', error)
+                throw error
+              }
+            },
+            // 流式AI请求
+            requestStream: async (prompt, onProgress, options = {}) => {
+              try {
+                const response = await this.aiService.sendMessage(
+                  {
+                    name: component.name + '组件',
+                    prompt: '你是' + component.name + '组件的AI助手'
+                  },
+                  prompt,
+                  options.chatHistory || []
+                )
+                return response.response || response
+              } catch (error) {
+                console.error('组件AI流式请求失败:', error)
+                throw error
+              }
+            }
+          },
+          
+          // 当前组件信息
+          component: {
+            name: component.name,
+            description: component.description
+          }
+        }
+        
         // 创建一个函数来执行自定义组件代码，并返回 render 函数
-        const renderFunction = new Function(`
+        // 将上下文对象作为参数传递给组件
+        const renderFunction = new Function('context', `
+          const { styles, ai, component } = context;
           ${codeWithoutExport}
           return render;
-        `)()
+        `)(componentContext)
         
         console.log('创建的 render 函数:', typeof renderFunction, renderFunction)
         
@@ -6910,11 +6823,19 @@ export default {
     parseComponentParams(code) {
       const params = []
       
+      console.log('开始解析组件参数，代码长度:', code.length)
+      console.log('代码前500字符:', code.substring(0, 500))
+      
       // 尝试从代码注释中提取参数信息
-      // 格式：// @param {类型} 参数名 - 描述
-      const paramRegex = /\/\/\s*@param\s*(?:\{[^}]+\})?\s*(\w+)\s*-\s*(.+?)(?:\n|$)/g
+      // 支持多种格式：
+      // 1. // @param {类型} 参数名 - 描述
+      // 2. // @param 参数名 - 描述
+      // 3. // @param 参数名 描述（没有连字符）
+      // 参数名支持中文、英文、数字、下划线、美元符号
+      const paramRegex = /\/\/\s*@param\s*(?:\{[^}]*\})?\s*([a-zA-Z_$\u4e00-\u9fa5][a-zA-Z0-9_$\u4e00-\u9fa5]*)\s*(?:-|\s)\s*(.+?)(?:\r?\n|$)/g
       let match
       while ((match = paramRegex.exec(code)) !== null) {
+        console.log('匹配到参数:', match)
         params.push({
           name: match[1],
           description: match[2].trim(),
@@ -6922,14 +6843,19 @@ export default {
         })
       }
       
+      console.log('从注释中解析到的参数数量:', params.length)
+      
       // 如果没有找到参数注释，尝试从 render 函数中推断
       if (params.length === 0) {
+        console.log('未找到参数注释，尝试从 render 函数推断')
         // 查找 params 的使用情况
         const paramUsageRegex = /params\[(\d+)\]/g
         const usedParams = new Set()
         while ((match = paramUsageRegex.exec(code)) !== null) {
           usedParams.add(parseInt(match[1]))
         }
+        
+        console.log('检测到的参数索引:', Array.from(usedParams))
         
         if (usedParams.size > 0) {
           usedParams.forEach(index => {
@@ -6942,6 +6868,7 @@ export default {
         }
       }
       
+      console.log('最终解析到的参数:', params)
       return params
     },
     
@@ -6967,32 +6894,67 @@ export default {
         code: `// 自定义组件
 // 组件包含三个部分：template（HTML结构）、style（样式）、script（逻辑）
 
+// ============ 可用接口 ============
+// 1. styles - 样式设置接口
+//    styles.theme - 当前主题 ('light' 或 'dark')
+//    styles.primaryColor - 主色调
+//    styles.fontSize - 字体大小
+//    styles.borderRadius - 圆角大小
+//    styles.fontFamily - 字体
+//    styles.enableAnimations - 是否启用动画
+//    styles.getCSSVar(varName) - 获取CSS变量值
+//    styles.getAllCSSVars() - 获取所有CSS变量
+//
+// 2. ai - AI请求接口
+//    ai.request(prompt, options) - 发送AI请求
+//    ai.requestStream(prompt, onProgress, options) - 流式AI请求
+//
+// 3. component - 当前组件信息
+//    component.name - 组件名称
+//    component.description - 组件描述
+
 // @param {string} 标题 - 组件标题
 // @param {string} 内容 - 组件内容
+// @param {boolean} 使用AI - 是否使用AI生成内容
+
 const template = \`
 <div class="custom-component">
   <h3>{{ title }}</h3>
   <div class="content">
     {{ content }}
   </div>
+  <div class="theme-info">
+    当前主题: {{ theme }} | 主色: {{ primaryColor }}
+  </div>
 </div>
 \`;
 
 const style = \`
-.custom-component {
+/* 使用作用域选择器，避免与全局样式冲突 */
+.custom-component-wrapper .custom-component {
   padding: 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px;
+  background: linear-gradient(135deg, var(--primary-color, #667eea) 0%, #764ba2 100%);
+  border-radius: var(--border-radius, 8px);
   color: white;
+  font-family: var(--font-family, system-ui);
 }
 
-.custom-component h3 {
+.custom-component-wrapper .custom-component h3 {
   margin: 0 0 8px 0;
-  font-size: 18px;
+  font-size: calc(var(--font-size, 14px) * 1.3);
 }
 
-.custom-component .content {
-  font-size: 14px;
+.custom-component-wrapper .custom-component .content {
+  font-size: var(--font-size, 14px);
+  line-height: 1.6;
+}
+
+.custom-component-wrapper .theme-info {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  font-size: calc(var(--font-size, 14px) * 0.85);
 }
 \`;
 
@@ -7000,17 +6962,48 @@ function render(params) {
   // params 是参数数组
   const title = params[0] || '默认标题';
   const content = params[1] || '默认内容';
-  
+  const useAI = params[2] === true || params[2] === 'true';
+
+  // 使用样式接口
+  const theme = styles.theme;
+  const primaryColor = styles.primaryColor;
+  const fontSize = styles.fontSize;
+  const borderRadius = styles.borderRadius;
+
+  // 如果启用AI，使用AI接口生成内容
+  let finalContent = content;
+  if (useAI) {
+    // 注意：AI请求是异步的，这里只是示例
+    // 实际使用时需要在组件外部处理异步逻辑
+    ai.request(\`请为"\${title}"生成一段简短的描述\`).then(aiContent => {
+      finalContent = aiContent;
+    }).catch(err => {
+      console.error('AI请求失败:', err);
+    });
+  }
+
   return {
     type: 'custom',
     data: {
       template,
       style,
-      props: { title, content }
+      props: { 
+        title, 
+        content: finalContent,
+        theme,
+        primaryColor
+      }
     }
   };
 }`,
-        aiPrompt: ''
+        aiPrompt: '',
+        aiChatHistory: [],
+        aiInput: '',
+        workflowState: {
+          isRunning: false,
+          currentStep: null,
+          steps: []
+        }
       }
       this.showComponentEditorModal = true
     },
@@ -7023,7 +7016,14 @@ function render(params) {
         name: component.name,
         description: component.description,
         code: component.code,
-        aiPrompt: ''
+        aiPrompt: '',
+        aiChatHistory: [],
+        aiInput: '',
+        workflowState: {
+          isRunning: false,
+          currentStep: null,
+          steps: []
+        }
       }
       this.showComponentEditorModal = true
     },
@@ -7037,7 +7037,14 @@ function render(params) {
         name: '',
         description: '',
         code: '',
-        aiPrompt: ''
+        aiPrompt: '',
+        aiChatHistory: [],
+        aiInput: '',
+        workflowState: {
+          isRunning: false,
+          currentStep: null,
+          steps: []
+        }
       }
     },
 
@@ -7056,10 +7063,63 @@ function render(params) {
       // 验证组件代码
       try {
         const codeWithoutExport = this.componentEditor.code.replace(/export\s+function\s+render\s*\(/, 'function render(')
-        const testFunction = new Function(`
+        
+        // 创建组件上下文对象用于验证
+        const componentContext = {
+          // 样式设置接口
+          styles: {
+            theme: this.settings.theme || 'light',
+            primaryColor: this.settings.primaryColor || '#ec4899',
+            fontSize: this.settings.fontSize || 14,
+            borderRadius: this.settings.borderRadius || 8,
+            fontFamily: this.settings.fontFamily || 'system-ui',
+            enableAnimations: this.settings.enableAnimations !== false,
+            enableShineEffect: this.settings.enableShineEffect || false,
+            shineOpacity: this.settings.shineOpacity || 0.4,
+            getCSSVar: (varName) => {
+              const value = getComputedStyle(document.documentElement).getPropertyValue(varName)
+              return value ? value.trim() : null
+            },
+            getAllCSSVars: () => {
+              const styles = getComputedStyle(document.documentElement)
+              const vars = {}
+              for (let i = 0; i < styles.length; i++) {
+                const name = styles[i]
+                if (name.startsWith('--')) {
+                  vars[name] = styles.getPropertyValue(name).trim()
+                }
+              }
+              return vars
+            }
+          },
+          // AI请求接口
+          ai: {
+            request: async (prompt, options = {}) => {
+              try {
+                const response = await this.aiService.sendMessage(
+                  { name: '组件验证', prompt: '你是组件验证的AI助手' },
+                  prompt,
+                  options.chatHistory || []
+                )
+                return response.response || response
+              } catch (error) {
+                console.error('组件AI请求失败:', error)
+                throw error
+              }
+            }
+          },
+          // 当前组件信息
+          component: {
+            name: this.componentEditor.name || '验证组件',
+            description: this.componentEditor.description || ''
+          }
+        }
+        
+        const testFunction = new Function('context', `
+          const { styles, ai, component } = context;
           ${codeWithoutExport}
           return typeof render === 'function' ? render : null;
-        `)()
+        `)(componentContext)
         
         if (!testFunction) {
           this.showNotification('组件代码必须包含 render 函数', 'warning')
@@ -7323,33 +7383,49 @@ function render(params) {
 
 组件描述：${this.componentEditor.aiPrompt}
 
+重要说明：
+- 组件将在一个包装器容器中渲染，容器类名为 "custom-component-wrapper"
+- 样式选择器应该使用 ".custom-component-wrapper" 作为前缀，确保样式只作用于当前组件
+- template 中的 {{ variable }} 会被自动替换为 props 中对应变量的值
+- style 中的 {{ variable }} 也会被自动替换为 props 中对应变量的值
+
 要求：
 1. 定义一个 render 函数，接收 params 参数数组
 2. render 函数返回一个对象，包含 type 和 data 字段
-3. type 应该是 'custom'
+3. type 必须是 'custom'
 4. data 包含 template（HTML模板字符串）、style（CSS样式字符串）和 props（属性对象）
 5. template 中使用 {{ variable }} 来引用 props 中的变量
-6. 代码应该简洁、高效、易于理解
-7. 添加适当的注释说明，包括参数说明
-8. 参数说明格式：// @param {类型} 参数名 - 描述
-9. 添加适当的注释说明
+6. style 中也可以使用 {{ variable }} 来引用 props 中的变量（用于动态样式）
+7. 样式选择器必须使用 ".custom-component-wrapper" 作为前缀，避免影响全局样式
+8. 代码应该简洁、高效、易于理解
+9. 添加参数注释：// @param {类型} 参数名 - 描述
+10. 为每个参数提供合理的默认值
 
 示例格式：
 \`\`\`
 // @param {string} 标题 - 组件标题
 // @param {string} 内容 - 组件内容
+// @param {string} color - 文本颜色（十六进制）
 const template = \`<div class="my-component">{{ title }}</div>\`;
-const style = \`.my-component { color: blue; }\`;
+const style = \`
+.custom-component-wrapper .my-component {
+  color: {{ color }};
+  padding: 16px;
+  border-radius: 8px;
+}
+\`;
 
 function render(params) {
-  const title = params[0] || '默认值';
+  const title = params[0] || '默认标题';
   const content = params[1] || '默认内容';
+  const color = params[2] || '#333333';
+
   return {
     type: 'custom',
     data: {
       template,
       style,
-      props: { title, content }
+      props: { title, content, color }
     }
   };
 }
@@ -7396,6 +7472,851 @@ function render(params) {
         console.error('格式化代码失败:', error)
         this.showNotification('格式化代码失败', 'danger')
       }
+    },
+
+    // 发送 AI 消息（工作流模式）
+    async sendAiMessage() {
+      if (!this.componentEditor.aiInput.trim()) {
+        return
+      }
+
+      const userMessage = this.componentEditor.aiInput.trim()
+      this.componentEditor.aiInput = ''
+
+      // 添加用户消息到聊天历史
+      this.componentEditor.aiChatHistory.push({
+        role: 'user',
+        content: userMessage,
+        type: 'message'
+      })
+
+      // 启动工作流
+      await this.runAiWorkflow(userMessage)
+    },
+
+    // 运行 AI 工作流
+    async runAiWorkflow(userMessage) {
+      this.isAiThinking = true
+      this.componentEditor.workflowState.isRunning = true
+      this.componentEditor.workflowState.steps = []
+
+      try {
+        // 第一步：让AI分析任务并创建任务列表
+        this.componentEditor.aiChatHistory.push({
+          role: 'ai',
+          content: '正在分析任务并创建执行计划...',
+          type: 'message'
+        })
+
+        const taskListPrompt = `你是一个专业的 Vue 组件开发助手。用户正在创建或修改一个自定义组件。
+
+${this.componentEditor.code.trim() ? `\n当前组件代码：\n\`\`\`javascript\n${this.componentEditor.code}\n\`\`\`\n` : ''}
+
+${this.componentEditor.name ? `组件名称：${this.componentEditor.name}\n` : ''}
+${this.componentEditor.description ? `组件描述：${this.componentEditor.description}\n` : ''}
+
+用户的请求：${userMessage}
+
+【任务创建规则 - 严格遵守】
+
+1. **单一功能 = 单一任务**
+   - 如果用户要求创建一个组件（如"创建一个温度计组件"、"创建一个论坛页面"），只创建1个任务
+   - 任务描述应该简洁明了，例如："创建温度计组件"或"创建论坛页面组件"
+   
+2. **多个独立功能 = 多个任务**
+   - 只有当用户要求实现多个完全独立的功能时，才拆分为多个任务
+   - 例如："添加按钮和输入框" → 2个任务（"添加按钮组件"、"添加输入框组件"）
+   
+3. **禁止的拆分方式**
+   - ❌ 不要将HTML、CSS、JS分开创建
+   - ❌ 不要将"编写代码"、"添加样式"、"测试"分开
+   - ❌ 不要将一个组件的实现拆分为多个步骤
+   
+4. **任务描述格式**
+   - 使用简洁的动词开头
+   - 直接说明要创建/修改的内容
+   - 例如："创建温度计组件"、"添加删除按钮功能"、"修改组件颜色样式"
+
+5. **返回格式**
+   只返回任务列表，格式如下：
+   
+   任务列表：
+   1. [任务1描述]
+   2. [任务2描述]
+   ...
+
+【重要提醒】
+- 你的唯一任务是创建任务列表，不要开始编写代码
+- 不要包含任何代码示例或实现细节
+- 只返回任务列表，不要包含其他说明
+- 确保任务数量合理，避免过度细分`
+
+        const taskListResponse = await this.aiService.sendMessage(
+          {
+            name: '组件开发助手',
+            prompt: `你是一个专业的 Vue 组件开发助手，专门负责分析和拆分组件开发任务。
+
+【你的职责】
+- 分析用户的组件开发请求
+- 将请求拆分为合理的任务列表
+- 避免过度细分，确保每个任务都是完整的功能单元
+- 不要编写代码，只创建任务列表
+
+【任务拆分原则】
+1. 单一功能 = 单一任务（如"创建温度计组件"）
+2. 多个独立功能 = 多个任务（如"添加按钮和输入框"）
+3. 禁止将HTML、CSS、JS分开创建
+4. 禁止将组件实现拆分为多个步骤
+
+【返回格式】
+只返回任务列表，不要包含其他说明。`
+          },
+          taskListPrompt,
+          []
+        )
+
+        if (!taskListResponse || !taskListResponse.response) {
+          throw new Error('AI 响应为空')
+        }
+
+        // 解析任务列表
+        const taskListText = taskListResponse.response.trim()
+        const tasks = this.parseTaskList(taskListText)
+
+        if (tasks.length === 0) {
+          throw new Error('无法解析任务列表')
+        }
+
+        // 显示任务列表
+        const taskListMessage = `已创建执行计划，共 ${tasks.length} 个任务：\n${tasks.map((t, i) => `${i + 1}. ${t.description}`).join('\n')}`
+        this.componentEditor.aiChatHistory.push({
+          role: 'ai',
+          content: taskListMessage,
+          type: 'message'
+        })
+
+        // 初始化任务状态
+        this.componentEditor.workflowState.tasks = tasks.map(t => ({
+          ...t,
+          completed: false
+        }))
+
+        // 执行任务列表
+        for (let i = 0; i < tasks.length; i++) {
+          const task = tasks[i]
+
+          // 构建当前任务的提示词
+          const taskPrompt = this.buildTaskPrompt(task, i, tasks.length)
+
+          // 将聊天历史转换为AI服务需要的格式
+          const chatHistory = this.componentEditor.aiChatHistory.map(msg => ({
+            role: msg.role === 'ai' ? 'assistant' : msg.role,
+            content: msg.content
+          }))
+
+          // 执行任务
+          const response = await this.aiService.sendMessage(
+            {
+              name: '组件开发助手',
+              prompt: `你是一个专业的 Vue 组件开发助手，可以使用工具来完成任务。
+
+【组件开发规范】
+1. 组件必须包含三个部分：
+   - template: HTML模板字符串（使用 \`\` 包裹）
+   - style: CSS样式字符串（使用 \`\` 包裹）
+   - render函数: 返回 { type: 'custom', data: { template, style, props } }
+
+2. 参数注释格式：
+   // @param {类型} 参数名 - 描述
+   例如：// @param {string} 标题 - 卡片标题
+
+3. 可用接口：
+   - styles.theme - 当前主题 ('light'/'dark')
+   - styles.primaryColor - 主色调
+   - styles.fontSize - 字体大小
+   - styles.borderRadius - 圆角大小
+   - styles.fontFamily - 字体
+   - styles.getCSSVar(varName) - 获取CSS变量
+   - styles.getAllCSSVars() - 获取所有CSS变量
+   - ai.request(prompt) - 发送AI请求
+   - component.name - 组件名称
+
+4. 样式规范：
+   - 使用 .custom-component-wrapper 前缀避免样式冲突
+   - 优先使用CSS变量：var(--primary-color), var(--bg-secondary)等
+   - 使用相对单位：calc(var(--font-size, 14px) * 1.3)
+
+5. 参数类型支持（支持嵌套）：
+   - string: 字符串类型
+   - number: 数字类型
+   - boolean: 布尔类型（true/false）
+   - array: 数组类型，支持嵌套数组和对象
+   - object: 对象类型，支持嵌套对象和数组
+   
+   嵌套参数示例：
+   // @param {array} 列表数据 - 支持嵌套的列表项数组
+   // @param {object} 配置项 - 支持嵌套的配置对象
+   
+   调用示例：
+   @<!组件名~[{"name":"项目1","value":100},{"name":"项目2","value":200}]>
+   @<!组件名~{"settings":{"theme":"dark","fontSize":16},"items":[1,2,3]}>
+
+6. 返回格式：
+   {
+     type: 'custom',
+     data: {
+       template: 'HTML模板',
+       style: 'CSS样式',
+       props: { prop1: value1, prop2: value2 }
+     }
+   }
+
+7. 循环渲染支持：
+   - v-for="(item, index) in items" - 遍历数组
+   - v-for="(value, key) in object" - 遍历对象
+   - v-for="(value, key, index) in object" - 遍历对象（带索引）
+   - {{ item.property }} - 访问对象属性
+   
+   论坛消息示例：
+   // @param {array} 消息列表 - 用户消息数组
+   // 调用：@<!论坛~[{"username":"张三","content":"第一条消息"},{"username":"李四","content":"第二条消息"}]>
+   
+   模板：
+   <div v-for="(message, index) in messages">
+     <div class="message">
+       <span class="username">{{ message.username }}:</span>
+       <span class="content">{{ message.content }}</span>
+     </div>
+   </div>
+
+【工具使用规则】
+- 代码长度<500字符时，优先使用WRITE工具
+- 代码长度>=500字符时，优先使用REPLACE工具
+- 确保代码格式正确，包含template、style和render函数`
+            },
+            taskPrompt,
+            chatHistory
+          )
+
+          if (!response || !response.response) {
+            throw new Error('AI 响应为空')
+          }
+
+          const aiResponse = response.response.trim()
+
+          // 解析 AI 响应，检查是否有工具调用
+          const toolCalls = this.parseToolCalls(aiResponse)
+
+          if (toolCalls.length > 0) {
+            // 执行工具调用
+            const toolCall = toolCalls[0]
+            const result = await this.executeToolCall(toolCall)
+
+            // 添加工具执行结果消息
+            const resultMessage = result.success 
+              ? `✓ 工具执行成功：${result.message}`
+              : `✗ 工具执行失败：${result.message}`
+
+            this.componentEditor.aiChatHistory.push({
+              role: 'ai',
+              content: resultMessage,
+              type: 'message'
+            })
+
+            // 添加到工作流步骤
+            this.componentEditor.workflowState.steps.push({
+              ...toolCall,
+              result: result,
+              taskId: task.id
+            })
+
+            // 标记任务完成
+            this.componentEditor.workflowState.tasks[i].completed = true
+
+            // 显示任务完成消息
+            const taskCompleteMessage = `✓ 任务 ${i + 1}/${tasks.length} 已完成：${task.description}`
+            this.componentEditor.aiChatHistory.push({
+              role: 'ai',
+              content: taskCompleteMessage,
+              type: 'message'
+            })
+          } else {
+            // 没有工具调用，任务失败
+            this.componentEditor.aiChatHistory.push({
+              role: 'ai',
+              content: `✗ 任务 ${i + 1}/${tasks.length} 失败：${task.description}`,
+              type: 'message'
+            })
+            throw new Error('任务执行失败，没有工具调用')
+          }
+
+          // 滚动到最新消息
+          this.$nextTick(() => {
+            const chatMessages = this.$refs.aiChatMessages
+            if (chatMessages) {
+              chatMessages.scrollTop = chatMessages.scrollHeight
+            }
+          })
+        }
+
+        // 所有任务完成
+        this.componentEditor.workflowState.isRunning = false
+        this.componentEditor.aiChatHistory.push({
+          role: 'ai',
+          content: '🎉 所有任务已完成！',
+          type: 'message'
+        })
+
+      } catch (error) {
+        console.error('AI 工作流失败:', error)
+        this.showNotification('AI 工作流失败', 'danger')
+        this.componentEditor.aiChatHistory.push({
+          role: 'ai',
+          content: `抱歉，我遇到了一些问题：${error.message}`,
+          type: 'message'
+        })
+      } finally {
+        this.isAiThinking = false
+        this.componentEditor.workflowState.isRunning = false
+      }
+    },
+
+    // 解析任务列表
+    parseTaskList(text) {
+      const tasks = []
+      const lines = text.split('\n')
+      
+      lines.forEach(line => {
+        // 匹配 "1. 任务描述" 或 "1) 任务描述" 格式
+        const match = line.match(/^\s*\d+[\.\)]\s*(.+)$/)
+        if (match) {
+          tasks.push({
+            id: `task-${Date.now()}-${tasks.length}`,
+            description: match[1].trim()
+          })
+        }
+      })
+      
+      return tasks
+    },
+
+    // 构建单个任务的提示词
+    buildTaskPrompt(task, currentIndex, totalTasks) {
+      const completedTasks = this.componentEditor.workflowState.tasks.filter(t => t.completed)
+      const pendingTasks = this.componentEditor.workflowState.tasks.filter(t => !t.completed)
+
+      let context = ''
+
+      // 当前代码
+      if (this.componentEditor.code.trim()) {
+        context += `\n当前组件代码：\n\`\`\`javascript\n${this.componentEditor.code}\n\`\`\`\n`
+      }
+
+      // 已完成的任务
+      if (completedTasks.length > 0) {
+        context += `\n已完成的任务：\n`
+        completedTasks.forEach((t, i) => {
+          context += `✓ ${t.description}\n`
+        })
+      }
+
+      // 待完成的任务
+      if (pendingTasks.length > 0) {
+        context += `\n待完成的任务：\n`
+        pendingTasks.forEach((t, i) => {
+          const isCurrent = t.id === task.id
+          context += `${isCurrent ? '→' : '○'} ${t.description}\n`
+        })
+      }
+
+      // 构建提示词
+      let prompt = `你是一个专业的 Vue 组件开发助手。正在执行任务列表中的任务。
+
+${context}
+
+【当前任务】
+任务 ${currentIndex + 1}/${totalTasks}：${task.description}
+
+【组件开发规范】
+1. 组件必须包含三个部分：
+   - template: HTML模板字符串（使用 \`\` 包裹）
+   - style: CSS样式字符串（使用 \`\` 包裹）
+   - render函数: 返回 { type: 'custom', data: { template, style, props } }
+
+2. 参数注释格式：
+   // @param {类型} 参数名 - 描述
+   例如：// @param {string} 标题 - 卡片标题
+
+3. 可用接口：
+   - styles.theme - 当前主题 ('light'/'dark')
+   - styles.primaryColor - 主色调
+   - styles.fontSize - 字体大小
+   - styles.borderRadius - 圆角大小
+   - styles.fontFamily - 字体
+   - styles.getCSSVar(varName) - 获取CSS变量
+   - styles.getAllCSSVars() - 获取所有CSS变量
+   - ai.request(prompt) - 发送AI请求
+   - component.name - 组件名称
+
+4. 样式规范：
+   - 使用 .custom-component-wrapper 前缀避免样式冲突
+   - 优先使用CSS变量：var(--primary-color), var(--bg-secondary)等
+   - 使用相对单位：calc(var(--font-size, 14px) * 1.3)
+
+5. 返回格式：
+   {
+     type: 'custom',
+     data: {
+       template: 'HTML模板',
+       style: 'CSS样式',
+       props: { prop1: value1, prop2: value2 }
+     }
+   }
+
+请使用工具来完成当前任务。
+
+可用工具：
+1. **READ** - 读取当前代码
+   格式：[READ] 确认当前代码结构 [/READ]
+
+2. **WRITE** - 写入新的完整代码（推荐用于代码长度<500字符时）
+   格式：[WRITE] 要写入的完整代码 [/WRITE]
+
+3. **REPLACE** - 替换代码中的特定部分（推荐用于代码长度>=500字符时）
+   格式：[REPLACE] 要替换的旧内容<<<>>>新内容 [/REPLACE]
+
+4. **DELETE** - 删除代码中的特定部分
+   格式：[DELETE] 要删除的内容 [/DELETE]
+
+【重要规则】：
+1. **只使用一个工具**来完成当前任务
+2. 不要在响应中添加其他说明文字
+3. 完成任务后，系统会自动标记任务完成并继续下一个任务
+4. 不要输出 [END]、[DONE] 或 [FINISH] 标识
+5. 如果代码长度<500字符，优先使用WRITE工具
+6. 如果代码长度>=500字符，优先使用REPLACE工具
+7. 确保代码格式正确，包含template、style和render函数
+
+请使用工具来完成当前任务。`
+
+      return prompt
+    },
+
+// 构建工作流提示词
+    buildWorkflowPrompt(userMessage, previousSteps) {
+      // 构建上下文
+      let context = ''
+
+      // 如果已有代码，包含在上下文中
+      if (this.componentEditor.code.trim()) {
+        context += `\n\n当前组件代码：\n\`\`\`javascript\n${this.componentEditor.code}\n\`\`\`\n`
+        
+        // 计算代码长度
+        const codeLength = this.componentEditor.code.length
+        context += `\n当前代码长度：${codeLength} 字符\n`
+      }
+
+      // 如果有组件名称和描述，也包含在上下文中
+      if (this.componentEditor.name) {
+        context += `\n组件名称：${this.componentEditor.name}\n`
+      }
+      if (this.componentEditor.description) {
+        context += `组件描述：${this.componentEditor.description}\n`
+      }
+
+      // 如果有之前的步骤，包含在上下文和工具执行结果
+      if (previousSteps.length > 0) {
+        context += `\n\n已完成的步骤：\n`
+        previousSteps.forEach((step, index) => {
+          const status = step.result?.success ? '✓ 成功' : '✗ 失败'
+          const message = step.result?.message || ''
+          context += `${index + 1}. [${step.tool}] ${status}: ${message}\n`
+        })
+      }
+
+      // 构建提示词
+      let prompt = `你是一个专业的 Vue 组件开发助手。用户正在创建或修改一个自定义组件。
+
+${context}
+
+${userMessage ? `用户的请求：${userMessage}` : ''}
+
+你可以使用以下工具来完成用户的请求：
+
+1. **READ** - 读取当前代码（代码已在上方显示，此工具用于确认和分析）
+   格式：[READ] 确认当前代码结构 [/READ]
+
+2. **WRITE** - 写入新的完整代码（推荐用于代码长度较短或需要大幅修改时）
+   格式：[WRITE] 要写入的完整代码 [/WRITE]
+   建议：当代码长度少于500字符时，优先使用WRITE工具
+
+3. **REPLACE** - 替换代码中的特定部分（推荐用于代码较长或只需要局部修改时）
+   格式：[REPLACE] 要替换的旧内容<<<>>>新内容 [/REPLACE]
+   注意：使用<<<>>>作为分隔符，不要在旧内容或新内容中使用这个分隔符
+   建议：当代码长度超过500字符时，使用REPLACE工具进行局部修改
+
+4. **DELETE** - 删除代码中的特定部分
+   格式：[DELETE] 要删除的内容 [/DELETE]
+
+【重要规则 - 必须遵守】：
+1. **每次响应只能包含一个工具调用**
+2. **不要在同一个响应中包含多个工具调用**
+3. **不要在同一个响应中同时包含工具调用和结束标识**
+4. 如果任务需要多个步骤，每次只执行一个步骤，系统会自动继续
+5. 只有在所有步骤都完成后，才在单独的响应中输出 [END]、[DONE] 或 [FINISH]
+6. 不要在工具调用之外添加其他说明文字
+7. 每次只关注当前需要执行的一步操作
+8. **工具执行结果会作为消息返回给你**：
+   - 如果工具执行成功，你会看到：✓ 工具执行成功：[结果描述]
+   - 如果工具执行失败，你会看到：✗ 工具执行失败：[错误信息]
+9. **根据上一步的执行结果决定下一步操作**：
+   - 如果上一步成功，继续下一步
+   - 如果上一步失败，尝试修正或使用其他方法
+   - 如果所有步骤都完成，输出结束标识
+
+【工具选择建议】：
+- **代码长度 < 500字符**：优先使用 WRITE 工具，直接替换整个代码更简单高效
+- **代码长度 >= 500字符**：使用 REPLACE 工具进行局部修改，避免重复大量代码
+- **只需要修改一小部分**：使用 REPLACE 工具
+- **需要大幅修改或重构**：使用 WRITE 工具
+
+工作流程示例：
+- 第1次：你发送 [READ] 确认当前代码结构 [/READ]
+  → 系统返回消息：✓ 工具执行成功：代码已确认
+- 第2次（代码较短）：你发送 [WRITE] 完整的更新后代码 [/WRITE]
+  → 系统返回消息：✓ 工具执行成功：代码已更新
+- 或第2次（代码较长）：你发送 [REPLACE] const style = \`...\`<<<>>>const style = \`.custom-component-wrapper .custom-component { background-color: {{ bgColor }}; }\` [/REPLACE]
+  → 系统返回消息：✓ 工具执行成功：代码已替换
+- 第3次：你发送 [DONE] 任务完成
+  → 系统返回消息：任务已完成
+
+组件要求：
+- 定义一个 render 函数，接收 params 参数数组
+- render 函数返回 { type: 'custom', data: { template, style, props } }
+- template 中使用 {{ variable }} 引用 props 中的变量
+- 样式选择器必须使用 ".custom-component-wrapper" 作为前缀
+- 添加参数注释：// @param {类型} 参数名 - 描述
+
+请使用工具来完成用户的请求。记住：每次只能使用一个工具，工具执行结果会作为消息返回给你！`
+
+      return prompt
+    },
+
+    // 解析工具调用
+    parseToolCalls(response) {
+      const toolCalls = []
+      const toolRegex = /\[(READ|WRITE|REPLACE|DELETE|ANALYZE)\]([\s\S]*?)\[\/\1\]/g
+      let match
+
+      while ((match = toolRegex.exec(response)) !== null) {
+        const tool = match[1]
+        const content = match[2].trim()
+
+        toolCalls.push({
+          tool,
+          content,
+          raw: match[0]
+        })
+      }
+
+      return toolCalls
+    },
+
+    // 执行工具调用
+    async executeToolCall(toolCall) {
+      const { tool, content } = toolCall
+
+      // 添加工具调用消息到聊天历史
+      this.componentEditor.aiChatHistory.push({
+        role: 'ai',
+        type: 'tool',
+        tool: tool,
+        content: content.substring(0, 100) + (content.length > 100 ? '...' : '')
+      })
+
+      let result = {
+        success: false,
+        message: '',
+        data: null
+      }
+
+      // 执行工具
+      switch (tool) {
+        case 'READ':
+          // 读取工具，不做实际修改，代码已在上下文中
+          result.success = true
+          result.message = '代码已确认'
+          result.data = { code: this.componentEditor.code }
+          break
+
+        case 'WRITE':
+          // 写入工具，直接替换整个代码
+          try {
+            let writeCode = content
+            writeCode = writeCode.replace(/```javascript\n?/g, '')
+            writeCode = writeCode.replace(/```\n?/g, '')
+            this.componentEditor.code = writeCode.trim()
+            result.success = true
+            result.message = '代码已更新'
+            result.data = { code: this.componentEditor.code }
+            this.showNotification('代码已更新', 'success')
+          } catch (error) {
+            result.success = false
+            result.message = `写入失败：${error.message}`
+            this.showNotification('代码更新失败', 'danger')
+          }
+          break
+
+        case 'REPLACE':
+          // 替换工具，替换特定部分
+          try {
+            const parts = content.split('<<<>>>')
+            if (parts.length >= 2) {
+              const oldContent = parts[0].trim()
+              const newContent = parts.slice(1).join('<<<>>>').trim()
+              const oldCode = this.componentEditor.code
+              this.componentEditor.code = this.componentEditor.code.replace(oldContent, newContent)
+              
+              if (oldCode !== this.componentEditor.code) {
+                result.success = true
+                result.message = '代码已替换'
+                result.data = { replaced: true }
+                this.showNotification('代码已替换', 'success')
+              } else {
+                result.success = false
+                result.message = '未找到要替换的内容'
+                this.showNotification('未找到要替换的内容', 'warning')
+              }
+            } else {
+              result.success = false
+              result.message = 'REPLACE 格式错误，需要使用 <<<>>> 分隔旧内容和新内容'
+            }
+          } catch (error) {
+            result.success = false
+            result.message = `替换失败：${error.message}`
+            this.showNotification('代码替换失败', 'danger')
+          }
+          break
+
+        case 'DELETE':
+          // 删除工具，删除特定部分
+          try {
+            let deleteContent = content
+            deleteContent = deleteContent.replace(/```javascript\n?/g, '')
+            deleteContent = deleteContent.replace(/```\n?/g, '')
+            const oldCode = this.componentEditor.code
+            this.componentEditor.code = this.componentEditor.code.replace(deleteContent, '')
+            
+            if (oldCode !== this.componentEditor.code) {
+              result.success = true
+              result.message = '代码已删除'
+              result.data = { deleted: true }
+              this.showNotification('代码已删除', 'success')
+            } else {
+              result.success = false
+              result.message = '未找到要删除的内容'
+              this.showNotification('未找到要删除的内容', 'warning')
+            }
+          } catch (error) {
+            result.success = false
+            result.message = `删除失败：${error.message}`
+            this.showNotification('代码删除失败', 'danger')
+          }
+          break
+
+        
+      }
+
+      // 滚动到最新消息
+      this.$nextTick(() => {
+        const chatMessages = this.$refs.aiChatMessages
+        if (chatMessages) {
+          chatMessages.scrollTop = chatMessages.scrollHeight
+        }
+      })
+
+      return result
+    },
+
+    // 获取工具图标
+    getToolIcon(tool) {
+      const icons = {
+        READ: '📖',
+        WRITE: '📝',
+        REPLACE: '🔄',
+        DELETE: '🗑️',
+        ANALYZE: '🔍'
+      }
+      return icons[tool] || '🔧'
+    },
+
+    // 显示组件预览
+    showComponentPreview() {
+      if (!this.componentEditor.code.trim()) {
+        this.showNotification('请先编写组件代码', 'warning')
+        return
+      }
+
+      // 解析组件参数
+      const params = this.parseComponentParamsFromCode(this.componentEditor.code)
+
+      // 初始化预览数据
+      this.componentPreview = {
+        params: params,
+        values: params.map(() => ''),
+        component: null,
+        error: null
+      }
+
+      this.showComponentPreviewModal = true
+
+      // 自动刷新预览
+      this.$nextTick(() => {
+        this.refreshComponentPreview()
+      })
+    },
+
+    // 关闭组件预览
+    closeComponentPreview() {
+      this.showComponentPreviewModal = false
+      this.componentPreview = {
+        params: [],
+        values: [],
+        component: null,
+        error: null
+      }
+    },
+
+    // 刷新组件预览
+    refreshComponentPreview() {
+      this.componentPreview.error = null
+      this.componentPreview.component = null
+
+      try {
+        // 验证组件代码
+        const codeWithoutExport = this.componentEditor.code.replace(/export\s+function\s+render\s*\(/, 'function render(')
+
+        // 创建组件上下文对象（与注册组件时相同）
+        const componentContext = {
+          // 样式设置接口
+          styles: {
+            theme: this.settings.theme || 'light',
+            primaryColor: this.settings.primaryColor || '#ec4899',
+            fontSize: this.settings.fontSize || 14,
+            borderRadius: this.settings.borderRadius || 8,
+            fontFamily: this.settings.fontFamily || 'system-ui',
+            enableAnimations: this.settings.enableAnimations !== false,
+            enableShineEffect: this.settings.enableShineEffect || false,
+            shineOpacity: this.settings.shineOpacity || 0.4,
+            // 获取CSS变量值
+            getCSSVar: (varName) => {
+              const value = getComputedStyle(document.documentElement).getPropertyValue(varName)
+              return value ? value.trim() : null
+            },
+            // 获取所有CSS变量
+            getAllCSSVars: () => {
+              const styles = getComputedStyle(document.documentElement)
+              const vars = {}
+              for (let i = 0; i < styles.length; i++) {
+                const name = styles[i]
+                if (name.startsWith('--')) {
+                  vars[name] = styles.getPropertyValue(name).trim()
+                }
+              }
+              return vars
+            }
+          },
+          
+          // AI请求接口
+          ai: {
+            // 发送AI请求
+            request: async (prompt, options = {}) => {
+              try {
+                const response = await this.aiService.sendMessage(
+                  {
+                    name: '组件预览',
+                    prompt: '你是组件预览的AI助手'
+                  },
+                  prompt,
+                  options.chatHistory || []
+                )
+                return response.response || response
+              } catch (error) {
+                console.error('组件AI请求失败:', error)
+                throw error
+              }
+            }
+          },
+          
+          // 当前组件信息
+          component: {
+            name: this.componentEditor.name || '预览组件',
+            description: this.componentEditor.description || ''
+          }
+        }
+
+        const renderFunction = new Function('context', `
+          const { styles, ai, component } = context;
+          ${codeWithoutExport}
+          return render;
+        `)(componentContext)
+
+        if (typeof renderFunction !== 'function') {
+          throw new Error('代码中未找到 render 函数')
+        }
+
+        // 使用当前参数值渲染组件
+        const result = renderFunction(this.componentPreview.values)
+
+        if (!result || !result.type || !result.data) {
+          throw new Error('render 函数必须返回包含 type 和 data 的对象')
+        }
+
+        this.componentPreview.component = result
+      } catch (error) {
+        console.error('预览组件失败:', error)
+        this.componentPreview.error = error.message
+      }
+    },
+
+    // 从代码中解析参数信息
+    parseComponentParamsFromCode(code) {
+      const params = []
+
+      // 尝试从代码注释中提取参数信息
+      // 支持多种格式：
+      // 1. // @param {类型} 参数名 - 描述
+      // 2. // @param 参数名 - 描述
+      // 3. // @param 参数名 描述（没有连字符）
+      // 参数名支持中文、英文、数字、下划线、美元符号
+      const paramRegex = /\/\/\s*@param\s*(?:\{[^}]*\})?\s*([a-zA-Z_$\u4e00-\u9fa5][a-zA-Z0-9_$\u4e00-\u9fa5]*)\s*(?:-|\s)\s*(.+?)(?:\r?\n|$)/g
+      let match
+      while ((match = paramRegex.exec(code)) !== null) {
+        params.push({
+          name: match[1],
+          description: match[2].trim()
+        })
+      }
+
+      // 如果没有找到参数注释，尝试从 params 使用情况推断
+      if (params.length === 0) {
+        const paramUsageRegex = /params\[(\d+)\]/g
+        const usedParams = new Set()
+        while ((match = paramUsageRegex.exec(code)) !== null) {
+          usedParams.add(parseInt(match[1]))
+        }
+
+        if (usedParams.size > 0) {
+          usedParams.forEach(index => {
+            params.push({
+              name: `参数${index + 1}`,
+              description: `组件参数 ${index + 1}`
+            })
+          })
+        }
+      }
+
+      return params
     },
 
     // 构建智能填写提示词
