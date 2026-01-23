@@ -890,7 +890,7 @@ body {
   flex: 1;
   max-width: min(70%, 600px);
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .message.user .message-content-wrapper {
@@ -914,7 +914,7 @@ body {
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .message.user .message-content {
@@ -1886,6 +1886,42 @@ body {
     word-wrap: break-word;
     overflow-wrap: break-word;
     word-break: break-word;
+  }
+
+  /* 组件渲染器内部元素不受限制 */
+  .component-renderer * {
+    max-width: none !important;
+    word-wrap: normal !important;
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+  }
+
+  /* 自定义组件特殊处理 */
+  .custom-component-wrapper,
+  .custom-component-wrapper * {
+    max-width: none !important;
+    word-wrap: normal !important;
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    line-height: inherit !important;
+  }
+
+  /* 确保自定义组件容器不受父容器行高影响 */
+  .custom-component-wrapper {
+    line-height: 1.5 !important;
+  }
+
+  /* 进度条和柱状图特殊处理 */
+  .progress-track,
+  .bar-wrapper,
+  .affection-bar-bg {
+    line-height: 0 !important;
+  }
+
+  .progress-fill,
+  .bar-fill,
+  .affection-bar-fill {
+    line-height: inherit !important;
   }
 
   /* 处理代码块 */

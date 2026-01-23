@@ -1682,15 +1682,141 @@
   color: var(--text-primary);
 }
 
+/* 预览主头部 */
+.preview-main-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.preview-main-header h4 {
+  margin: 0;
+}
+
+/* 尺寸控制器 */
+.preview-size-controls {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.size-control-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.size-control-group label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.size-select {
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.size-select:hover {
+  border-color: var(--primary-color);
+}
+
+.size-select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1);
+}
+
 .preview-container {
+  /* 自适应最小高度，但允许根据内容扩展 */
   min-height: 200px;
+  max-height: 600px;
   background: var(--bg-secondary);
   border-radius: 12px;
   border: 1px solid var(--border-color);
   padding: 20px;
-  /* 移除 flex 布局，使其与实际渲染环境一致 */
+  /* 使用 block 布局以支持各种组件类型 */
   display: block;
-  overflow: auto;
+  /* 确保内容溢出时可以滚动 */
+  overflow-x: auto;
+  overflow-y: auto;
+  /* 确保容器宽度适应内容 */
+  width: 100%;
+  max-width: 100%;
+  /* 添加平滑滚动 */
+  scroll-behavior: smooth;
+  /* 添加微妙的阴影效果 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  /* 添加过渡效果 */
+  transition: all 0.3s ease;
+  /* 确保缩放时不会溢出 */
+  transform-origin: top left;
+}
+
+/* 预览容器悬停效果 */
+.preview-container:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  border-color: var(--primary-color);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .preview-main-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .preview-size-controls {
+    width: 100%;
+  }
+
+  .size-control-group {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .preview-container {
+    padding: 16px;
+    min-height: 150px;
+  }
+}
+
+/* 预览容器内部的样式重置 */
+.preview-container :deep(*) {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 针对不同组件类型的特殊处理 */
+.preview-container :deep(.component-renderer) {
+  /* 移除组件渲染器的外边距，避免与容器边距重复 */
+  margin: 0;
+  padding: 0;
+  /* 确保组件宽度适应容器 */
+  width: 100%;
+}
+
+/* 表格组件特殊处理 */
+.preview-container :deep(.data-table) {
+  /* 确保表格可以水平滚动 */
+  overflow-x: auto;
+}
+
+/* 自定义组件特殊处理 */
+.preview-container :deep(.custom-component-container) {
+  /* 确保自定义组件不受父级限制 */
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
 }
 
 .preview-error {
@@ -1698,12 +1824,91 @@
   font-size: 14px;
   text-align: center;
   padding: 20px;
+  background: rgba(255, 0, 0, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 0, 0, 0.2);
 }
 
 .preview-empty {
   color: var(--text-secondary);
   font-size: 14px;
   text-align: center;
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.preview-empty::before {
+  content: '📦';
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+/* 预览容器滚动条样式优化 */
+.preview-container::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.preview-container::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+}
+
+.preview-container::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 6px;
+  border: 2px solid var(--bg-tertiary);
+}
+
+.preview-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* 预览容器加载状态 */
+.preview-container.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.preview-container.loading::after {
+  content: '';
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: preview-spin 0.8s linear infinite;
+}
+
+@keyframes preview-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 预览成功动画 */
+.preview-container.success-animation {
+  animation: preview-success 0.5s ease-out;
+}
+
+@keyframes preview-success {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* 暗色主题适配 - AI 聊天和预览 */

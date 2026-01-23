@@ -4037,14 +4037,56 @@ function render(params) {
                   </button>
                 </div>
                 <div class="preview-main">
-                  <h4>预览效果</h4>
-                  <div class="preview-container">
+                  <div class="preview-main-header">
+                    <h4>预览效果</h4>
+                    <div class="preview-size-controls">
+                      <div class="size-control-group">
+                        <label>宽度:</label>
+                        <select v-model="componentPreview.sizeOptions.width" class="size-select">
+                          <option value="auto">自动</option>
+                          <option value="100%">100%</option>
+                          <option value="75%">75%</option>
+                          <option value="50%">50%</option>
+                        </select>
+                      </div>
+                      <div class="size-control-group">
+                        <label>高度:</label>
+                        <select v-model="componentPreview.sizeOptions.height" class="size-select">
+                          <option value="auto">自动</option>
+                          <option value="400px">400px</option>
+                          <option value="600px">600px</option>
+                          <option value="800px">800px</option>
+                        </select>
+                      </div>
+                      <div class="size-control-group">
+                        <label>缩放:</label>
+                        <select v-model="componentPreview.sizeOptions.scale" class="size-select">
+                          <option :value="0.5">50%</option>
+                          <option :value="0.75">75%</option>
+                          <option :value="1">100%</option>
+                          <option :value="1.25">125%</option>
+                          <option :value="1.5">150%</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="preview-container"
+                    :class="{ 'success-animation': componentPreview.component && !componentPreview.error }"
+                    :style="{
+                      width: componentPreview.sizeOptions && componentPreview.sizeOptions.width === 'auto' ? 'auto' : (componentPreview.sizeOptions?.width || '100%'),
+                      height: componentPreview.sizeOptions && componentPreview.sizeOptions.height === 'auto' ? 'auto' : (componentPreview.sizeOptions?.height || 'auto'),
+                      transform: `scale(${componentPreview.sizeOptions?.scale || 1})`,
+                      transformOrigin: 'top left'
+                    }"
+                  >
                     <div v-if="componentPreview.error" class="preview-error">
                       {{ componentPreview.error }}
                     </div>
                     <ComponentRenderer
                       v-else-if="componentPreview.component"
                       :component="componentPreview.component"
+                      :isPreview="true"
                     />
                     <div v-else class="preview-empty">
                       点击"刷新预览"查看组件效果
@@ -4813,7 +4855,13 @@ export default {
         params: [],
         values: [],
         component: null,
-        error: null
+        error: null,
+        // 尺寸控制选项
+        sizeOptions: {
+          width: 'auto', // auto, 100%, 75%, 50%
+          height: 'auto', // auto, 400px, 600px, 800px
+          scale: 1 // 0.5, 0.75, 1, 1.25, 1.5
+        }
       },
 
 
@@ -5289,6 +5337,11 @@ export default {
     this.aiService = new AIService(this.storageManager)
     this.themeManager = new ThemeManager(this.storageManager)
     this.musicColorExtractor = new MusicColorExtractor()
+
+    // 初始化组件 AI 接口
+    const { initComponentAIInterface } = await import('./utils/componentAIInterface.js')
+    initComponentAIInterface(this.aiService, this.storageManager)
+    console.log('Component AI Interface initialized')
 
     // 先加载自定义组件，然后再初始化组件列表
     await this.loadCustomComponents()
@@ -7389,6 +7442,26 @@ function render(params) {
 - template 中的 {{ variable }} 会被自动替换为 props 中对应变量的值
 - style 中的 {{ variable }} 也会被自动替换为 props 中对应变量的值
 
+【组件布局特殊性说明】
+⚠️ 重要：组件根容器的布局特性如下，请在设计组件样式时特别注意：
+
+1. 根容器宽度：100%（占满聊天消息容器的宽度）
+2. 根容器高度：auto（根据组件内容自适应）
+3. 根容器文本对齐：center（内部行内元素会自动居中）
+4. 根容器样式：display: block，有内边距 16px 和背景色
+
+布局建议：
+- 如果组件需要居中显示：使用 margin: 0 auto 让组件在容器中水平居中
+- 如果组件需要左对齐：在组件容器上添加 text-align: left
+- 如果组件需要限制宽度：设置 max-width（建议值：400px-800px）并配合 margin: 0 auto
+- 避免在根容器上设置固定宽度或高度，应该让组件内容自适应
+- 对于表格、列表等需要左对齐的组件，务必在组件容器上设置 text-align: left
+
+示例布局模式：
+- 居中卡片：width: 100%; max-width: 600px; margin: 0 auto;
+- 左对齐列表：width: 100%; max-width: 600px; margin: 0 auto; text-align: left;
+- 全宽表格：width: 100%; text-align: left;
+
 要求：
 1. 定义一个 render 函数，接收 params 参数数组
 2. render 函数返回一个对象，包含 type 和 data 字段
@@ -7400,6 +7473,7 @@ function render(params) {
 8. 代码应该简洁、高效、易于理解
 9. 添加参数注释：// @param {类型} 参数名 - 描述
 10. 为每个参数提供合理的默认值
+11. 根据组件类型选择合适的布局模式（居中/左对齐/全宽）
 
 示例格式：
 \`\`\`
@@ -7412,6 +7486,10 @@ const style = \`
   color: {{ color }};
   padding: 16px;
   border-radius: 8px;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: left;
 }
 \`;
 
@@ -7500,6 +7578,38 @@ function render(params) {
       this.componentEditor.workflowState.isRunning = true
       this.componentEditor.workflowState.steps = []
 
+      // 检测用户请求中的接口关键词
+      const detectedInterfaces = this.detectInterfaceKeywords(userMessage || '')
+      console.log(`[Component AI] 检测到的接口类型: ${detectedInterfaces.length > 0 ? detectedInterfaces.join(', ') : '无'}`)
+
+      // 如果检测到接口关键词，增强用户请求，添加接口使用需求
+      let enhancedUserMessage = userMessage
+      if (detectedInterfaces.length > 0) {
+        const interfaceRequirements = detectedInterfaces.map(type => {
+          switch(type) {
+            case 'style':
+              return '使用样式接口变量（$colors、$fonts、$sizes等）让组件自动适配主题'
+            case 'aiRequest':
+              return '添加AI请求功能，使用data-ai-request属性实现点击触发AI文本生成'
+            case 'aiImage':
+              return '添加AI绘画功能，使用data-ai-image属性实现点击触发AI图片生成'
+            default:
+              return ''
+          }
+        }).filter(req => req).join('，')
+        
+        enhancedUserMessage = `${userMessage}。${interfaceRequirements}。`
+        console.log(`[Component AI] 增强后的用户请求: "${enhancedUserMessage}"`)
+      }
+
+      // 生成接口上下文
+      const interfaceContext = this.generateInterfaceContext()
+      
+      // 如果检测到接口关键词，生成详细的接口用法说明
+      const interfaceUsageDetails = detectedInterfaces.length > 0 
+        ? this.getInterfaceUsageDetails(detectedInterfaces)
+        : ''
+
       try {
         // 第一步：让AI分析任务并创建任务列表
         this.componentEditor.aiChatHistory.push({
@@ -7515,7 +7625,11 @@ ${this.componentEditor.code.trim() ? `\n当前组件代码：\n\`\`\`javascript\
 ${this.componentEditor.name ? `组件名称：${this.componentEditor.name}\n` : ''}
 ${this.componentEditor.description ? `组件描述：${this.componentEditor.description}\n` : ''}
 
-用户的请求：${userMessage}
+${interfaceContext}
+
+${interfaceUsageDetails}
+
+用户的请求：${enhancedUserMessage}
 
 【任务创建规则 - 严格遵守】
 
@@ -7661,7 +7775,27 @@ ${this.componentEditor.description ? `组件描述：${this.componentEditor.desc
    @<!组件名~[{"name":"项目1","value":100},{"name":"项目2","value":200}]>
    @<!组件名~{"settings":{"theme":"dark","fontSize":16},"items":[1,2,3]}>
 
-6. 返回格式：
+6. 【组件布局特殊性说明】
+   ⚠️ 重要：组件根容器的布局特性如下，请在设计组件样式时特别注意：
+   
+   - 根容器宽度：100%（占满聊天消息容器的宽度）
+   - 根容器高度：auto（根据组件内容自适应）
+   - 根容器文本对齐：center（内部行内元素会自动居中）
+   - 根容器样式：display: block，有内边距 16px 和背景色
+   
+   布局建议：
+   - 如果组件需要居中显示：使用 margin: 0 auto 让组件在容器中水平居中
+   - 如果组件需要左对齐：在组件容器上添加 text-align: left
+   - 如果组件需要限制宽度：设置 max-width（建议值：400px-800px）并配合 margin: 0 auto
+   - 避免在根容器上设置固定宽度或高度，应该让组件内容自适应
+   - 对于表格、列表等需要左对齐的组件，务必在组件容器上设置 text-align: left
+   
+   示例布局模式：
+   - 居中卡片：width: 100%; max-width: 600px; margin: 0 auto;
+   - 左对齐列表：width: 100%; max-width: 600px; margin: 0 auto; text-align: left;
+   - 全宽表格：width: 100%; text-align: left;
+
+7. 返回格式：
    {
      type: 'custom',
      data: {
@@ -7829,10 +7963,26 @@ ${this.componentEditor.description ? `组件描述：${this.componentEditor.desc
         })
       }
 
+      // 添加接口上下文
+      context += '\n\n' + this.generateInterfaceContext()
+
+      // 检测任务描述中的接口关键词
+      const detectedInterfaces = this.detectInterfaceKeywords(task.description || '')
+      console.log(`[Component AI] 任务 "${task.description}" 检测到的接口: ${detectedInterfaces.length > 0 ? detectedInterfaces.join(', ') : '无'}`)
+
+      // 如果检测到接口关键词，添加详细的接口用法说明
+      let interfaceUsageDetails = ''
+      if (detectedInterfaces.length > 0) {
+        interfaceUsageDetails = this.getInterfaceUsageDetails(detectedInterfaces)
+        console.log(`[Component AI] 已为任务添加接口用法说明`)
+      }
+
       // 构建提示词
       let prompt = `你是一个专业的 Vue 组件开发助手。正在执行任务列表中的任务。
 
 ${context}
+
+${interfaceUsageDetails}
 
 【当前任务】
 任务 ${currentIndex + 1}/${totalTasks}：${task.description}
@@ -7847,23 +7997,12 @@ ${context}
    // @param {类型} 参数名 - 描述
    例如：// @param {string} 标题 - 卡片标题
 
-3. 可用接口：
-   - styles.theme - 当前主题 ('light'/'dark')
-   - styles.primaryColor - 主色调
-   - styles.fontSize - 字体大小
-   - styles.borderRadius - 圆角大小
-   - styles.fontFamily - 字体
-   - styles.getCSSVar(varName) - 获取CSS变量
-   - styles.getAllCSSVars() - 获取所有CSS变量
-   - ai.request(prompt) - 发送AI请求
-   - component.name - 组件名称
-
-4. 样式规范：
+3. 样式规范：
    - 使用 .custom-component-wrapper 前缀避免样式冲突
-   - 优先使用CSS变量：var(--primary-color), var(--bg-secondary)等
+   - 优先使用样式接口变量（$colors、$fonts、$sizes等）让组件自动适配主题
    - 使用相对单位：calc(var(--font-size, 14px) * 1.3)
 
-5. 返回格式：
+4. 返回格式：
    {
      type: 'custom',
      data: {
@@ -7872,6 +8011,12 @@ ${context}
        props: { prop1: value1, prop2: value2 }
      }
    }
+
+5. AI接口使用：
+   - AI请求：在元素上添加 data-ai-request 属性，点击时触发AI文本生成
+   - AI绘画：在元素上添加 data-ai-image 属性，点击时触发AI图片生成
+   - 提示词支持从props中引用，使用 {{ 变量名 }} 格式
+   - AI接口会自动继承AI设置中的配置
 
 请使用工具来完成当前任务。
 
@@ -7904,6 +8049,8 @@ ${context}
 
 // 构建工作流提示词
     buildWorkflowPrompt(userMessage, previousSteps) {
+      console.log(`[Component AI] 构建提示词，用户请求: "${userMessage}"`)
+      
       // 构建上下文
       let context = ''
 
@@ -7934,12 +8081,28 @@ ${context}
         })
       }
 
+      // 添加接口上下文
+      context += '\n\n' + this.generateInterfaceContext()
+
+      // 检测用户请求中的接口关键词
+      const detectedInterfaces = this.detectInterfaceKeywords(userMessage || '')
+      console.log(`[Component AI] 检测到的接口类型: ${detectedInterfaces.length > 0 ? detectedInterfaces.join(', ') : '无'}`)
+
       // 构建提示词
       let prompt = `你是一个专业的 Vue 组件开发助手。用户正在创建或修改一个自定义组件。
 
 ${context}
 
-${userMessage ? `用户的请求：${userMessage}` : ''}
+${userMessage ? `用户的请求：${userMessage}` : ''}`
+
+      // 如果检测到接口关键词，添加详细的接口用法说明
+      if (detectedInterfaces.length > 0) {
+        const usageDetails = this.getInterfaceUsageDetails(detectedInterfaces)
+        prompt += usageDetails
+        console.log(`[Component AI] 已添加接口用法说明，长度: ${usageDetails.length} 字符`)
+      }
+
+      prompt += `
 
 你可以使用以下工具来完成用户的请求：
 
@@ -7997,10 +8160,241 @@ ${userMessage ? `用户的请求：${userMessage}` : ''}
 - 样式选择器必须使用 ".custom-component-wrapper" 作为前缀
 - 添加参数注释：// @param {类型} 参数名 - 描述
 
+【组件布局特殊性说明】
+⚠️ 重要：组件根容器的布局特性如下，请在设计组件样式时特别注意：
+
+1. 根容器宽度：100%（占满聊天消息容器的宽度）
+2. 根容器高度：auto（根据组件内容自适应）
+3. 根容器文本对齐：center（内部行内元素会自动居中）
+4. 根容器样式：display: block，有内边距 16px 和背景色
+
+布局建议：
+- 如果组件需要居中显示：使用 margin: 0 auto 让组件在容器中水平居中
+- 如果组件需要左对齐：在组件容器上添加 text-align: left
+- 如果组件需要限制宽度：设置 max-width（建议值：400px-800px）并配合 margin: 0 auto
+- 避免在根容器上设置固定宽度或高度，应该让组件内容自适应
+- 对于表格、列表等需要左对齐的组件，务必在组件容器上设置 text-align: left
+
+示例布局模式：
+- 居中卡片：width: 100%; max-width: 600px; margin: 0 auto;
+- 左对齐列表：width: 100%; max-width: 600px; margin: 0 auto; text-align: left;
+- 全宽表格：width: 100%; text-align: left;
+
 请使用工具来完成用户的请求。记住：每次只能使用一个工具，工具执行结果会作为消息返回给你！`
 
       return prompt
     },
+
+    // 生成接口上下文
+    generateInterfaceContext() {
+      return `【可用接口】
+
+组件模板中可以使用以下内置接口：
+
+1. 样式接口 - 自动适配主题和样式设置
+   - $theme: 当前主题 ('light' 或 'dark')
+   - $isDark: 是否为暗色主题
+   - $isLight: 是否为亮色主题
+   - $colors: 颜色变量集合
+     - $colors.bgPrimary: 主背景色
+     - $colors.bgSecondary: 次背景色
+     - $colors.bgTertiary: 第三背景色
+     - $colors.textPrimary: 主文字色
+     - $colors.textSecondary: 次文字色
+     - $colors.textTertiary: 第三文字色
+     - $colors.primary: 主色调（根据颜色模式自动选择）
+     - $colors.secondary: 副色调
+     - $colors.gradient: 渐变色（根据颜色模式自动生成）
+     - $colors.success: 成功色
+     - $colors.warning: 警告色
+     - $colors.danger: 危险色
+     - $colors.border: 边框色
+   - $fonts: 字体变量
+     - $fonts.family: 字体族
+     - $fonts.size: 字体大小
+   - $sizes: 尺寸变量
+     - $sizes.borderRadius: 圆角大小
+   - $effects: 特效变量
+     - $effects.shadow: 阴影效果
+   - $styles: 完整样式对象
+
+2. AI请求接口 - 点击触发AI文本生成
+   在元素上添加 data-ai-request 属性
+   - data-ai-request: 请求ID（可选）
+   - data-ai-prompt: 提示词，支持 {{ 变量名 }} 引用props
+   - data-ai-on-success: 成功回调函数名（可选）
+   - data-ai-on-error: 错误回调函数名（可选）
+   
+   示例：\`<button data-ai-request data-ai-prompt="{{ prompt }}">生成文本</button>\`
+
+3. AI绘画接口 - 点击触发AI图片生成
+   在元素上添加 data-ai-image 属性
+   - data-ai-image: 请求ID（可选）
+   - data-ai-prompt: 提示词，支持 {{ 变量名 }} 引用props
+   - data-ai-negative-prompt: 负面提示词（可选）
+   - data-ai-steps: 采样步数（仅Stable Diffusion，可选）
+   - data-ai-width: 图片宽度（可选）
+   - data-ai-height: 图片高度（可选）
+   - data-ai-cfg-scale: CFG Scale（仅Stable Diffusion，可选）
+   - data-ai-sampler: 采样器名称（仅Stable Diffusion，可选）
+   - data-ai-model: 模型名称（仅Stable Diffusion，可选）
+   - data-ai-size: 图片尺寸（仅网络API，可选）
+   - data-ai-on-success: 成功回调函数名（可选）
+   - data-ai-on-error: 错误回调函数名（可选）
+   - data-ai-on-progress: 进度回调函数名（可选）
+   
+   示例：\`<button data-ai-image data-ai-prompt="{{ prompt }}" data-ai-steps="30" data-ai-width="768" data-ai-height="768">生成图片</button>\`
+
+【使用建议】
+- 优先使用样式接口变量（$colors、$fonts、$sizes等）让组件自动适配主题
+- 使用AI接口时，提示词支持从props中引用，使用 {{ 变量名 }} 格式
+- AI接口需要用户点击才会触发，不会自动执行
+- AI接口会自动继承AI设置中的配置
+`
+    },
+
+    // 检测用户请求中的接口关键词并返回相关的接口用法说明
+    detectInterfaceKeywords(userMessage) {
+      const keywords = {
+        style: ['样式', '颜色', '主题', '背景', '文字', '字体', '圆角', '阴影', '渐变', '$colors', '$fonts', '$sizes', '$effects', 
+                 'style', 'color', 'theme', 'background', 'text', 'font', 'border-radius', 'shadow', 'gradient',
+                 '配色', '外观', '界面', '美化', '设计'],
+        aiRequest: ['AI请求', 'AI文本', '生成文本', 'chat', '对话', '问答', 'data-ai-request',
+                    'ai请求', 'ai文本', '聊天', '提问', '回答', '文本生成', '文本', '对话',
+                    'request', 'chat', 'question', 'answer', 'text', 'conversation'],
+        aiImage: ['AI绘画', 'AI图片', '生成图片', '图片', '绘画', 'image', 'draw', 'data-ai-image',
+                  'ai绘画', 'ai图片', '图像', '画图', '绘图', '照片', '图像生成',
+                  'painting', 'drawing', 'picture', 'photo', 'generate image']
+      }
+
+      const detectedInterfaces = []
+      const lowerMessage = userMessage.toLowerCase()
+
+      for (const [interfaceType, keywordList] of Object.entries(keywords)) {
+        for (const keyword of keywordList) {
+          if (lowerMessage.includes(keyword.toLowerCase())) {
+            detectedInterfaces.push(interfaceType)
+            console.log(`[Component AI] 检测到接口关键词: ${interfaceType} (关键词: ${keyword})`)
+            break
+          }
+        }
+      }
+
+      if (detectedInterfaces.length > 0) {
+        console.log(`[Component AI] 检测到的接口: ${detectedInterfaces.join(', ')}`)
+      }
+
+      return detectedInterfaces
+    },
+
+    // 获取接口用法的详细说明
+    getInterfaceUsageDetails(interfaceTypes) {
+      console.log(`[Component AI] 获取接口用法详情，接口类型: ${interfaceTypes.join(', ')}`)
+      let details = '\n\n【接口用法详细说明】\n'
+
+      if (interfaceTypes.includes('style')) {
+        console.log(`[Component AI] 添加样式接口用法说明`)
+        details += `
+**样式接口用法：**
+
+在HTML中使用：
+<div style="background-color: {{ $colors.bgSecondary }}; color: {{ $colors.textPrimary }}">
+  内容
+</div>
+
+在CSS中使用：
+\`
+.custom-component-wrapper .my-card {
+  background-color: {{ $colors.bgSecondary }};
+  color: {{ $colors.textPrimary }};
+  border: 1px solid {{ $colors.border }};
+  border-radius: {{ $sizes.borderRadius }};
+}
+\`
+
+可用变量：
+- $colors.bgPrimary, $colors.bgSecondary, $colors.bgTertiary
+- $colors.textPrimary, $colors.textSecondary, $colors.textTertiary
+- $colors.primary, $colors.secondary, $colors.gradient
+- $colors.success, $colors.warning, $colors.danger, $colors.border
+- $fonts.family, $fonts.size
+- $sizes.borderRadius
+- $effects.shadow
+`
+      }
+
+      if (interfaceTypes.includes('aiRequest')) {
+        details += `
+**AI请求接口用法：**
+
+基础用法：
+<button data-ai-request data-ai-prompt="{{ prompt }}">生成文本</button>
+
+带变量引用：
+<div data-ai-request data-ai-prompt="{{ question }}">点击获取答案</div>
+
+带回调函数：
+<button data-ai-request 
+        data-ai-prompt="{{ prompt }}"
+        data-ai-on-success="onSuccess"
+        data-ai-on-error="onError">
+  生成
+</button>
+
+属性说明：
+- data-ai-request: 标记为AI请求元素
+- data-ai-prompt: 提示词，支持 {{ 变量名 }} 引用props
+- data-ai-on-success: 成功回调函数名（可选）
+- data-ai-on-error: 错误回调函数名（可选）
+`
+      }
+
+      if (interfaceTypes.includes('aiImage')) {
+        details += `
+**AI绘画接口用法：**
+
+基础用法：
+<button data-ai-image data-ai-prompt="{{ prompt }}">生成图片</button>
+
+带参数（Stable Diffusion）：
+<button data-ai-image 
+        data-ai-prompt="{{ prompt }}"
+        data-ai-steps="30"
+        data-ai-width="768"
+        data-ai-height="768"
+        data-ai-sampler="DPM++ 2M Karras"
+        data-ai-cfg-scale="8">
+  高清生成
+</button>
+
+带参数（网络API）：
+<div data-ai-image 
+     data-ai-prompt="风景"
+     data-ai-size="1024x1024"
+     data-ai-negative-prompt="模糊,低质量">
+  生成大图
+</div>
+
+属性说明：
+- data-ai-image: 标记为AI绘画元素
+- data-ai-prompt: 提示词，支持 {{ 变量名 }} 引用props
+- data-ai-negative-prompt: 负面提示词（可选）
+- data-ai-steps: 采样步数（仅Stable Diffusion，可选）
+- data-ai-width: 图片宽度（可选）
+- data-ai-height: 图片高度（可选）
+- data-ai-cfg-scale: CFG Scale（仅Stable Diffusion，可选）
+- data-ai-sampler: 采样器名称（仅Stable Diffusion，可选）
+- data-ai-model: 模型名称（仅Stable Diffusion，可选）
+- data-ai-size: 图片尺寸（仅网络API，如 '1024x1024'，可选）
+- data-ai-on-success: 成功回调函数名（可选）
+- data-ai-on-error: 错误回调函数名（可选）
+- data-ai-on-progress: 进度回调函数名（可选）
+`
+      }
+
+      return details
+    },
+
 
     // 解析工具调用
     parseToolCalls(response) {
@@ -8165,7 +8559,12 @@ ${userMessage ? `用户的请求：${userMessage}` : ''}
         params: params,
         values: params.map(() => ''),
         component: null,
-        error: null
+        error: null,
+        sizeOptions: {
+          width: 'auto',
+          height: 'auto',
+          scale: 1
+        }
       }
 
       this.showComponentPreviewModal = true
@@ -8183,7 +8582,12 @@ ${userMessage ? `用户的请求：${userMessage}` : ''}
         params: [],
         values: [],
         component: null,
-        error: null
+        error: null,
+        sizeOptions: {
+          width: 'auto',
+          height: 'auto',
+          scale: 1
+        }
       }
     },
 
@@ -8275,7 +8679,17 @@ ${userMessage ? `用户的请求：${userMessage}` : ''}
         this.componentPreview.component = result
       } catch (error) {
         console.error('预览组件失败:', error)
-        this.componentPreview.error = error.message
+        // 提供更详细的错误信息
+        let errorMessage = error.message
+        if (error.stack) {
+          const stackLines = error.stack.split('\n')
+          if (stackLines.length > 0) {
+            // 获取错误发生的位置
+            const errorLocation = stackLines[0].trim()
+            errorMessage += `\n位置: ${errorLocation}`
+          }
+        }
+        this.componentPreview.error = errorMessage
       }
     },
 

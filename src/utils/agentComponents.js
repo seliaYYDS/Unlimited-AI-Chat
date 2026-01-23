@@ -147,8 +147,15 @@ function parseParams(paramsString, paramDefinitions) {
   // 使用更智能的分隔符处理，支持嵌套结构
   const params = smartSplit(paramsString, ',')
   
-  // 特殊处理：如果只有一个参数定义且类型为ARRAY，将所有参数作为数组返回
+  // 特殊处理：如果只有一个参数定义且类型为ARRAY
+  // 检查第一个参数是否本身就是数组格式（以 [ 开头，以 ] 结尾）
   if (paramDefinitions.length === 1 && paramDefinitions[0].type === PARAM_TYPES.ARRAY) {
+    // 如果整个参数字符串就是一个数组，直接解析
+    const trimmed = paramsString.trim()
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      return [parseValue(paramsString, PARAM_TYPES.ARRAY)]
+    }
+    // 否则将所有参数作为数组返回
     return [params.map(p => parseValue(p, PARAM_TYPES.STRING))]
   }
   
@@ -173,8 +180,43 @@ function parseParams(paramsString, paramDefinitions) {
     ]
   }
   
+  // 检测并修复被错误分割的数组参数
+  const fixedParams = []
+  for (let i = 0; i < params.length; i++) {
+    const param = params[i]
+    const definition = paramDefinitions[i]
+    
+    // 如果当前参数以 [ 开头，但没有对应的 ]，说明数组被错误分割了
+    if (param.trim().startsWith('[') && !param.trim().endsWith(']')) {
+      // 尝试找到数组的结束位置
+      let combined = param
+      let j = i + 1
+      let bracketCount = 1
+      
+      // 继续查找直到找到匹配的 ]
+      while (j < params.length && bracketCount > 0) {
+        combined += ',' + params[j]
+        const nextParam = params[j]
+        
+        // 计算括号数量
+        for (const char of nextParam) {
+          if (char === '[') bracketCount++
+          else if (char === ']') bracketCount--
+        }
+        
+        j++
+      }
+      
+      // 将组合后的参数作为一个参数
+      fixedParams.push(combined)
+      i = j - 1 // 跳过已处理的参数
+    } else {
+      fixedParams.push(param)
+    }
+  }
+  
   // 默认处理：逐个解析参数
-  return params.map((param, index) => {
+  return fixedParams.map((param, index) => {
     const definition = paramDefinitions[index]
     
     if (!definition) {
@@ -386,7 +428,20 @@ export function renderComponent(componentName, params) {
     return result
   } catch (error) {
     console.error(`组件 ${componentName} 渲染失败:`, error)
-    return null
+    console.error('错误详情:', error.message)
+    console.error('参数:', params)
+    console.error('错误堆栈:', error.stack)
+
+    // 返回错误信息以便在UI中显示
+    return {
+      type: 'error',
+      data: {
+        message: `组件 ${componentName} 渲染失败: ${error.message}`,
+        componentName,
+        params,
+        error: error.message
+      }
+    }
   }
 }
 
@@ -881,6 +936,107 @@ registerComponent('config', {
       type: 'config',
       data: {
         config
+      }
+    }
+  }
+})
+
+/**
+ * 天气卡片组件 - 展示样式接口使用
+ * 参数：城市名,温度,天气描述
+ * 例如：北京,25,晴
+ */
+registerComponent('weather-card', {
+  description: '显示天气信息卡片，演示如何使用样式接口自动适配主题',
+  params: [
+    { 
+      name: 'city', 
+      description: '城市名称', 
+      type: PARAM_TYPES.STRING, 
+      required: true 
+    },
+    { 
+      name: 'temperature', 
+      description: '温度（摄氏度）', 
+      type: PARAM_TYPES.NUMBER, 
+      required: true 
+    },
+    { 
+      name: 'description', 
+      description: '天气描述', 
+      type: PARAM_TYPES.STRING, 
+      defaultValue: '' 
+    }
+  ],
+  example: '北京,25,晴',
+  render: (params) => {
+    const city = params[0] || '未知城市'
+    const temperature = params[1] || 0
+    const description = params[2] || '未知'
+
+    return {
+      type: 'custom',
+      data: {
+        template: `
+<div class="weather-card">
+  <div class="weather-icon">🌤️</div>
+  <div class="weather-info">
+    <div class="city-name">{{ city }}</div>
+    <div class="temperature">{{ temperature }}°C</div>
+    <div class="description">{{ description }}</div>
+  </div>
+</div>
+`,
+        style: `
+.custom-component-wrapper .weather-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background-color: {{ $colors.bgSecondary }};
+  border: 1px solid {{ $colors.border }};
+  border-radius: {{ $sizes.borderRadius }};
+  box-shadow: {{ $effects.shadow }};
+  transition: all 0.3s ease;
+}
+
+.custom-component-wrapper .weather-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.custom-component-wrapper .weather-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.custom-component-wrapper .weather-info {
+  flex: 1;
+}
+
+.custom-component-wrapper .city-name {
+  font-size: 14px;
+  color: {{ $colors.textSecondary }};
+  margin-bottom: 4px;
+}
+
+.custom-component-wrapper .temperature {
+  font-size: 32px;
+  font-weight: 700;
+  color: {{ $colors.textPrimary }};
+  margin-bottom: 4px;
+}
+
+.custom-component-wrapper .description {
+  font-size: 14px;
+  color: {{ $colors.textSecondary }};
+}
+`,
+        props: {
+          city,
+          temperature,
+          description
+        }
       }
     }
   }
