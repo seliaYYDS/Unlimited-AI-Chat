@@ -286,10 +286,14 @@ function smartSplit(str, separator) {
  * @returns {*} 解析后的值
  */
 function parseValue(value, type) {
+  console.log('parseValue 被调用:', { value, type, trimmedValue: value.trim() })
+  
   switch (type) {
     case PARAM_TYPES.NUMBER:
       const num = parseFloat(value)
-      return isNaN(num) ? null : num
+      const result = isNaN(num) ? null : num
+      console.log('parseValue NUMBER 结果:', { value, num, result })
+      return result
       
     case PARAM_TYPES.BOOLEAN:
       if (value.toLowerCase() === 'true' || value === '1') return true
@@ -631,6 +635,8 @@ registerComponent('progress', {
   ],
   example: '75,100,完成度',
   render: (params) => {
+    console.log('进度条渲染参数:', params)
+    
     // 兼容新旧两种参数格式
     let current, max, label
     
@@ -648,11 +654,18 @@ registerComponent('progress', {
       return { type: 'error', data: '进度条需要当前值和最大值' }
     }
 
-    if (isNaN(current) || isNaN(max) || max <= 0) {
+    if (isNaN(current) || isNaN(max)) {
       return { type: 'error', data: '无效的数值参数' }
     }
 
-    const percentage = Math.min(100, Math.max(0, (current / max * 100)))
+    // 允许 max 为 0，但需要特殊处理
+    let percentage = 0
+    if (max > 0) {
+      percentage = Math.min(100, Math.max(0, (current / max * 100)))
+    } else if (max === 0) {
+      // 当 max 为 0 时，根据 current 的值决定百分比
+      percentage = current === 0 ? 100 : 0
+    }
 
     return {
       type: 'progress',

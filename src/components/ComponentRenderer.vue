@@ -241,25 +241,28 @@ export default {
         this.updateCustomStyle(newStyle)
       },
       immediate: true
-    },
-    'component.type': {
-      handler(newType) {
-        if (newType === 'custom') {
-          this.$nextTick(() => {
-            this.setupAITriggers()
-          })
-        }
-      },
-      immediate: true
     }
   },
   mounted() {
+    console.log('[ComponentRenderer] mounted 开始执行')
+    console.log('[ComponentRenderer] 组件信息:', {
+      id: this.component.id,
+      type: this.component.type,
+      hasData: !!this.component.data
+    })
+
     this.updateCustomStyle(this.component?.data?.style)
     this.componentAIInterface = getComponentAIInterface()
+
+    console.log('[ComponentRenderer] componentAIInterface:', this.componentAIInterface)
+
     if (this.component.type === 'custom') {
+      console.log('[ComponentRenderer] 组件类型为 custom，将在 nextTick 中设置 AI 触发器')
       this.$nextTick(() => {
         this.setupAITriggers()
       })
+    } else {
+      console.log('[ComponentRenderer] 组件类型不是 custom，跳过 AI 触发器设置')
     }
   },
   beforeUnmount() {
@@ -270,22 +273,44 @@ export default {
 
     // 设置 AI 触发器
     setupAITriggers() {
+      console.log('[ComponentRenderer] setupAITriggers 开始执行')
       this.cleanupAITriggers()
 
-      if (!this.componentAIInterface || this.component.type !== 'custom') {
+      if (!this.componentAIInterface) {
+        console.error('[ComponentRenderer] componentAIInterface 未初始化')
+        return
+      }
+
+      if (this.component.type !== 'custom') {
+        console.log('[ComponentRenderer] 组件类型不是 custom，跳过 AI 触发器设置')
         return
       }
 
       const container = this.$refs.customComponentContainer
-      if (!container) return
+      if (!container) {
+        console.error('[ComponentRenderer] customComponentContainer 未找到')
+        return
+      }
+
+      console.log('[ComponentRenderer] 容器已找到，开始查找 AI 触发器元素')
 
       // 查找所有带有 data-ai-request 属性的元素
       const requestElements = container.querySelectorAll('[data-ai-request]')
+      console.log(`[ComponentRenderer] 找到 ${requestElements.length} 个 AI 请求元素`)
+
       requestElements.forEach((element, index) => {
         const requestId = element.getAttribute('data-ai-request') || `request-${this.component.id}-${index}`
         const promptSource = element.getAttribute('data-ai-prompt') || ''
         const onSuccess = element.getAttribute('data-ai-on-success')
         const onError = element.getAttribute('data-ai-on-error')
+
+        console.log(`[ComponentRenderer] 设置 AI 请求触发器:`, {
+          requestId,
+          promptSource,
+          onSuccess,
+          onError,
+          element: element.tagName
+        })
 
         // 创建触发器
         const trigger = this.componentAIInterface.createRequestTrigger(requestId, {
@@ -295,15 +320,24 @@ export default {
         })
 
         this.aiTriggers.set(requestId, trigger)
+        console.log(`[ComponentRenderer] AI 请求触发器已创建并存储: ${requestId}`)
 
         // 绑定点击事件
-        element.addEventListener('click', () => {
+        element.addEventListener('click', (e) => {
+          console.log(`[ComponentRenderer] AI 请求按钮被点击: ${requestId}`)
+          console.log(`[ComponentRenderer] 触发器状态:`, {
+            isLoading: trigger.isLoading,
+            isPending: trigger.isPending,
+            prompt: trigger.prompt
+          })
           trigger.execute()
         })
       })
 
       // 查找所有带有 data-ai-image 属性的元素
       const imageElements = container.querySelectorAll('[data-ai-image]')
+      console.log(`[ComponentRenderer] 找到 ${imageElements.length} 个 AI 绘画元素`)
+
       imageElements.forEach((element, index) => {
         const requestId = element.getAttribute('data-ai-image') || `image-${this.component.id}-${index}`
         const promptSource = element.getAttribute('data-ai-prompt') || ''
@@ -320,6 +354,19 @@ export default {
         const sampler = element.getAttribute('data-ai-sampler')
         const model = element.getAttribute('data-ai-model')
         const size = element.getAttribute('data-ai-size')
+
+        console.log(`[ComponentRenderer] 设置 AI 绘画触发器:`, {
+          requestId,
+          promptSource,
+          negativePromptSource,
+          steps,
+          width,
+          height,
+          onSuccess,
+          onError,
+          onProgress,
+          element: element.tagName
+        })
 
         // 创建触发器
         const trigger = this.componentAIInterface.createImageTrigger(requestId, {
@@ -338,12 +385,21 @@ export default {
         })
 
         this.aiTriggers.set(requestId, trigger)
+        console.log(`[ComponentRenderer] AI 绘画触发器已创建并存储: ${requestId}`)
 
         // 绑定点击事件
-        element.addEventListener('click', () => {
+        element.addEventListener('click', (e) => {
+          console.log(`[ComponentRenderer] AI 绘画按钮被点击: ${requestId}`)
+          console.log(`[ComponentRenderer] 触发器状态:`, {
+            isLoading: trigger.isLoading,
+            isPending: trigger.isPending,
+            prompt: trigger.prompt
+          })
           trigger.execute()
         })
       })
+
+      console.log('[ComponentRenderer] setupAITriggers 执行完成')
     },
 
     // 解析提示词（支持从 props 中获取）
@@ -362,11 +418,43 @@ export default {
 
     // 处理 AI 请求结果
     handleAIResult(element, result, callbackName) {
-      // 更新元素内容
-      if (element.tagName === 'BUTTON' || element.tagName === 'A') {
-        element.textContent = result || '完成'
+      console.log('[ComponentRenderer] handleAIResult 被调用:', result)
+
+      // 解析响应对象
+      let responseText = result
+      if (typeof result === 'object' && result !== null) {
+        responseText = result.response || ''
+        console.log('[ComponentRenderer] 解析响应对象:', {
+          hasResponse: !!result.response,
+          hasTokens: !!result.tokens,
+          hasThinkingTime: !!result.thinkingTime,
+          responseText: responseText
+        })
+      }
+
+      // 检查是否有目标元素
+      const targetId = element.getAttribute('data-ai-target')
+      if (targetId) {
+        // 将结果显示到目标元素
+        const targetElement = document.getElementById(targetId)
+        if (targetElement) {
+          targetElement.textContent = responseText || '无响应'
+          console.log('[ComponentRenderer] 结果已显示到目标元素:', targetId)
+        } else {
+          console.warn('[ComponentRenderer] 未找到目标元素:', targetId)
+        }
+        
+        // 恢复按钮文本
+        if (element.tagName === 'BUTTON' || element.tagName === 'A') {
+          element.textContent = '获取AI答案'
+        }
       } else {
-        element.textContent = result
+        // 如果没有目标元素，更新当前元素内容
+        if (element.tagName === 'BUTTON' || element.tagName === 'A') {
+          element.textContent = responseText || '完成'
+        } else {
+          element.textContent = responseText
+        }
       }
 
       // 如果有回调函数，执行它
@@ -415,9 +503,34 @@ export default {
 
     // 处理 AI 进度
     handleAIProgress(element, progress, callbackName) {
-      // 更新进度显示
-      if (element.tagName === 'BUTTON' || element.tagName === 'A') {
-        element.textContent = `生成中... ${Math.round(progress * 100)}%`
+      console.log('[ComponentRenderer] handleAIProgress 被调用:', progress)
+
+      // 解析进度（AIService 的流式输出传递的是文本片段）
+      let progressText = progress
+      if (typeof progress === 'object' && progress !== null) {
+        progressText = progress.response || ''
+      }
+
+      // 检查是否有目标元素
+      const targetId = element.getAttribute('data-ai-target')
+      if (targetId) {
+        // 将流式输出显示到目标元素
+        const targetElement = document.getElementById(targetId)
+        if (targetElement) {
+          targetElement.textContent = progressText || '生成中...'
+        }
+        
+        // 更新按钮状态
+        if (element.tagName === 'BUTTON' || element.tagName === 'A') {
+          element.textContent = '生成中...'
+        }
+      } else {
+        // 如果没有目标元素，更新当前元素内容
+        if (element.tagName === 'BUTTON' || element.tagName === 'A') {
+          element.textContent = progressText || '生成中...'
+        } else {
+          element.textContent = progressText
+        }
       }
 
       // 如果有回调函数，执行它
@@ -1043,17 +1156,49 @@ export default {
 
     /* 隔离样式上下文 */
     isolation: isolate;
+
+    /* 强制重置 white-space，不受父元素影响 */
+    white-space: normal !important;
+    word-wrap: normal !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+
+    /* 确保组件内容不会被截断 */
+    overflow: visible !important;
   }
 
-  /* 预览模式：移除外边距和内边距，由父容器控制 */
+  /* 预览模式：移除外边距和内边距，由父容器控制，并确保高度同步 */
   :scope.preview-mode {
     margin: 0;
     padding: 0;
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: visible !important; /* 确保组件内容不会被截断 */
+  }
+
+  /* 预览模式下的直接子元素继承高度 */
+  :scope.preview-mode > * {
+    flex: 1;
+    min-height: 0;
+    max-height: none; /* 移除最大高度限制，允许组件自适应 */
+    overflow: visible !important; /* 确保组件内容不会被截断 */
   }
 
   /* 确保所有内部元素使用正确的盒模型 */
   * {
     box-sizing: border-box;
+  }
+
+  /* 强制重置所有元素的 white-space 属性 */
+  * {
+    white-space: normal !important;
+    word-wrap: normal !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
   }
 
   /* 重置可能继承的样式 */
@@ -1121,8 +1266,8 @@ export default {
     background: rgba(0, 0, 0, 0.05);
     border-radius: 4px;
     overflow-x: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
+    white-space: pre !important;
+    word-wrap: normal !important;
   }
 
   a {
@@ -1336,6 +1481,13 @@ export default {
   margin: 0 auto;
 }
 
+/* 预览模式下的柱状图 */
+.component-renderer.preview-mode .bar-chart {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
 .bar-container {
   display: flex;
   flex-direction: column;
@@ -1388,6 +1540,16 @@ export default {
   padding: 8px;
 }
 
+/* 预览模式下的雷达图 */
+.component-renderer.preview-mode .radar-chart {
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
 .radar-svg {
   width: 100%;
   max-width: 300px;
@@ -1429,6 +1591,13 @@ export default {
 /* 饼状图样式 */
 .pie-chart {
   padding: 8px;
+}
+
+/* 预览模式下的饼状图 */
+.component-renderer.preview-mode .pie-chart {
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .pie-svg {
@@ -1479,6 +1648,16 @@ export default {
   box-sizing: border-box;
 }
 
+/* 预览模式下的进度条 */
+.component-renderer.preview-mode .progress-bar {
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
 .progress-label {
   font-size: 13px;
   color: var(--text-color, #333);
@@ -1523,6 +1702,13 @@ export default {
   text-align: left;
 }
 
+/* 预览模式下的表格 */
+.component-renderer.preview-mode .data-table {
+  height: 100%;
+  max-height: 100%;
+  overflow: auto;
+}
+
 .data-table table {
   width: 100%;
   max-width: 800px;
@@ -1553,23 +1739,11 @@ export default {
 }
 
 /* 自定义组件样式 - 温和的隔离 */
-.custom-component-wrapper {
-  padding: 8px;
-
-  /* 基础样式 */
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  font-family: var(--font-family, system-ui);
-  font-size: var(--font-size, 14px);
-  line-height: 1.5;
-  color: var(--text-color, #333);
-
-  /* 使用 CSS containment */
-  contain: layout style paint;
-
-  /* 隔离样式上下文 */
-  isolation: isolate;
+/* 预览模式下的自定义组件容器 */
+.component-renderer.preview-mode .custom-component-wrapper {
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 /* 确保自定义组件内的元素使用正确的行高 */
@@ -1579,7 +1753,7 @@ export default {
 
 .custom-component-container {
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible; /* 改为 visible，避免内容被截断 */
 
   /* 基础样式 */
   display: block;
@@ -1595,6 +1769,13 @@ export default {
 
   /* 隔离样式上下文 */
   isolation: isolate;
+}
+
+/* 预览模式下的自定义组件容器 */
+.component-renderer.preview-mode .custom-component-container {
+  height: 100%;
+  max-height: 100%;
+  overflow: auto;
 }
 
 /* 确保自定义组件内的元素使用正确的盒模型 */
@@ -1660,6 +1841,13 @@ export default {
   text-align: left;
 }
 
+/* 预览模式下的卡片 */
+.component-renderer.preview-mode .info-card {
+  height: 100%;
+  max-height: 100%;
+  overflow: auto;
+}
+
 .card-info {
   border-left-color: #3498db;
   background: rgba(52, 152, 219, 0.1);
@@ -1715,6 +1903,16 @@ export default {
   color: white;
 }
 
+/* 预览模式下的统计卡片 */
+.component-renderer.preview-mode .stat-card {
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
 .stat-value {
   font-size: 32px;
   font-weight: 700;
@@ -1744,6 +1942,15 @@ export default {
   background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
   border-radius: 8px;
   text-align: left;
+}
+
+/* 预览模式下的开关 */
+.component-renderer.preview-mode .toggle-switch {
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .toggle-label {
@@ -1792,6 +1999,13 @@ export default {
   width: 100%;
   max-width: 600px;
   margin: 0 auto;
+}
+
+/* 预览模式下的列表 */
+.component-renderer.preview-mode .item-list {
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .list-items {
@@ -1845,6 +2059,13 @@ export default {
   background: var(--bg-secondary, rgba(0, 0, 0, 0.05));
   border-radius: 12px;
   text-align: left;
+}
+
+/* 预览模式下的配置展示 */
+.component-renderer.preview-mode .config-display {
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .config-header {

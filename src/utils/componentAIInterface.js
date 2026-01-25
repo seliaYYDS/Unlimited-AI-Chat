@@ -15,8 +15,11 @@ export class ComponentAIInterface {
    * @returns {Object} AI配置对象
    */
   getAIConfig() {
+    console.log('[ComponentAIInterface] getAIConfig 开始执行')
     const settings = this.storageManager.getSettings()
-    return {
+    console.log('[ComponentAIInterface] 获取到的设置:', settings)
+
+    const config = {
       provider: settings.currentProvider || 'openai',
       apiKey: settings.apiKey || '',
       model: settings.model || 'gpt-3.5-turbo',
@@ -27,6 +30,9 @@ export class ComponentAIInterface {
       frequencyPenalty: settings.frequencyPenalty || 0,
       presencePenalty: settings.presencePenalty || 0
     }
+
+    console.log('[ComponentAIInterface] 返回的 AI 配置:', config)
+    return config
   }
 
   /**
@@ -34,20 +40,31 @@ export class ComponentAIInterface {
    * @returns {Object} AI绘画配置对象
    */
   getAIImageConfig() {
+    console.log('[ComponentAIInterface] getAIImageConfig 开始执行')
     const settings = this.storageManager.getSettings()
-    const useNetworkImage = settings.useNetworkImage || false
+    console.log('[ComponentAIInterface] 获取到的设置:', settings)
 
-    if (useNetworkImage) {
-      // 网络AI绘画
-      return {
-        provider: settings.networkImageProvider || 'openai',
+    const imageGenProvider = settings.imageGenProvider || 'sdapi'
+    console.log('[ComponentAIInterface] imageGenProvider:', imageGenProvider)
+
+    let config
+
+    if (imageGenProvider === 'network') {
+      // 网络AI绘画（如硅基流动）
+      config = {
+        provider: settings.networkImageProvider || 'siliconflow',
         apiKey: settings.networkImageApiKey || '',
-        model: settings.networkImageModel || 'dall-e-3',
-        size: settings.imageSize || '1024x1024'
+        model: settings.networkImageModel || 'Qwen/Qwen-Image',
+        width: settings.sdWidth || 1024,
+        height: settings.sdHeight || 1024,
+        steps: settings.sdSteps || 20,
+        cfgScale: settings.sdCfgScale || 7,
+        positivePrompt: settings.sdPositivePrompt || '',
+        negativePrompt: settings.sdNegativePrompt || ''
       }
     } else {
-      // Stable Diffusion
-      return {
+      // SD API（Stable Diffusion）
+      config = {
         provider: 'stable-diffusion',
         apiUrl: settings.sdApiUrl || 'http://127.0.0.1:7860',
         model: settings.sdModel || '',
@@ -56,9 +73,13 @@ export class ComponentAIInterface {
         width: settings.sdWidth || 512,
         height: settings.sdHeight || 512,
         sampler: settings.sdSampler || 'Euler a',
+        positivePrompt: settings.sdPositivePrompt || '',
         negativePrompt: settings.sdNegativePrompt || ''
       }
     }
+
+    console.log('[ComponentAIInterface] 返回的 AI 绘画配置:', config)
+    return config
   }
 
   /**
@@ -72,6 +93,9 @@ export class ComponentAIInterface {
    * @returns {Object} 触发器对象
    */
   createRequestTrigger(requestId, options = {}) {
+    // 保存对 this 的引用，以便在 trigger 对象的方法中使用
+    const self = this
+
     const {
       prompt = '',
       onSuccess = null,
@@ -92,8 +116,15 @@ export class ComponentAIInterface {
        * @returns {Promise} 请求Promise
        */
       async execute() {
+        console.log(`[ComponentAIInterface] execute 开始执行: ${requestId}`)
+        console.log(`[ComponentAIInterface] 当前状态:`, {
+          isPending: this.isPending,
+          isLoading: this.isLoading,
+          prompt: this.prompt
+        })
+
         if (this.isPending || this.isLoading) {
-          console.warn(`Request ${requestId} is already in progress`)
+          console.warn(`[ComponentAIInterface] Request ${requestId} is already in progress`)
           return
         }
 
@@ -101,61 +132,46 @@ export class ComponentAIInterface {
         this.error = null
         this.result = null
 
-        const config = this.getAIConfig()
+        console.log(`[ComponentAIInterface] 开始获取 AI 配置`)
+        const config = self.getAIConfig()
+        console.log(`[ComponentAIInterface] AI 配置:`, {
+          provider: config.provider,
+          model: config.model,
+          hasApiKey: !!config.apiKey,
+          apiEndpoint: config.apiEndpoint
+        })
 
         try {
-          // 构建消息
-          const messages = [
-            { role: 'user', content: prompt }
-          ]
-
-          // 如果有进度回调，使用流式输出
-          if (onProgress) {
-            const fullResponse = await this.aiService.streamChat(
-              messages,
-              {
-                provider: config.provider,
-                apiKey: config.apiKey,
-                model: config.model,
-                apiEndpoint: config.apiEndpoint,
-                temperature: config.temperature,
-                maxTokens: config.maxTokens,
-                topP: config.topP,
-                frequencyPenalty: config.frequencyPenalty,
-                presencePenalty: config.presencePenalty
-              },
-              (chunk) => {
-                onProgress(chunk, requestId)
-              }
-            )
-
-            this.result = fullResponse
-            if (onSuccess) onSuccess(fullResponse, requestId)
-          } else {
-            // 普通请求
-            const response = await this.aiService.chat(
-              messages,
-              {
-                provider: config.provider,
-                apiKey: config.apiKey,
-                model: config.model,
-                apiEndpoint: config.apiEndpoint,
-                temperature: config.temperature,
-                maxTokens: config.maxTokens,
-                topP: config.topP,
-                frequencyPenalty: config.frequencyPenalty,
-                presencePenalty: config.presencePenalty
-              }
-            )
-
-            this.result = response
-            if (onSuccess) onSuccess(response, requestId)
+          // 创建一个临时的 agent 对象用于 sendMessage
+          const tempAgent = {
+            id: 'component-ai',
+            name: 'Component AI',
+            prompt: '',
+            skills: []
           }
+
+          console.log(`[ComponentAIInterface] 构建消息:`, prompt)
+
+          // 使用 sendMessage 方法
+          const response = await self.aiService.sendMessage(
+            tempAgent,
+            prompt,
+            [],
+            onProgress ? (chunk) => {
+              onProgress(chunk, requestId)
+            } : null
+          )
+
+          this.result = response
+          console.log(`[ComponentAIInterface] AI 请求完成:`, response)
+          if (onSuccess) onSuccess(response, requestId)
         } catch (error) {
+          console.error(`[ComponentAIInterface] AI 请求失败:`, error)
           this.error = error.message || 'AI请求失败'
           if (onError) onError(error, requestId)
         } finally {
           this.isLoading = false
+          console.log(`[ComponentAIInterface] execute 执行完成: ${requestId}`)
         }
       },
 
@@ -196,6 +212,7 @@ export class ComponentAIInterface {
 
     const {
       prompt = '',
+      positivePrompt = null,
       negativePrompt = '',
       steps = null,
       width = null,
@@ -213,6 +230,7 @@ export class ComponentAIInterface {
     const trigger = {
       id: requestId,
       prompt,
+      positivePrompt,
       negativePrompt,
       steps,
       width,
@@ -232,8 +250,16 @@ export class ComponentAIInterface {
        * @returns {Promise} 请求Promise
        */
       async execute() {
+        console.log(`[ComponentAIInterface] execute image 开始执行: ${requestId}`)
+        console.log(`[ComponentAIInterface] 当前状态:`, {
+          isPending: this.isPending,
+          isLoading: this.isLoading,
+          prompt: this.prompt,
+          negativePrompt: this.negativePrompt
+        })
+
         if (this.isPending || this.isLoading) {
-          console.warn(`Image request ${requestId} is already in progress`)
+          console.warn(`[ComponentAIInterface] Image request ${requestId} is already in progress`)
           return
         }
 
@@ -242,11 +268,19 @@ export class ComponentAIInterface {
         this.result = null
         this.progress = 0
 
+        console.log(`[ComponentAIInterface] 开始获取 AI 绘画配置`)
         // 获取AI配置
         const config = self.getAIImageConfig()
+        console.log(`[ComponentAIInterface] AI 绘画配置:`, {
+          provider: config.provider,
+          hasApiKey: !!config.apiKey,
+          apiUrl: config.apiUrl,
+          model: config.model
+        })
 
         try {
           if (config.provider === 'stable-diffusion') {
+            console.log(`[ComponentAIInterface] 使用 Stable Diffusion 绘画`)
             // Stable Diffusion 绘画
             const imageResult = await self.generateWithStableDiffusion({
               ...config,
@@ -266,24 +300,39 @@ export class ComponentAIInterface {
             })
 
             this.result = imageResult
+            console.log(`[ComponentAIInterface] Stable Diffusion 绘画完成:`, imageResult)
             if (onSuccess) onSuccess(imageResult, requestId)
           } else {
-            // 网络AI绘画（OpenAI DALL-E等）
+            console.log(`[ComponentAIInterface] 使用网络 API 绘画: ${config.provider}`)
+            // 网络AI绘画（硅基流动、OpenAI DALL-E等）
             const imageResult = await self.generateWithNetworkAPI({
               ...config,
               prompt,
-              size: size !== null ? size : config.size,
-              ...extraParams
+              width: width !== null ? width : config.width,
+              height: height !== null ? height : config.height,
+              steps: steps !== null ? steps : config.steps,
+              cfgScale: cfgScale !== null ? cfgScale : config.cfgScale,
+              positivePrompt: positivePrompt !== null ? positivePrompt : config.positivePrompt,
+              negativePrompt: negativePrompt !== null ? negativePrompt : config.negativePrompt,
+              model: model !== null ? model : config.model,
+              ...extraParams,
+              onProgress: (value) => {
+                this.progress = value
+                if (onProgress) onProgress(value, requestId)
+              }
             })
 
             this.result = imageResult
+            console.log(`[ComponentAIInterface] 网络 API 绘画完成:`, imageResult)
             if (onSuccess) onSuccess(imageResult, requestId)
           }
         } catch (error) {
+          console.error(`[ComponentAIInterface] AI 绘画失败:`, error)
           this.error = error.message || 'AI绘画失败'
           if (onError) onError(error, requestId)
         } finally {
           this.isLoading = false
+          console.log(`[ComponentAIInterface] execute image 执行完成: ${requestId}`)
         }
       },
 
@@ -370,12 +419,37 @@ export class ComponentAIInterface {
       apiKey,
       model,
       prompt,
-      size = '1024x1024'
+      width = 1024,
+      height = 1024,
+      steps = 20,
+      cfgScale = 7,
+      positivePrompt = '',
+      negativePrompt = '',
+      onProgress = null
     } = params
 
     let apiUrl, headers, body
 
-    if (provider === 'openai') {
+    // 构建完整的提示词
+    const fullPrompt = positivePrompt ? `${positivePrompt}, ${prompt}` : prompt
+
+    if (provider === 'siliconflow') {
+      // 硅基流动图像生成
+      apiUrl = 'https://api.siliconflow.cn/v1/images/generations'
+      headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      }
+      body = {
+        model: model || 'Qwen/Qwen-Image',
+        prompt: fullPrompt,
+        negative_prompt: negativePrompt,
+        image_size: `${width}x${height}`,
+        steps: steps,
+        cfg_scale: cfgScale
+      }
+    } else if (provider === 'openai') {
+      // OpenAI DALL-E
       apiUrl = 'https://api.openai.com/v1/images/generations'
       headers = {
         'Content-Type': 'application/json',
@@ -385,11 +459,14 @@ export class ComponentAIInterface {
         model: model || 'dall-e-3',
         prompt: prompt,
         n: 1,
-        size: size
+        size: `${width}x${height}`
       }
     } else {
       throw new Error(`Unsupported image generation provider: ${provider}`)
     }
+
+    // 更新进度 - 开始生成
+    if (onProgress) onProgress(10)
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -399,16 +476,38 @@ export class ComponentAIInterface {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(`API error: ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`)
+      const errorMessage = errorData.message || errorData.error?.message || 'Unknown error'
+      throw new Error(`API error: ${response.statusText} - ${errorMessage}`)
     }
 
-    const data = await response.json()
-    const imageUrl = data.data[0].url
+    // 更新进度 - 正在处理
+    if (onProgress) onProgress(50)
 
-    return {
-      type: provider,
-      imageUrl: imageUrl,
-      params: body
+    const data = await response.json()
+
+    // 更新进度 - 完成
+    if (onProgress) onProgress(100)
+
+    // 返回图片 URL
+    if (data.data && data.data.length > 0) {
+      const imageUrl = data.data[0].url
+      // 将 URL 转换为 base64
+      const imageResponse = await fetch(imageUrl)
+      const blob = await imageResponse.blob()
+      const base64Image = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+      return {
+        type: provider,
+        imageUrl: imageUrl,
+        base64: base64Image,
+        params: body
+      }
+    } else {
+      throw new Error('Network API returned empty image data')
     }
   }
 

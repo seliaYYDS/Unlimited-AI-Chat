@@ -5339,9 +5339,25 @@ export default {
     this.musicColorExtractor = new MusicColorExtractor()
 
     // 初始化组件 AI 接口
+    console.log('[App] 开始初始化组件 AI 接口')
+    console.log('[App] aiService:', this.aiService)
+    console.log('[App] storageManager:', this.storageManager)
+
     const { initComponentAIInterface } = await import('./utils/componentAIInterface.js')
     initComponentAIInterface(this.aiService, this.storageManager)
+
     console.log('Component AI Interface initialized')
+
+    // 验证初始化是否成功
+    const { getComponentAIInterface } = await import('./utils/componentAIInterface.js')
+    const componentAIInterface = getComponentAIInterface()
+    console.log('[App] ComponentAIInterface 实例:', componentAIInterface)
+    console.log('[App] ComponentAIInterface methods:', {
+      getAIConfig: typeof componentAIInterface?.getAIConfig,
+      getAIImageConfig: typeof componentAIInterface?.getAIImageConfig,
+      createRequestTrigger: typeof componentAIInterface?.createRequestTrigger,
+      createImageTrigger: typeof componentAIInterface?.createImageTrigger
+    })
 
     // 先加载自定义组件，然后再初始化组件列表
     await this.loadCustomComponents()
@@ -6944,107 +6960,348 @@ export default {
         id: null,
         name: '',
         description: '',
-        code: `// 自定义组件
-// 组件包含三个部分：template（HTML结构）、style（样式）、script（逻辑）
+        code: `// 自定义组件示例
+// 组件包含三个部分：template（HTML结构）、style（样式）、render函数（逻辑）
 
-// ============ 可用接口 ============
-// 1. styles - 样式设置接口
-//    styles.theme - 当前主题 ('light' 或 'dark')
-//    styles.primaryColor - 主色调
-//    styles.fontSize - 字体大小
-//    styles.borderRadius - 圆角大小
-//    styles.fontFamily - 字体
-//    styles.enableAnimations - 是否启用动画
-//    styles.getCSSVar(varName) - 获取CSS变量值
-//    styles.getAllCSSVars() - 获取所有CSS变量
+// ============ 样式接口说明 ============
+// 在模板和样式中可以使用以下内置变量：
 //
-// 2. ai - AI请求接口
-//    ai.request(prompt, options) - 发送AI请求
-//    ai.requestStream(prompt, onProgress, options) - 流式AI请求
+// 1. 主题信息
+//    $theme - 当前主题 ('light' 或 'dark')
+//    $isDark - 是否为暗色主题
+//    $isLight - 是否为亮色主题
 //
-// 3. component - 当前组件信息
-//    component.name - 组件名称
-//    component.description - 组件描述
+// 2. 颜色变量 ($colors)
+//    $colors.bgPrimary - 主背景色
+//    $colors.bgSecondary - 次背景色
+//    $colors.bgTertiary - 第三背景色
+//    $colors.textPrimary - 主文字色
+//    $colors.textSecondary - 次文字色
+//    $colors.textTertiary - 第三文字色
+//    $colors.primary - 主色调（根据颜色模式自动选择）
+//    $colors.secondary - 副色调
+//    $colors.gradient - 渐变色（自动生成）
+//    $colors.success - 成功色
+//    $colors.warning - 警告色
+//    $colors.danger - 危险色
+//    $colors.border - 边框色
+//
+// 3. 字体变量 ($fonts)
+//    $fonts.family - 字体族
+//    $fonts.size - 字体大小
+//
+// 4. 尺寸变量 ($sizes)
+//    $sizes.borderRadius - 圆角大小
+//
+// 5. 特效变量 ($effects)
+//    $effects.shadow - 阴影效果
+//
+// ============ AI接口说明 ============
+// 在模板中添加特殊属性即可使用AI功能：
+//
+// 1. AI请求接口
+//    在元素上添加 data-ai-request 属性，点击时触发AI请求
+//    data-ai-request - 请求ID（可选）
+//    data-ai-prompt - 提示词，支持变量引用如 {{ prompt }}
+//    data-ai-on-success - 成功回调函数名（可选）
+//    data-ai-on-error - 错误回调函数名（可选）
+//    示例：<button data-ai-request data-ai-prompt="{{ prompt }}">生成文本</button>
+//
+// 2. AI绘画接口
+//    在元素上添加 data-ai-image 属性，点击时触发AI绘画
+//    data-ai-image - 请求ID（可选）
+//    data-ai-prompt - 提示词，支持变量引用
+//    data-ai-negative-prompt - 负面提示词（可选）
+//    data-ai-steps - 采样步数（可选）
+//    data-ai-width - 图片宽度（可选）
+//    data-ai-height - 图片高度（可选）
+//    data-ai-cfg-scale - CFG Scale（可选）
+//    data-ai-sampler - 采样器名称（可选）
+//    data-ai-model - 模型名称（可选）
+//    data-ai-size - 图片尺寸（可选，用于网络API）
+//    data-ai-on-success - 成功回调函数名（可选）
+//    data-ai-on-error - 错误回调函数名（可选）
+//    data-ai-on-progress - 进度回调函数名（可选）
+//    示例：<div data-ai-image data-ai-prompt="{{ prompt }}">生成图片</div>
+//
+// 注意：AI接口需要用户点击按钮才会触发，会自动继承AI设置中的配置
 
-// @param {string} 标题 - 组件标题
-// @param {string} 内容 - 组件内容
-// @param {boolean} 使用AI - 是否使用AI生成内容
+// @param {string} 标题 - 卡片标题
+// @param {string} 内容 - 卡片内容
+// @param {string} 图片提示词 - AI绘画提示词（可选）
 
 const template = \`
-<div class="custom-component">
-  <h3>{{ title }}</h3>
-  <div class="content">
-    {{ content }}
+<div class="smart-card">
+  <div class="card-header">
+    <h3>{{ title }}</h3>
+    <div class="theme-badge">{{ $isDark ? '🌙 暗色' : '☀️ 亮色' }}</div>
   </div>
-  <div class="theme-info">
-    当前主题: {{ theme }} | 主色: {{ primaryColor }}
+  
+  <div class="card-body">
+    <div class="content-section">
+      <p>{{ content }}</p>
+    </div>
+    
+    <!-- AI绘画区域 -->
+    <div class="image-section" data-ai-image data-ai-prompt="{{ imagePrompt }}">
+      <div class="image-placeholder">
+        <div class="placeholder-icon">🎨</div>
+        <div class="placeholder-text">点击生成图片</div>
+        <div class="placeholder-hint">提示词: {{ imagePrompt }}</div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- AI问答区域 -->
+  <div class="ai-section">
+    <div class="ai-question">
+      <span class="label">问题：</span>
+      <span>{{ question }}</span>
+    </div>
+    <button 
+      class="ai-btn" 
+      data-ai-request 
+      data-ai-prompt="{{ question }}"
+      data-ai-target="ai-answer-text">
+      获取AI答案
+    </button>
+    <div class="ai-answer">
+      <span class="label">答案：</span>
+      <span class="answer-text" id="ai-answer-text">点击按钮获取答案</span>
+    </div>
+  </div>
+  
+  <div class="card-footer">
+    <div class="info-item">
+      <span class="label">主题：</span>
+      <span>{{ $theme }}</span>
+    </div>
+    <div class="info-item">
+      <span class="label">主色：</span>
+      <span class="color-dot" :style="{ backgroundColor: $colors.primary }"></span>
+    </div>
   </div>
 </div>
 \`;
 
 const style = \`
-/* 使用作用域选择器，避免与全局样式冲突 */
-.custom-component-wrapper .custom-component {
-  padding: 16px;
-  background: linear-gradient(135deg, var(--primary-color, #667eea) 0%, #764ba2 100%);
-  border-radius: var(--border-radius, 8px);
+/* 使用 .custom-component-wrapper 作为选择器前缀，确保样式隔离 */
+.custom-component-wrapper .smart-card {
+  padding: 20px;
+  background-color: {{ $colors.bgSecondary }};
+  border: 1px solid {{ $colors.border }};
+  border-radius: {{ $sizes.borderRadius }};
+  box-shadow: {{ $effects.shadow }};
+  transition: all 0.3s ease;
+}
+
+.custom-component-wrapper .smart-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* 卡片头部 */
+.custom-component-wrapper .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid {{ $colors.border }};
+}
+
+.custom-component-wrapper .card-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: {{ $colors.textPrimary }};
+}
+
+.custom-component-wrapper .theme-badge {
+  padding: 4px 12px;
+  background: {{ $colors.gradient }};
   color: white;
-  font-family: var(--font-family, system-ui);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.custom-component-wrapper .custom-component h3 {
-  margin: 0 0 8px 0;
-  font-size: calc(var(--font-size, 14px) * 1.3);
+/* 卡片主体 */
+.custom-component-wrapper .card-body {
+  margin-bottom: 16px;
 }
 
-.custom-component-wrapper .custom-component .content {
-  font-size: var(--font-size, 14px);
+.custom-component-wrapper .content-section {
+  padding: 12px;
+  background-color: {{ $colors.bgPrimary }};
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.custom-component-wrapper .content-section p {
+  margin: 0;
+  color: {{ $colors.textSecondary }};
   line-height: 1.6;
 }
 
-.custom-component-wrapper .theme-info {
-  margin-top: 12px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.2);
+/* 图片区域 */
+.custom-component-wrapper .image-section {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: {{ $colors.bgPrimary }};
+  border: 2px dashed {{ $colors.border }};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.custom-component-wrapper .image-section:hover {
+  border-color: {{ $colors.primary }};
+  background-color: {{ $colors.bgTertiary }};
+}
+
+.custom-component-wrapper .image-section img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.custom-component-wrapper .image-placeholder {
+  text-align: center;
+}
+
+.custom-component-wrapper .placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.custom-component-wrapper .placeholder-text {
+  font-size: 14px;
+  color: {{ $colors.textPrimary }};
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.custom-component-wrapper .placeholder-hint {
+  font-size: 12px;
+  color: {{ $colors.textTertiary }};
+}
+
+/* AI问答区域 */
+.custom-component-wrapper .ai-section {
+  padding: 12px;
+  background-color: {{ $colors.bgPrimary }};
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.custom-component-wrapper .ai-question {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.custom-component-wrapper .ai-question .label {
+  font-weight: 600;
+  color: {{ $colors.textPrimary }};
+  margin-right: 8px;
+}
+
+.custom-component-wrapper .ai-question span:last-child {
+  color: {{ $colors.textSecondary }};
+}
+
+.custom-component-wrapper .ai-btn {
+  width: 100%;
+  padding: 10px;
+  background: {{ $colors.gradient }};
+  color: white;
+  border: none;
   border-radius: 6px;
-  font-size: calc(var(--font-size, 14px) * 0.85);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.custom-component-wrapper .ai-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.custom-component-wrapper .ai-btn:active {
+  transform: translateY(0);
+}
+
+.custom-component-wrapper .ai-answer {
+  margin-top: 12px;
+  padding: 12px;
+  background-color: {{ $colors.bgTertiary }};
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.custom-component-wrapper .ai-answer .label {
+  font-weight: 600;
+  color: {{ $colors.textPrimary }};
+  margin-right: 8px;
+}
+
+.custom-component-wrapper .ai-answer .answer-text {
+  color: {{ $colors.textSecondary }};
+  line-height: 1.6;
+}
+
+/* 卡片底部 */
+.custom-component-wrapper .card-footer {
+  display: flex;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid {{ $colors.border }};
+}
+
+.custom-component-wrapper .info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.custom-component-wrapper .info-item .label {
+  color: {{ $colors.textSecondary }};
+}
+
+.custom-component-wrapper .info-item span:last-child {
+  color: {{ $colors.textPrimary }};
+}
+
+.custom-component-wrapper .color-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid {{ $colors.border }};
 }
 \`;
 
 function render(params) {
-  // params 是参数数组
-  const title = params[0] || '默认标题';
-  const content = params[1] || '默认内容';
-  const useAI = params[2] === true || params[2] === 'true';
-
-  // 使用样式接口
-  const theme = styles.theme;
-  const primaryColor = styles.primaryColor;
-  const fontSize = styles.fontSize;
-  const borderRadius = styles.borderRadius;
-
-  // 如果启用AI，使用AI接口生成内容
-  let finalContent = content;
-  if (useAI) {
-    // 注意：AI请求是异步的，这里只是示例
-    // 实际使用时需要在组件外部处理异步逻辑
-    ai.request(\`请为"\${title}"生成一段简短的描述\`).then(aiContent => {
-      finalContent = aiContent;
-    }).catch(err => {
-      console.error('AI请求失败:', err);
-    });
-  }
+  // 从参数中获取值
+  const title = params[0] || '智能卡片';
+  const content = params[1] || '这是一个示例组件，展示了样式接口和AI接口的使用方法。';
+  const imagePrompt = params[2] || '美丽的风景，高清，细节丰富';
+  const question = params[3] || '什么是人工智能？';
 
   return {
     type: 'custom',
     data: {
       template,
       style,
-      props: { 
-        title, 
-        content: finalContent,
-        theme,
-        primaryColor
+      props: {
+        title,
+        content,
+        imagePrompt,
+        question
       }
     }
   };
@@ -16796,7 +17053,8 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 }
 
 .preview-container {
-  height: 400px;
+  min-height: 400px;
+  height: auto;
   border: 2px dashed var(--border-color);
   border-radius: 16px;
   display: flex;
@@ -16807,6 +17065,86 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   background: var(--bg-secondary);
   margin-bottom: 24px;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* 确保预览容器内的 ComponentRenderer 能够正确填充高度 */
+.preview-container > .component-renderer {
+  height: 100%;
+  width: 100%;
+  max-height: 100%;
+}
+
+/* 聊天界面中的组件样式优化 */
+.message-content > .component-renderer {
+  margin: 12px 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  overflow: visible; /* 允许组件内容完整显示 */
+}
+
+/* 确保聊天界面中的组件容器样式正确 */
+.message-content > .component-renderer > * {
+  max-width: 100%;
+  overflow: visible; /* 允许组件内容完整显示 */
+}
+
+/* 聊天界面中的柱状图优化 */
+.message-content > .component-renderer .bar-chart {
+  margin: 0 auto;
+}
+
+/* 聊天界面中的雷达图优化 */
+.message-content > .component-renderer .radar-chart {
+  margin: 0 auto;
+}
+
+/* 聊天界面中的饼状图优化 */
+.message-content > .component-renderer .pie-chart {
+  margin: 0 auto;
+}
+
+/* 聊天界面中的进度条优化 */
+.message-content > .component-renderer .progress-bar {
+  margin: 0 auto;
+}
+
+/* 聊天界面中的表格优化 */
+.message-content > .component-renderer .data-table {
+  margin: 0 auto;
+  overflow-x: auto;
+}
+
+/* 聊天界面中的卡片优化 */
+.message-content > .component-renderer .info-card {
+  margin: 0 auto;
+}
+
+/* 聊天界面中的统计卡片优化 */
+.message-content > .component-renderer .stat-card {
+  margin: 0 auto;
+}
+
+/* 聊天界面中的开关优化 */
+.message-content > .component-renderer .toggle-switch {
+  margin: 0 auto;
+}
+
+/* 聊天界面中的列表优化 */
+.message-content > .component-renderer .item-list {
+  margin: 0 auto;
+}
+
+/* 聊天界面中的配置展示优化 */
+.message-content > .component-renderer .config-display {
+  margin: 0 auto;
+}
+
+/* 聊天界面中的自定义组件优化 */
+.message-content > .component-renderer .custom-component-wrapper {
+  margin: 0 auto;
 }
 
 .preview-container.success-animation {
