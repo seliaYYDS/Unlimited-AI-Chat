@@ -688,6 +688,50 @@
       </div>
     </div>
 
+    <!-- 问候动画设置 -->
+    <div class="settings-section">
+      <h4 class="section-title">问候动画设置</h4>
+
+      <div class="form-group">
+        <CustomCheckbox
+          :model-value="settings.enableSplashAnimation"
+          label="启用问候动画"
+          @update:model-value="updateSetting('enableSplashAnimation', $event)"
+        />
+        <div class="form-hint">
+          开启后，打开应用时会显示问候动画
+        </div>
+      </div>
+
+      <div class="form-group" v-if="settings.enableSplashAnimation">
+        <CustomSlider
+          :model-value="settings.splashDuration"
+          :min="300"
+          :max="2000"
+          :step="100"
+          :show-value="true"
+          label="问候动画停留时间"
+          unit="ms"
+          @update:model-value="updateSetting('splashDuration', $event)"
+        />
+        <div class="form-hint">
+          设置问候动画显示的时长（300-2000毫秒）
+        </div>
+      </div>
+
+      <div class="form-group" v-if="settings.enableSplashAnimation">
+        <label>标题文字动画类型</label>
+        <CustomSelect
+          :model-value="settings.splashAnimationType"
+          :options="splashAnimationTypeOptions"
+          @update:model-value="updateSetting('splashAnimationType', $event)"
+        />
+        <div class="form-hint">
+          选择标题文字的动画效果类型
+        </div>
+      </div>
+    </div>
+
     <!-- 灵动岛设置 -->
     <div class="settings-section">
       <h4 class="section-title">灵动岛设置</h4>
@@ -1188,6 +1232,12 @@ export default {
         { value: 'fast', label: '快速' },
         { value: 'normal', label: '正常' },
         { value: 'slow', label: '慢速' }
+      ],
+
+      splashAnimationTypeOptions: [
+        { value: 'scale', label: '放大' },
+        { value: 'flyIn', label: '飞入' },
+        { value: 'fadeIn', label: '渐入' }
       ],
 
       shineColorPresets: [

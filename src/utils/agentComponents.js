@@ -185,9 +185,14 @@ function parseParams(paramsString, paramDefinitions) {
   for (let i = 0; i < params.length; i++) {
     const param = params[i]
     const definition = paramDefinitions[i]
+    const trimmed = param.trim()
     
-    // 如果当前参数以 [ 开头，但没有对应的 ]，说明数组被错误分割了
-    if (param.trim().startsWith('[') && !param.trim().endsWith(']')) {
+    // 检查是否为字符串（以引号开头）
+    const isString = (trimmed.startsWith('"') || trimmed.startsWith("'"))
+    
+    // 只有当参数以 [ 开头，不以 ] 结尾，且不是字符串时，才认为是被错误分割的数组
+    // 排除字符串情况，因为字符串也可能包含 [ 和 ]
+    if (!isString && trimmed.startsWith('[') && !trimmed.endsWith(']')) {
       // 尝试找到数组的结束位置
       let combined = param
       let j = i + 1
@@ -198,10 +203,19 @@ function parseParams(paramsString, paramDefinitions) {
         combined += ',' + params[j]
         const nextParam = params[j]
         
-        // 计算括号数量
+        // 计算括号数量（只计算方括号，忽略字符串内的）
+        let inString = false
+        let stringChar = ''
         for (const char of nextParam) {
-          if (char === '[') bracketCount++
-          else if (char === ']') bracketCount--
+          if ((char === '"' || char === "'") && !inString) {
+            inString = true
+            stringChar = char
+          } else if (char === stringChar && inString) {
+            inString = false
+          } else if (!inString) {
+            if (char === '[') bracketCount++
+            else if (char === ']') bracketCount--
+          }
         }
         
         j++
@@ -243,9 +257,10 @@ function smartSplit(str, separator) {
   
   for (let i = 0; i < str.length; i++) {
     const char = str[i]
+    const prevChar = i > 0 ? str[i - 1] : ''
     
-    // 处理字符串
-    if ((char === '"' || char === "'") && (i === 0 || str[i - 1] !== '\\')) {
+    // 处理字符串引号（包括转义字符的情况）
+    if ((char === '"' || char === "'") && prevChar !== '\\') {
       if (!inString) {
         inString = true
         stringChar = char
@@ -257,6 +272,7 @@ function smartSplit(str, separator) {
         current += char
       }
     } else if (inString) {
+      // 在字符串内，保留所有字符（包括逗号）
       current += char
     } else if (char === '[' || char === '{') {
       depth++
@@ -264,7 +280,8 @@ function smartSplit(str, separator) {
     } else if (char === ']' || char === '}') {
       depth--
       current += char
-    } else if (char === separator && depth === 0) {
+    } else if (char === separator && depth === 0 && !inString) {
+      // 只在非字符串且深度为0时分割
       result.push(current.trim())
       current = ''
     } else {

@@ -1,6 +1,6 @@
 <template>
-  <div 
-    class="app" 
+  <div
+    class="app"
     :class="{ 'theme-dark': isDarkTheme }"
     :style="{
       '--modal-backdrop-blur': styleSettings.modalBackdropBlur ? `${styleSettings.modalBackdropBlurAmount}px` : '0px',
@@ -8,8 +8,14 @@
     }"
   >
 
-
-
+    <!-- 开启动画问候屏幕 -->
+    <transition name="splash" v-if="styleSettings.enableSplashAnimation">
+      <div v-show="showSplash" class="splash-screen">
+        <div class="splash-content">
+          <h1 :class="['splash-title', `splash-title-${styleSettings.splashAnimationType}`]">UNLIMITED</h1>
+        </div>
+      </div>
+    </transition>
 
     <!-- 侧边栏 -->
 
@@ -493,7 +499,7 @@
 
               <!-- 图片生成进度条 -->
               <div v-if="message.isGeneratingImage" class="progress-bar">
-                <div class="progress-fill" :style="{ width: message.imageProgress + '%' }"></div>
+                <div class="progress-fill" :data-color-mode="styleSettings.colorMode" :style="{ width: message.imageProgress + '%' }"></div>
                 <div class="progress-text">{{ message.imageProgress }}%</div>
               </div>
 
@@ -4704,6 +4710,9 @@ export default {
 
       isScrollingToBottom: false, // 是否正在滚动到底部
 
+      // 开启动画
+      showSplash: true,
+
       // 模态框状态
 
       showCreateModal: false,
@@ -5077,7 +5086,10 @@ export default {
         messageBubbleStyle: 'default',
         chatLayout: 'standard',
         colorMode: 'single',
-        enableMusicColorSync: false
+        enableMusicColorSync: false,
+        enableSplashAnimation: true,
+        splashDuration: 500,
+        splashAnimationType: 'scale'
       },
 
       // AI 设置
@@ -5481,6 +5493,15 @@ export default {
 
     // 加载样式设置
     this.loadStyleSettings()
+
+    // 开启动画：根据设置决定是否显示问候动画
+    if (this.styleSettings.enableSplashAnimation) {
+      setTimeout(() => {
+        this.showSplash = false
+      }, this.styleSettings.splashDuration || 500)
+    } else {
+      this.showSplash = false
+    }
 
     // 确保流光效果设置被应用
     this.$nextTick(() => {
@@ -6157,6 +6178,10 @@ export default {
         enableDynamicIslandMusicInfo: settings.enableDynamicIslandMusicInfo !== undefined ? settings.enableDynamicIslandMusicInfo : true,
         // 灵动岛歌词显示设置
         enableDynamicIslandLyrics: settings.enableDynamicIslandLyrics !== undefined ? settings.enableDynamicIslandLyrics : false,
+        // 问候动画设置
+        enableSplashAnimation: settings.enableSplashAnimation !== undefined ? settings.enableSplashAnimation : true,
+        splashDuration: settings.splashDuration || 500,
+        splashAnimationType: settings.splashAnimationType || 'scale',
         // 主题颜色设置
         themeColors: settings.themeColors || null
       }
@@ -6168,29 +6193,25 @@ export default {
     updateStyleSettings(newSettings) {
       const wasColorSyncEnabled = this.styleSettings.enableMusicColorSync;
       const isColorSyncEnabled = newSettings.enableMusicColorSync;
-      
+
       // 检查是否禁用了音乐封面颜色联动
       if (wasColorSyncEnabled && !isColorSyncEnabled) {
         this.restoreOriginalThemeColor();
       }
-      
+
       this.styleSettings = { ...newSettings }
       // 同时更新settings对象中的相关设置
-      this.settings = { ...this.settings, ...newSettings }
+      this.settings.styleSettings = { ...newSettings }
       this.applyStyleSettings()
-      
-      // 立即保存设置到localStorage
-      const updatedSettings = {
-        ...this.settings,
-        ...this.styleSettings
-      }
-      const success = this.storageManager.saveSettings(updatedSettings)
+
+      // 立即保存设置到 localStorage
+      const success = this.storageManager.saveSettings(this.settings)
       if (!success) {
         console.error('保存样式设置失败')
       } else {
-        console.log('样式设置已保存', updatedSettings)
+        console.log('样式设置已保存', this.styleSettings)
       }
-      
+
       // 如果启用了音乐封面颜色联动且有当前播放的歌曲，重新提取颜色
       if (!wasColorSyncEnabled && isColorSyncEnabled && this.currentMusic && this.isMusicPlaying) {
         // 延迟一下确保样式已应用
@@ -6686,16 +6707,11 @@ export default {
     // 初始化组件列表
     initializeComponents() {
       const components = getAllComponents()
-      console.log('[组件系统] 加载的组件:', components)
-      console.log('[组件系统] 组件数量:', components.length)
-      console.log('[组件系统] 组件名称:', components.map(c => c.name))
+      
 
       if (Array.isArray(components) && components.length > 0) {
         this.availableComponents = components
-        console.log(`[组件系统] 成功加载 ${components.length} 个组件`)
-      } else {
-        console.error('[组件系统] 组件加载失败或为空')
-        this.availableComponents = []
+                this.availableComponents = []
       }
     },
 
@@ -6745,17 +6761,17 @@ export default {
     // 加载自定义组件
     async loadCustomComponents() {
       try {
-        console.log('开始加载自定义组件...')
+        
         this.customComponents = await conversationDB.getAllCustomComponents()
-        console.log('加载的自定义组件:', this.customComponents)
+        
         
         // 将自定义组件注册到组件系统
         this.customComponents.forEach(component => {
-          console.log('注册自定义组件:', component.name)
+          
           this.registerCustomComponent(component)
         })
         
-        console.log('自定义组件注册完成')
+        
         
         // 重新初始化组件列表，包含新注册的自定义组件
         this.initializeComponents()
@@ -6768,7 +6784,7 @@ export default {
     // 注册自定义组件到组件系统
     registerCustomComponent(component) {
       try {
-        console.log('开始注册自定义组件:', component.name, component)
+        
         
         // 移除 export 关键字，因为 new Function 不支持 ES6 模块语法
         const codeWithoutExport = component.code.replace(/export\s+function\s+render\s*\(/, 'function render(')
@@ -6872,7 +6888,7 @@ export default {
         // 尝试从代码中解析参数信息
         const params = this.parseComponentParams(component.code)
         
-        console.log('解析的参数:', params)
+        
         
         // 注册组件
         registerComponent(component.name, {
@@ -6882,7 +6898,7 @@ export default {
           example: this.generateComponentExample(component.name, params)
         })
         
-        console.log('组件注册成功:', component.name)
+        
       } catch (error) {
         console.error(`注册自定义组件 ${component.name} 失败:`, error)
       }
@@ -6892,7 +6908,7 @@ export default {
     parseComponentParams(code) {
       const params = []
       
-      console.log('开始解析组件参数，代码长度:', code.length)
+      
       console.log('代码前500字符:', code.substring(0, 500))
       
       // 尝试从代码注释中提取参数信息
@@ -6904,7 +6920,7 @@ export default {
       const paramRegex = /\/\/\s*@param\s*(?:\{[^}]*\})?\s*([a-zA-Z_$\u4e00-\u9fa5][a-zA-Z0-9_$\u4e00-\u9fa5]*)\s*(?:-|\s)\s*(.+?)(?:\r?\n|$)/g
       let match
       while ((match = paramRegex.exec(code)) !== null) {
-        console.log('匹配到参数:', match)
+        
         params.push({
           name: match[1],
           description: match[2].trim(),
@@ -6912,11 +6928,11 @@ export default {
         })
       }
       
-      console.log('从注释中解析到的参数数量:', params.length)
+      
       
       // 如果没有找到参数注释，尝试从 render 函数中推断
       if (params.length === 0) {
-        console.log('未找到参数注释，尝试从 render 函数推断')
+        
         // 查找 params 的使用情况
         const paramUsageRegex = /params\[(\d+)\]/g
         const usedParams = new Set()
@@ -6924,7 +6940,7 @@ export default {
           usedParams.add(parseInt(match[1]))
         }
         
-        console.log('检测到的参数索引:', Array.from(usedParams))
+        
         
         if (usedParams.size > 0) {
           usedParams.forEach(index => {
@@ -6937,7 +6953,7 @@ export default {
         }
       }
       
-      console.log('最终解析到的参数:', params)
+      
       return params
     },
     
@@ -7448,7 +7464,7 @@ function render(params) {
       }
 
       try {
-        console.log('开始保存组件:', this.componentEditor)
+        
         console.log('IndexedDB 状态:', conversationDB.db ? '已初始化' : '未初始化')
         console.log('使用 localStorage:', conversationDB.useLocalStorage)
         
@@ -7459,7 +7475,7 @@ function render(params) {
           code: this.componentEditor.code.trim()
         }
 
-        console.log('组件数据:', componentData)
+        
 
         // 确保 IndexedDB 已初始化
         if (!conversationDB.db) {
@@ -7469,7 +7485,7 @@ function render(params) {
 
         const savedComponent = await conversationDB.saveCustomComponent(componentData)
 
-        console.log('保存的组件:', savedComponent)
+        
 
         // 验证保存是否成功
         if (!savedComponent || !savedComponent.id) {
@@ -7482,7 +7498,7 @@ function render(params) {
           throw new Error('组件保存失败：无法从数据库读取')
         }
 
-        console.log('验证的组件:', verifiedComponent)
+        
 
         // 更新本地组件列表
         const existingIndex = this.customComponents.findIndex(c => c.id === savedComponent.id)
@@ -7492,7 +7508,7 @@ function render(params) {
           this.customComponents.push(savedComponent)
         }
 
-        console.log('当前组件列表:', this.customComponents)
+        
 
         // 注册或重新注册组件
         this.registerCustomComponent(savedComponent)
@@ -7837,7 +7853,6 @@ function render(params) {
 
       // 检测用户请求中的接口关键词
       const detectedInterfaces = this.detectInterfaceKeywords(userMessage || '')
-      console.log(`[Component AI] 检测到的接口类型: ${detectedInterfaces.length > 0 ? detectedInterfaces.join(', ') : '无'}`)
 
       // 如果检测到接口关键词，增强用户请求，添加接口使用需求
       let enhancedUserMessage = userMessage
@@ -7856,7 +7871,6 @@ function render(params) {
         }).filter(req => req).join('，')
         
         enhancedUserMessage = `${userMessage}。${interfaceRequirements}。`
-        console.log(`[Component AI] 增强后的用户请求: "${enhancedUserMessage}"`)
       }
 
       // 生成接口上下文
@@ -8225,13 +8239,11 @@ ${interfaceUsageDetails}
 
       // 检测任务描述中的接口关键词
       const detectedInterfaces = this.detectInterfaceKeywords(task.description || '')
-      console.log(`[Component AI] 任务 "${task.description}" 检测到的接口: ${detectedInterfaces.length > 0 ? detectedInterfaces.join(', ') : '无'}`)
 
       // 如果检测到接口关键词，添加详细的接口用法说明
       let interfaceUsageDetails = ''
       if (detectedInterfaces.length > 0) {
         interfaceUsageDetails = this.getInterfaceUsageDetails(detectedInterfaces)
-        console.log(`[Component AI] 已为任务添加接口用法说明`)
       }
 
       // 构建提示词
@@ -8306,8 +8318,6 @@ ${interfaceUsageDetails}
 
 // 构建工作流提示词
     buildWorkflowPrompt(userMessage, previousSteps) {
-      console.log(`[Component AI] 构建提示词，用户请求: "${userMessage}"`)
-      
       // 构建上下文
       let context = ''
 
@@ -8343,7 +8353,6 @@ ${interfaceUsageDetails}
 
       // 检测用户请求中的接口关键词
       const detectedInterfaces = this.detectInterfaceKeywords(userMessage || '')
-      console.log(`[Component AI] 检测到的接口类型: ${detectedInterfaces.length > 0 ? detectedInterfaces.join(', ') : '无'}`)
 
       // 构建提示词
       let prompt = `你是一个专业的 Vue 组件开发助手。用户正在创建或修改一个自定义组件。
@@ -8356,7 +8365,6 @@ ${userMessage ? `用户的请求：${userMessage}` : ''}`
       if (detectedInterfaces.length > 0) {
         const usageDetails = this.getInterfaceUsageDetails(detectedInterfaces)
         prompt += usageDetails
-        console.log(`[Component AI] 已添加接口用法说明，长度: ${usageDetails.length} 字符`)
       }
 
       prompt += `
@@ -8531,14 +8539,9 @@ ${userMessage ? `用户的请求：${userMessage}` : ''}`
         for (const keyword of keywordList) {
           if (lowerMessage.includes(keyword.toLowerCase())) {
             detectedInterfaces.push(interfaceType)
-            console.log(`[Component AI] 检测到接口关键词: ${interfaceType} (关键词: ${keyword})`)
             break
           }
         }
-      }
-
-      if (detectedInterfaces.length > 0) {
-        console.log(`[Component AI] 检测到的接口: ${detectedInterfaces.join(', ')}`)
       }
 
       return detectedInterfaces
@@ -8546,11 +8549,9 @@ ${userMessage ? `用户的请求：${userMessage}` : ''}`
 
     // 获取接口用法的详细说明
     getInterfaceUsageDetails(interfaceTypes) {
-      console.log(`[Component AI] 获取接口用法详情，接口类型: ${interfaceTypes.join(', ')}`)
       let details = '\n\n【接口用法详细说明】\n'
 
       if (interfaceTypes.includes('style')) {
-        console.log(`[Component AI] 添加样式接口用法说明`)
         details += `
 **样式接口用法：**
 
@@ -10478,12 +10479,12 @@ ${conversationText}
     parseAndRenderComponents(message) {
       if (!message.content) return
 
-      console.log('开始解析组件，消息内容:', message.content)
+      
 
       // 解析组件调用
       const componentCalls = parseComponentCalls(message.content)
 
-      console.log('解析到的组件调用:', componentCalls)
+      
 
       if (componentCalls.length === 0) {
         message.components = []
@@ -10494,7 +10495,7 @@ ${conversationText}
       const components = []
 
       componentCalls.forEach(call => {
-        console.log('渲染组件:', call.componentName, '参数:', call.params)
+        
         const rendered = renderComponent(call.componentName, call.params)
         console.log('渲染结果:', rendered)
         if (rendered) {
@@ -10507,7 +10508,7 @@ ${conversationText}
         }
       })
 
-      console.log('所有渲染的组件:', components)
+      
 
       // 只更新组件列表，不修改消息内容
       message.components = components
@@ -14367,6 +14368,117 @@ ${sceneContext ? `场景上下文参考：\n${sceneContext}` : ''}`
 /* 导入样式文件 */
 @import './styles/global.css';
 
+/* ========== 开启动画样式 ========== */
+
+/* 问候屏幕容器 */
+.splash-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+/* 问候屏幕内容 */
+.splash-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 问候屏幕标题 */
+.splash-title {
+  font-size: 64px;
+  font-weight: 1;
+  color: #ffffff;
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  margin: 0;
+  opacity: 1;
+  /* 风格化字体栈：以 Montserrat 为首选，逐步降级到常见字体 */
+  font-family:
+    'Montserrat',         /* 现代无衬线字体（首选） */
+    'Poppins',            /* 几何无衬线字体 */
+    'Exo 2',              /* 现代几何字体 */
+    'Orbitron',           /* 科幻风格字体 */
+    'Roboto',             /* Google 无衬线字体 */
+    'Helvetica Neue',     /* 现代 Helvetica */
+    'Arial',              /* 经典无衬线字体 */
+    sans-serif;           /* 最终降级到系统默认无衬线字体 */
+  /* 添加字体平滑效果 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 添加文字阴影增强视觉效果 */
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 0.5),
+    0 0 20px rgba(255, 255, 255, 0.3),
+    0 0 30px rgba(255, 255, 255, 0.2);
+}
+
+/* 放大动画 */
+.splash-title-scale {
+  animation: splashScaleIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes splashScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 飞入动画 */
+.splash-title-flyIn {
+  animation: splashFlyIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes splashFlyIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 渐入动画 */
+.splash-title-fadeIn {
+  animation: splashFadeInOnly 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes splashFadeInOnly {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 问候屏幕过渡动画 */
+.splash-enter-active,
+.splash-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.splash-enter-from,
+.splash-leave-to {
+  opacity: 0;
+}
+
+/* ========== 开启动画样式结束 ========== */
+
 /* ========== 自定义拖拽系统样式 ========== */
 
 /* 拖拽中的智能体项 */
@@ -17109,6 +17221,59 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
 /* 聊天界面中的进度条优化 */
 .message-content > .component-renderer .progress-bar {
   margin: 0 auto;
+}
+
+/* 消息中的图片生成进度条样式 */
+.message-content-wrapper > .progress-bar {
+  position: relative;
+  width: 100%;
+  height: 16px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.message-content-wrapper > .progress-bar .progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--primary-color);
+  transition: width 0.3s ease;
+  border-radius: 8px 0 0 8px;
+  z-index: 1;
+}
+
+/* 单色模式 */
+.message-content-wrapper > .progress-bar .progress-fill {
+  background: var(--primary-color);
+}
+
+/* 双色模式 */
+.message-content-wrapper > .progress-bar .progress-fill[data-color-mode="dual"],
+.message-content-wrapper > .progress-bar .progress-fill[data-color-mode="gradient"] {
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+}
+
+/* 高级渐变模式 */
+.message-content-wrapper > .progress-bar .progress-fill[data-color-mode="advanced-gradient"] {
+  background: linear-gradient(90deg, var(--gradient-color-1), var(--gradient-color-2), var(--gradient-color-3));
+}
+
+.message-content-wrapper > .progress-bar .progress-text {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* 聊天界面中的表格优化 */
