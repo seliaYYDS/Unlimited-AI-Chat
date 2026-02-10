@@ -2,7 +2,7 @@
 export class ConversationDB {
     constructor() {
         this.dbName = 'AIConversationDB'
-        this.dbVersion = 4
+        this.dbVersion = 5
         this.storeName = 'conversations'
         this.db = null
         this.useLocalStorage = false
@@ -19,11 +19,108 @@ export class ConversationDB {
         return 'indexedDB' in window && window.indexedDB !== null
     }
 
+    // 检查当前数据库版本
+    async getCurrentDBVersion() {
+        if (!this.isIndexedDBAvailable()) {
+            return null
+        }
+
+        // 尝试使用 indexedDB.databases() API（如果浏览器支持）
+        if (indexedDB.databases) {
+            try {
+                const databases = await indexedDB.databases()
+                const dbInfo = databases.find(db => db.name === this.dbName)
+                if (dbInfo) {
+                    console.log(`[IndexedDB] 使用 databases API 获取版本: ${dbInfo.version}`)
+                    return dbInfo.version
+                } else {
+                    console.log('[IndexedDB] 数据库不存在')
+                    return 0
+                }
+            } catch (error) {
+                console.warn('[IndexedDB] databases API 不可用，使用备用方法:', error)
+            }
+        }
+
+        // 备用方法：尝试打开数据库获取版本
+        return new Promise((resolve) => {
+            let db = null
+            let resolved = false
+
+            const cleanup = () => {
+                if (db && !resolved) {
+                    try {
+                        db.close()
+                    } catch (e) {
+                        // 忽略关闭错误
+                    }
+                }
+            }
+
+            const doResolve = (value) => {
+                if (!resolved) {
+                    resolved = true
+                    cleanup()
+                    resolve(value)
+                }
+            }
+
+            try {
+                // 尝试以当前目标版本打开，如果成功则说明版本匹配或更高
+                const request = indexedDB.open(this.dbName, this.dbVersion)
+
+                request.onerror = () => {
+                    console.warn('[IndexedDB] 无法打开数据库检查版本:', request.error)
+                    doResolve(null)
+                }
+
+                request.onsuccess = () => {
+                    db = request.result
+                    const currentVersion = db.version
+                    console.log(`[IndexedDB] 当前数据库版本: ${currentVersion}`)
+                    doResolve(currentVersion)
+                }
+
+                request.onupgradeneeded = (event) => {
+                    db = event.target.result
+                    const oldVersion = event.oldVersion
+                    console.log(`[IndexedDB] 数据库需要升级，当前版本: ${oldVersion}`)
+                    // 取消升级事务，只获取版本信息
+                    event.target.transaction.abort()
+                    doResolve(oldVersion)
+                }
+
+                // 设置超时，防止无限等待
+                setTimeout(() => {
+                    if (!resolved) {
+                        console.warn('[IndexedDB] 获取版本超时')
+                        doResolve(null)
+                    }
+                }, 5000)
+
+            } catch (error) {
+                console.error('[IndexedDB] 获取版本时发生异常:', error)
+                doResolve(null)
+            }
+        })
+    }
+
     // 初始化数据库
     async init() {
         // 检查 IndexedDB 是否可用
         if (!this.isIndexedDBAvailable()) {
             console.warn('IndexedDB 不可用，将使用 localStorage 作为后备存储')
+            this.useLocalStorage = true
+            return true
+        }
+
+        // 检查当前数据库版本
+        const currentVersion = await this.getCurrentDBVersion()
+        console.log(`[IndexedDB] 当前数据库版本: ${currentVersion}, 目标版本: ${this.dbVersion}`)
+
+        // 如果当前版本为 null，说明 IndexedDB 不可用
+        if (currentVersion === null) {
+            console.warn('无法获取数据库版本，将使用 localStorage 作为后备存储')
             this.useLocalStorage = true
             return true
         }
@@ -34,14 +131,41 @@ export class ConversationDB {
             request.onerror = () => {
                 console.error('IndexedDB 打开失败，将使用 localStorage 作为后备存储:', request.error)
                 this.useLocalStorage = true
+                // 如果数据库已经打开，关闭它
+                if (request.result) {
+                    request.result.close()
+                }
                 resolve(true)
             }
 
-            request.onsuccess = () => {
+            request.onsuccess = async () => {
+                // 检查是否因为版本升级失败而降级到 localStorage
+                if (this.useLocalStorage) {
+                    console.warn('[IndexedDB] 版本升级失败，已降级到 localStorage')
+                    // 关闭数据库连接
+                    if (request.result) {
+                        request.result.close()
+                    }
+                    resolve(true)
+                    return
+                }
+
                 this.db = request.result
                 this.useLocalStorage = false
                 console.log('[IndexedDB] 数据库打开成功，版本:', this.db.version)
                 console.log('[IndexedDB] 所有对象存储:', Array.from(this.db.objectStoreNames))
+
+                // 验证数据库完整性
+                const isValid = await this.validateDatabase()
+                if (!isValid) {
+                    console.error('[IndexedDB] 数据库验证失败，降级到 localStorage')
+                    this.useLocalStorage = true
+                    this.db.close()
+                    this.db = null
+                    resolve(true)
+                    return
+                }
+
                 resolve(this.db)
             }
 
@@ -50,66 +174,164 @@ export class ConversationDB {
                 const oldVersion = event.oldVersion
                 const newVersion = event.newVersion
 
-                console.log(`IndexedDB upgrading from version ${oldVersion} to ${newVersion}`)
+                console.log(`[IndexedDB] 正在从版本 ${oldVersion} 升级到 ${newVersion}`)
 
-                // 创建对话对象存储，使用 agentId 作为键
-                if (!db.objectStoreNames.contains(this.storeName)) {
-                    const objectStore = db.createObjectStore(this.storeName, { keyPath: 'agentId' })
-                    objectStore.createIndex('agentId', 'agentId', { unique: true })
-                    objectStore.createIndex('updatedAt', 'updatedAt', { unique: false })
-                }
+                try {
+                    // 处理版本升级
+                    this.handleVersionUpgrade(db, oldVersion, newVersion)
 
-                // 创建图片对象存储，使用 messageId 作为键
-                const imageStoreName = 'images'
-                if (!db.objectStoreNames.contains(imageStoreName)) {
-                    const imageStore = db.createObjectStore(imageStoreName, { keyPath: 'messageId' })
-                    imageStore.createIndex('messageId', 'messageId', { unique: true })
-                    imageStore.createIndex('agentId', 'agentId', { unique: false })
-                    imageStore.createIndex('createdAt', 'createdAt', { unique: false })
-                }
+                    // 监听事务完成事件
+                    event.target.transaction.oncomplete = () => {
+                        console.log('[IndexedDB] 版本升级成功')
+                    }
 
-                // 创建头像对象存储，使用 agentId 作为键
-                const avatarStoreName = 'avatars'
-                if (!db.objectStoreNames.contains(avatarStoreName)) {
-                    const avatarStore = db.createObjectStore(avatarStoreName, { keyPath: 'agentId' })
-                    avatarStore.createIndex('agentId', 'agentId', { unique: true })
-                    avatarStore.createIndex('updatedAt', 'updatedAt', { unique: false })
-                }
+                    // 监听事务错误事件
+                    event.target.transaction.onerror = (error) => {
+                        console.error('[IndexedDB] 版本升级事务失败:', error)
+                        // 版本升级失败，将使用 localStorage
+                        this.useLocalStorage = true
+                        // 关闭数据库连接
+                        if (db) {
+                            db.close()
+                        }
+                    }
 
-                // 创建对话会话对象存储，使用复合键 agentId_sessionId
-                const sessionsStoreName = 'chatSessions'
-                if (!db.objectStoreNames.contains(sessionsStoreName)) {
-                    const sessionsStore = db.createObjectStore(sessionsStoreName, { keyPath: 'id' })
-                    sessionsStore.createIndex('agentId', 'agentId', { unique: false })
-                    sessionsStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+                    // 监听事务中止事件
+                    event.target.transaction.onabort = (error) => {
+                        console.error('[IndexedDB] 版本升级事务被中止:', error)
+                        // 版本升级失败，将使用 localStorage
+                        this.useLocalStorage = true
+                        // 关闭数据库连接
+                        if (db) {
+                            db.close()
+                        }
+                    }
+                } catch (error) {
+                    console.error('[IndexedDB] 版本升级过程中发生错误:', error)
+                    // 版本升级失败，将使用 localStorage
+                    this.useLocalStorage = true
+                    // 关闭数据库连接
+                    if (db) {
+                        db.close()
+                    }
+                    throw error
                 }
-
-                // 创建对话会话消息对象存储，使用复合键 agentId_sessionId
-                const sessionMessagesStoreName = 'chatSessionMessages'
-                if (!db.objectStoreNames.contains(sessionMessagesStoreName)) {
-                    const sessionMessagesStore = db.createObjectStore(sessionMessagesStoreName, { keyPath: 'id' })
-                    sessionMessagesStore.createIndex('agentId', 'agentId', { unique: false })
-                    sessionMessagesStore.createIndex('sessionId', 'sessionId', { unique: false })
-                    sessionMessagesStore.createIndex('agentId_sessionId', ['agentId', 'sessionId'], { unique: true })
-                }
-
-                // 创建自定义组件对象存储，使用组件 ID 作为键
-                const componentsStoreName = 'customComponents'
-                console.log('[IndexedDB] 检查 customComponents 对象存储:', db.objectStoreNames.contains(componentsStoreName))
-                if (!db.objectStoreNames.contains(componentsStoreName)) {
-                    console.log('[IndexedDB] 创建 customComponents 对象存储')
-                    const componentsStore = db.createObjectStore(componentsStoreName, { keyPath: 'id' })
-                    componentsStore.createIndex('name', 'name', { unique: false })
-                    componentsStore.createIndex('createdAt', 'createdAt', { unique: false })
-                    componentsStore.createIndex('updatedAt', 'updatedAt', { unique: false })
-                    console.log('[IndexedDB] customComponents 对象存储创建成功')
-                } else {
-                    console.log('[IndexedDB] customComponents 对象存储已存在')
-                }
-                
-                console.log('[IndexedDB] 所有对象存储:', Array.from(db.objectStoreNames))
             }
         })
+    }
+
+    // 处理数据库版本升级
+    handleVersionUpgrade(db, oldVersion, newVersion) {
+        console.log(`[IndexedDB] 开始版本升级流程: ${oldVersion} -> ${newVersion}`)
+
+        // 创建对话对象存储，使用 agentId 作为键
+        if (!db.objectStoreNames.contains(this.storeName)) {
+            console.log('[IndexedDB] 创建 conversations 对象存储')
+            const objectStore = db.createObjectStore(this.storeName, { keyPath: 'agentId' })
+            objectStore.createIndex('agentId', 'agentId', { unique: true })
+            objectStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+        }
+
+        // 创建图片对象存储，使用 messageId 作为键
+        const imageStoreName = 'images'
+        if (!db.objectStoreNames.contains(imageStoreName)) {
+            console.log('[IndexedDB] 创建 images 对象存储')
+            const imageStore = db.createObjectStore(imageStoreName, { keyPath: 'messageId' })
+            imageStore.createIndex('messageId', 'messageId', { unique: true })
+            imageStore.createIndex('agentId', 'agentId', { unique: false })
+            imageStore.createIndex('createdAt', 'createdAt', { unique: false })
+        }
+
+        // 创建头像对象存储，使用 agentId 作为键
+        const avatarStoreName = 'avatars'
+        if (!db.objectStoreNames.contains(avatarStoreName)) {
+            console.log('[IndexedDB] 创建 avatars 对象存储')
+            const avatarStore = db.createObjectStore(avatarStoreName, { keyPath: 'agentId' })
+            avatarStore.createIndex('agentId', 'agentId', { unique: true })
+            avatarStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+        }
+
+        // 创建对话会话对象存储，使用复合键 agentId_sessionId
+        const sessionsStoreName = 'chatSessions'
+        if (!db.objectStoreNames.contains(sessionsStoreName)) {
+            console.log('[IndexedDB] 创建 chatSessions 对象存储')
+            const sessionsStore = db.createObjectStore(sessionsStoreName, { keyPath: 'id' })
+            sessionsStore.createIndex('agentId', 'agentId', { unique: false })
+            sessionsStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+        }
+
+        // 创建对话会话消息对象存储，使用复合键 agentId_sessionId
+        const sessionMessagesStoreName = 'chatSessionMessages'
+        if (!db.objectStoreNames.contains(sessionMessagesStoreName)) {
+            console.log('[IndexedDB] 创建 chatSessionMessages 对象存储')
+            const sessionMessagesStore = db.createObjectStore(sessionMessagesStoreName, { keyPath: 'id' })
+            sessionMessagesStore.createIndex('agentId', 'agentId', { unique: false })
+            sessionMessagesStore.createIndex('sessionId', 'sessionId', { unique: false })
+            sessionMessagesStore.createIndex('agentId_sessionId', ['agentId', 'sessionId'], { unique: true })
+        }
+
+        // 创建自定义组件对象存储，使用组件 ID 作为键
+        const componentsStoreName = 'customComponents'
+        if (!db.objectStoreNames.contains(componentsStoreName)) {
+            console.log('[IndexedDB] 创建 customComponents 对象存储')
+            const componentsStore = db.createObjectStore(componentsStoreName, { keyPath: 'id' })
+            componentsStore.createIndex('name', 'name', { unique: false })
+            componentsStore.createIndex('createdAt', 'createdAt', { unique: false })
+            componentsStore.createIndex('updatedAt', 'updatedAt', { unique: false })
+        }
+
+        console.log('[IndexedDB] 所有对象存储:', Array.from(db.objectStoreNames))
+    }
+
+    // 验证数据库完整性
+    async validateDatabase() {
+        if (!this.db || this.useLocalStorage) {
+            return false
+        }
+
+        try {
+            // 检查所有必需的对象存储是否存在
+            const requiredStores = [
+                this.storeName,
+                'images',
+                'avatars',
+                'chatSessions',
+                'chatSessionMessages',
+                'customComponents'
+            ]
+
+            for (const storeName of requiredStores) {
+                if (!this.db.objectStoreNames.contains(storeName)) {
+                    console.error(`[IndexedDB] 缺少必需的对象存储: ${storeName}`)
+                    return false
+                }
+            }
+
+            // 尝试执行一个简单的读取操作来验证数据库是否可用
+            const transaction = this.db.transaction([this.storeName], 'readonly')
+            const objectStore = transaction.objectStore(this.storeName)
+
+            return new Promise((resolve, reject) => {
+                transaction.onerror = () => {
+                    console.error('[IndexedDB] 数据库验证失败:', transaction.error)
+                    resolve(false)
+                }
+
+                transaction.oncomplete = () => {
+                    console.log('[IndexedDB] 数据库验证成功')
+                    resolve(true)
+                }
+
+                // 尝试获取第一条记录
+                const request = objectStore.get('test_validation_key')
+                request.onsuccess = () => {
+                    // 验证成功
+                }
+            })
+        } catch (error) {
+            console.error('[IndexedDB] 数据库验证过程中发生错误:', error)
+            return false
+        }
     }
 
     // 保存智能体头像

@@ -373,19 +373,41 @@
                     <ComponentRenderer :component="component" />
                   </template>
                 </div>
-                <div v-else @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
-                  <template v-if="message.metadata && message.metadata.files && message.metadata.files.length > 0">
-                    <div v-for="(file, index) in message.metadata.files" :key="index">
-                      <FileDisplay
-                        :file-name="file.name"
-                        :file-content="file.content"
-                        :file-size="file.size"
-                        @click="handleFileClick"
-                      />
+                <div v-else-if="message.role === 'user'" @contextmenu.prevent.stop="handleChatContextMenu($event, message)">
+                  <!-- 编辑模式：显示输入框 -->
+                  <div v-if="editingMessageId === message.id" class="message-edit-container">
+                    <textarea
+                      class="message-edit-input"
+                      v-model="editingMessageContent"
+                      rows="3"
+                      :ref="el => { if (el && editingMessageId === message.id) el.focus() }"
+                      @keydown.ctrl.enter.stop="confirmEditMessage(message)"
+                      @keydown.meta.enter.stop="confirmEditMessage(message)"
+                      @keydown.esc.stop="cancelEditMessage"
+                    ></textarea>
+                    <div class="message-edit-actions">
+                      <button class="message-edit-confirm-btn" @click="confirmEditMessage(message)" title="确认修改">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                        </svg>
+                      </button>
                     </div>
-                  </template>
-                  <template v-if="message.content">
-                    {{ message.content }}
+                  </div>
+                  <!-- 正常模式：显示消息内容 -->
+                  <template v-else>
+                    <template v-if="message.metadata && message.metadata.files && message.metadata.files.length > 0">
+                      <div v-for="(file, index) in message.metadata.files" :key="index">
+                        <FileDisplay
+                          :file-name="file.name"
+                          :file-content="file.content"
+                          :file-size="file.size"
+                          @click="handleFileClick"
+                        />
+                      </div>
+                    </template>
+                    <template v-if="message.content">
+                      {{ message.content }}
+                    </template>
                   </template>
                 </div>
               </div>
@@ -533,20 +555,6 @@
             <path d="M7 6l5 5 5-5"/>
           </svg>
         </button>
-        
-        <!-- 总结对话加载覆盖层 -->
-        <transition name="fade">
-          <div v-if="isSummarizing" class="summarizing-overlay">
-            <div class="summarizing-content">
-              <div class="summarizing-spinner">
-                <div class="spinner-ring"></div>
-                <div class="spinner-ring"></div>
-                <div class="spinner-ring"></div>
-              </div>
-              <div class="summarizing-text">正在总结对话...</div>
-            </div>
-          </div>
-        </transition>
       </div>
       <div class="chat-input-area" v-if="currentAgent">
         <!-- 已上传文件显示区域 -->
@@ -3438,6 +3446,7 @@ export default {
       showEditMessageModal: false,
       editingMessage: null,
       editingMessageContent: '',
+      editingMessageId: null, // 当前正在编辑的消息ID
       // 侧边栏展开状态
       sidebarExpanded: true,
       // 动态岛显示内容状态
@@ -8738,16 +8747,11 @@ ${conversationText}
         })
     },
     editMessage(message) {
-      // 打开编辑弹窗并设置初始内容
+      // 进入编辑模式
       this.editingMessage = message
       this.editingMessageContent = message.content
-      this.showEditMessageModal = true
-      // 在弹窗打开后聚焦到文本框
-      this.$nextTick(() => {
-        if (this.$refs.editMessageTextarea) {
-          this.$refs.editMessageTextarea.focus()
-        }
-      })
+      this.editingMessageId = message.id
+      // 聚焦到输入框（通过模板中的 ref 实现）
     },
     async saveEditedMessage() {
       if (!this.editingMessage || !this.editingMessageContent.trim()) {
@@ -8771,6 +8775,36 @@ ${conversationText}
     },
     closeEditMessageModal() {
       this.showEditMessageModal = false
+      this.editingMessage = null
+      this.editingMessageContent = ''
+    },
+    // 确认编辑消息
+    async confirmEditMessage(message) {
+      if (!this.editingMessageContent.trim()) {
+        this.showNotification('消息内容不能为空', 'warning')
+        return
+      }
+      // 找到要编辑的消息
+      const messageIndex = this.agentConversations[this.currentAgent.id].findIndex(msg => msg.id === message.id)
+      if (messageIndex !== -1) {
+        // 更新消息内容
+        this.agentConversations[this.currentAgent.id][messageIndex].content = this.editingMessageContent
+        // 更新时间戳
+        this.agentConversations[this.currentAgent.id][messageIndex].timestamp = Date.now()
+        // 保存到本地存储
+        await this.saveCurrentConversations()
+        this.showNotification('消息已更新', 'success')
+      } else {
+        this.showNotification('未找到要编辑的消息', 'danger')
+      }
+      // 退出编辑模式
+      this.editingMessageId = null
+      this.editingMessage = null
+      this.editingMessageContent = ''
+    },
+    // 取消编辑消息
+    cancelEditMessage() {
+      this.editingMessageId = null
       this.editingMessage = null
       this.editingMessageContent = ''
     },

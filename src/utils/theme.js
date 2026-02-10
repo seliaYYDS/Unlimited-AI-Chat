@@ -99,10 +99,6 @@ export class ThemeManager {
 
         this.generateColorVariants(settings.primaryColor)
 
-        // 为加载圆圈设置次色调和渐变色2（使用主色调的变体）
-        root.style.setProperty('--secondary-color', this.lightenColor(settings.primaryColor, 0.15))
-        root.style.setProperty('--gradient-color2', this.lightenColor(settings.primaryColor, 0.3))
-
       }
 
     } else if (settings.colorMode === 'dual') {
@@ -133,15 +129,6 @@ export class ThemeManager {
 
         // root.style.setProperty('--avatar-color', settings.secondaryColor)
 
-        // 为加载圆圈设置渐变色2（使用次色调的变体）
-        root.style.setProperty('--gradient-color2', this.lightenColor(settings.secondaryColor, 0.15))
-
-      } else {
-
-        // 如果没有设置次色调，使用主色调的变体
-        root.style.setProperty('--secondary-color', this.lightenColor(settings.primaryColor, 0.15))
-        root.style.setProperty('--gradient-color2', this.lightenColor(settings.primaryColor, 0.3))
-
       }
 
       // 生成主色调的变体
@@ -161,38 +148,31 @@ export class ThemeManager {
         // 设置渐变颜色变量
         root.style.setProperty('--gradient-color1', settings.gradientColor1)
         root.style.setProperty('--gradient-color2', settings.gradientColor2)
-
+        
         // 所有元素使用颜色一与二的渐变
         root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${settings.gradientColor2} 100%)`)
         root.style.setProperty('--title-color', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${settings.gradientColor2} 100%)`)
         root.style.setProperty('--component-color', settings.gradientColor1)
         root.style.setProperty('--avatar-color', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${settings.gradientColor2} 100%)`)
-
+        
         // 为主色调和悬停状态设置渐变色
         root.style.setProperty('--primary-color', settings.gradientColor1)
         root.style.setProperty('--primary-hover', settings.gradientColor2)
-
-        // 为加载圆圈设置次色调（使用渐变色1和2的中间值）
-        root.style.setProperty('--secondary-color', settings.gradientColor2)
-
+        
       } else if (settings.gradientColor1) {
-
+        
         // 设置渐变颜色变量
-        const color2 = this.lightenColor(settings.gradientColor1, 0.2)
         root.style.setProperty('--gradient-color1', settings.gradientColor1)
-        root.style.setProperty('--gradient-color2', color2)
-
-        root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${color2} 100%)`)
-        root.style.setProperty('--title-color', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${color2} 100%)`)
+        root.style.setProperty('--gradient-color2', this.lightenColor(settings.gradientColor1, 0.2))
+        
+        root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${this.lightenColor(settings.gradientColor1, 0.2)} 100%)`)
+        root.style.setProperty('--title-color', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${this.lightenColor(settings.gradientColor1, 0.2)} 100%)`)
         root.style.setProperty('--component-color', settings.gradientColor1)
-        root.style.setProperty('--avatar-color', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${color2} 100%)`)
-
+        root.style.setProperty('--avatar-color', `linear-gradient(135deg, ${settings.gradientColor1} 0%, ${this.lightenColor(settings.gradientColor1, 0.2)} 100%)`)
+        
         // 为主色调和悬停状态设置渐变色
         root.style.setProperty('--primary-color', settings.gradientColor1)
-        root.style.setProperty('--primary-hover', color2)
-
-        // 为加载圆圈设置次色调
-        root.style.setProperty('--secondary-color', color2)
+        root.style.setProperty('--primary-hover', this.lightenColor(settings.gradientColor1, 0.2))
       }
 
       // 渐变样式将在CSS中使用这些变量
@@ -203,7 +183,7 @@ export class ThemeManager {
       if (settings.advancedGradientColors && settings.advancedGradientColors.length > 0) {
         const colors = settings.advancedGradientColors
         const direction = settings.gradientDirection || '135deg'
-
+        
         // 生成渐变CSS
         let gradientCSS
         if (direction === 'radial') {
@@ -220,36 +200,26 @@ export class ThemeManager {
           else if (direction === 'to-top-right') cssDirection = 'to top right'
           else if (direction === 'to-top-left') cssDirection = 'to top left'
           else if (direction === 'custom') cssDirection = `${settings.customGradientAngle || 135}deg`
-
+          
           gradientCSS = `linear-gradient(${cssDirection}, ${colors.join(', ')})`
         }
-
+        
         // 应用渐变到各个元素
         root.style.setProperty('--gradient-primary', gradientCSS)
         root.style.setProperty('--title-color', gradientCSS)
         root.style.setProperty('--avatar-color', gradientCSS)
-
+        
         // 使用第一个颜色作为主色调
         root.style.setProperty('--primary-color', colors[0])
         root.style.setProperty('--component-color', colors[0])
-
+        
         // 使用最后一个颜色作为悬停状态
         root.style.setProperty('--primary-hover', colors[colors.length - 1])
-
+        
         // 设置渐变颜色变量供其他组件使用
         colors.forEach((color, index) => {
           root.style.setProperty(`--gradient-color-${index + 1}`, color)
         })
-
-        // 为加载圆圈设置次色调和渐变色2
-        if (colors.length >= 2) {
-          root.style.setProperty('--secondary-color', colors[1])
-          root.style.setProperty('--gradient-color2', colors[1])
-        } else if (colors.length === 1) {
-          // 如果只有一个颜色，使用其变体
-          root.style.setProperty('--secondary-color', this.lightenColor(colors[0], 0.15))
-          root.style.setProperty('--gradient-color2', this.lightenColor(colors[0], 0.3))
-        }
       }
     }
 
