@@ -1,7 +1,11 @@
 <template>
   <div
     class="app"
-    :class="{ 'theme-dark': isDarkTheme }"
+    :class="{
+      'theme-dark': isDarkTheme,
+      'mobile-portrait': isPortraitMobile,
+      'sidebar-open': isPortraitMobile && sidebarExpanded
+    }"
     :style="{
       '--modal-backdrop-blur': styleSettings.modalBackdropBlur ? `${styleSettings.modalBackdropBlurAmount}px` : '0px',
       '--modal-backdrop-opacity': styleSettings.modalBackdropOpacity || 0.5
@@ -178,6 +182,23 @@
         </button>
         </div>
     </div>
+    <div
+      v-if="isPortraitMobile && sidebarExpanded"
+      class="mobile-sidebar-overlay"
+      @click="closeSidebarForMobile"
+    ></div>
+    <button
+      v-if="isPortraitMobile && !sidebarExpanded"
+      class="mobile-sidebar-fab"
+      type="button"
+      @click="toggleSidebar"
+      aria-label="打开侧边栏"
+      title="打开侧边栏"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/>
+      </svg>
+    </button>
     <!-- 主内容区域 -->
     <div class="main-content" :class="{ 'mode-transitioning': isTransitioning }" v-if="!isTavernMode">
       <div class="dynamic-island" :class="{ 'has-music': isMusicPlaying && currentMusic && settings.enableDynamicIslandMusicInfo }" v-if="currentAgent" @mouseenter="showDynamicIslandContent = true" @mouseleave="showDynamicIslandContent = false">
@@ -315,7 +336,16 @@
           <p>或创建一个新的智能体</p>
         </div>
         <div v-else-if="currentAgentConversations.length === 0" class="empty-state">
-          <div class="empty-icon">
+          <div v-if="currentAgentMemory" class="memory-display">
+            <div class="memory-header">
+              <h3>{{ currentAgent.name }} 的记忆</h3>
+            </div>
+            <div class="memory-content" v-html="MarkdownParser.formatAIOutput(currentAgentMemory, settings.enableFormatting)"></div>
+            <div class="memory-footer">
+              <p>发送消息开始对话，AI 会基于这些记忆与您交流</p>
+            </div>
+          </div>
+          <div v-else class="empty-icon">
             <svg viewBox="0 0 1024 1024" class="icon" version="1.1" xmlns="http://www.w3.org/2000/svg">
               <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
               <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
@@ -330,8 +360,8 @@
               </g>
             </svg>
           </div>
-          <h3>开始与 {{ currentAgent.name }} 对话</h3>
-          <p>在下方输入框发送第一条消息</p>
+          <h3 v-if="!currentAgentMemory">开始与 {{ currentAgent.name }} 对话</h3>
+          <p v-if="!currentAgentMemory">在下方输入框发送第一条消息</p>
         </div>
         <div v-else class="messages-container">
           <!-- 优化的消息渲染，为长对话列表做准备 -->
@@ -2915,6 +2945,18 @@ function render(params) {
                   </svg>
                 </button>
               </div>
+              <div class="tools-spacer"></div>
+              <div class="tools-group tools-group-end">
+                <button
+                  class="tool-btn close-notepad-btn"
+                  @click="closeNotepadModal"
+                  title="关闭草稿纸"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.29 19.71 2.88 18.3 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.29-6.3z"/>
+                  </svg>
+                </button>
+              </div>
             </div>
             <canvas
               ref="notepadCanvas"
@@ -2998,6 +3040,13 @@ function render(params) {
       @play-next-music="playNextMusicFromPlayer"
       @play-prev-music="playPrevMusicFromPlayer"
     />
+    <!-- 特效 Canvas 层 -->
+    <canvas 
+      ref="effectsCanvas" 
+      class="effects-canvas"
+      :width="canvasWidth"
+      :height="canvasHeight"
+    ></canvas>
     </div>
 </template>
 <script>
@@ -3064,6 +3113,7 @@ export default {
       storageManager: null,
       aiService: null,
       themeManager: null,
+      MarkdownParser: MarkdownParser,
       musicColorExtractor: null,
       originalThemeColor: null,
       isDarkTheme: false,
@@ -3340,7 +3390,33 @@ export default {
         enableMusicColorSync: false,
         enableSplashAnimation: true,
         splashDuration: 500,
-        splashAnimationType: 'scale'
+        splashAnimationType: 'scale',
+        // 特效设置
+        enableEffects: false,
+        enableClickEffects: true,
+        enableTrailEffects: true,
+        // 特效颜色模式
+        effectColorMode: 'themeColors', // themeColors, customColors, random
+        // 点击特效参数
+        clickEffectType: 'explosion',
+        clickEffectSpeed: 2,
+        clickEffectGravity: 0.1,
+        clickEffectParticleSize: 4,
+        clickEffectParticleCount: 12,
+        clickEffectDecay: 0.02,
+        // 拖尾特效参数
+        trailEffectType: 'particles',
+        trailEffectSpeed: 1,
+        trailEffectParticleSize: 3,
+        trailEffectDecay: 0.03,
+        trailEffectMaxLength: 50,
+        trailEffectLineWidth: 2,
+        // 按住特效参数
+        enableHoldEffects: true,
+        holdEffectType: 'pulse',
+        holdEffectSpeed: 1,
+        holdEffectSize: 50,
+        holdEffectIntensity: 0.5
       },
       // AI 设置
       aiSettings: {
@@ -3449,6 +3525,8 @@ export default {
       editingMessageId: null, // 当前正在编辑的消息ID
       // 侧边栏展开状态
       sidebarExpanded: true,
+      isPortraitMobile: false,
+      desktopSidebarExpanded: true,
       // 动态岛显示内容状态
       showDynamicIslandContent: false,
       // 音乐播放状态
@@ -3479,7 +3557,24 @@ export default {
         startPosition: { x: 0, y: 0 }, // 记录起始位置
         placeholderIndex: -1,
         originalOrder: []
-      }
+      },
+      // 特效 Canvas 相关
+      canvasWidth: 0,
+      canvasHeight: 0,
+      effectsCtx: null,
+      effectsCanvas: null,
+      // 特效状态
+      particles: [], // 点击特效粒子数组
+      trailPoints: [], // 拖尾特效点数组
+      holdParticles: [], // 按住特效粒子数组
+      isMouseHolding: false, // 鼠标是否按住
+      holdStartTime: 0, // 按住开始时间
+      holdDelayTime: 500, // 按住延迟触发时间（毫秒）
+      holdActivated: false, // 按住特效是否已激活
+      holdPosition: { x: 0, y: 0 }, // 按住位置
+      holdTime: 0, // 按住时间
+      lastMousePosition: { x: 0, y: 0 }, // 上一次鼠标位置
+      animationId: null // 动画帧ID
     }
   },
   async mounted() {
@@ -3552,6 +3647,10 @@ export default {
     } else {
       this.settings.apiKey = ''
     }
+    // 确保 customModelName 存在（兼容旧数据）
+    if (!this.settings.customModelName) {
+      this.settings.customModelName = ''
+    }
     // 强制从 settings 同步 AI 设置（优先使用最新的 settings）
     this.syncAiSettingsFromSettings()
     console.log('App mounted, synced aiSettings:', this.aiSettings)
@@ -3613,6 +3712,7 @@ export default {
     this.settings.contextLength = Number(this.settings.contextLength) || 50
     // 加载样式设置
     this.loadStyleSettings()
+    this.updateResponsiveLayout()
     // 开启动画：根据设置决定是否显示问候动画
     if (this.styleSettings.enableSplashAnimation) {
       setTimeout(() => {
@@ -3627,6 +3727,8 @@ export default {
       document.body.setAttribute('data-shine-enabled', this.settings.enableShineEffect?.toString() || 'true')
       // 初始化ResizeObserver
       this.initResizeObserver()
+      // 初始化特效 Canvas
+      this.initEffectsCanvas()
     })
     // 初始化模型列表
     this.updateModelList()
@@ -3674,6 +3776,10 @@ export default {
     // 移除图片预览器拖拽事件监听器
     document.removeEventListener('mousemove', this.handleViewerDrag)
     document.removeEventListener('mouseup', this.stopViewerDrag)
+    // 移除特效 Canvas 事件监听器
+    window.removeEventListener('resize', this.handleWindowResize)
+    this.removeEffectsEventListeners()
+    this.stopEffectsAnimation()
     // 移除滚动事件监听器
     const container = this.$refs.messagesContainer
     if (container) {
@@ -3732,6 +3838,35 @@ export default {
           this.updateExportPreview()
         }
       }
+    },
+    'styleSettings.enableEffects': {
+      handler(newValue) {
+        if (newValue) {
+          // 重新初始化特效事件监听器
+          this.removeEffectsEventListeners()
+          this.initEffectsEventListeners()
+        } else {
+          // 清空所有特效
+          this.particles = []
+          this.trailPoints = []
+        }
+      }
+    },
+    'styleSettings.enableClickEffects': {
+      handler(newValue) {
+        if (!newValue) {
+          // 清空点击粒子
+          this.particles = []
+        }
+      }
+    },
+    'styleSettings.enableTrailEffects': {
+      handler(newValue) {
+        if (!newValue) {
+          // 清空拖尾点
+          this.trailPoints = []
+        }
+      }
     }
   },
   computed: {
@@ -3739,6 +3874,12 @@ export default {
     currentAgentConversations() {
       if (!this.currentAgent) return []
       return this.agentConversations[this.currentAgent.id] || []
+    },
+    // 当前智能体的记忆内容
+    currentAgentMemory() {
+      if (!this.currentAgent) return null
+      const memory = this.storageManager.getAgentMemory(this.currentAgent.id)
+      return memory && memory.content && memory.content.trim() ? memory.content : null
     },
     // 当前智能体是否正在生成回复
     currentAgentIsGenerating() {
@@ -3833,6 +3974,950 @@ export default {
     }
   },
   methods: {
+    // ==================== 特效 Canvas 相关方法 ====================
+    // 初始化特效 Canvas
+    initEffectsCanvas() {
+      this.effectsCanvas = this.$refs.effectsCanvas
+      if (this.effectsCanvas) {
+        this.effectsCtx = this.effectsCanvas.getContext('2d')
+        this.resizeEffectsCanvas()
+        // 添加窗口调整事件监听器
+        window.addEventListener('resize', this.handleWindowResize)
+        // 添加鼠标事件监听器
+        this.initEffectsEventListeners()
+        // 开始特效渲染循环
+        this.startEffectsAnimation()
+      }
+    },
+    // 调整 Canvas 尺寸
+    resizeEffectsCanvas() {
+      if (this.effectsCanvas) {
+        this.canvasWidth = window.innerWidth
+        this.canvasHeight = window.innerHeight
+        this.effectsCanvas.width = this.canvasWidth
+        this.effectsCanvas.height = this.canvasHeight
+      }
+    },
+    // 处理窗口调整事件
+    handleWindowResize() {
+      this.resizeEffectsCanvas()
+      this.updateResponsiveLayout()
+    },
+    updateResponsiveLayout() {
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+
+      document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`)
+
+      const isPortraitMobile = viewportWidth <= 768 && viewportHeight > viewportWidth
+
+      if (isPortraitMobile && !this.isPortraitMobile) {
+        this.desktopSidebarExpanded = this.sidebarExpanded
+        this.sidebarExpanded = false
+        this.showDynamicIslandContent = false
+      } else if (!isPortraitMobile && this.isPortraitMobile) {
+        this.sidebarExpanded = this.desktopSidebarExpanded
+      }
+
+      this.isPortraitMobile = isPortraitMobile
+    },
+    // 初始化特效事件监听器
+    initEffectsEventListeners() {
+      // 鼠标点击事件
+      document.addEventListener('click', this.handleClickEffect)
+      // 鼠标移动事件
+      document.addEventListener('mousemove', this.handleMouseMoveEffect)
+      // 鼠标按下事件
+      document.addEventListener('mousedown', this.handleMouseDownEffect)
+      // 鼠标释放事件
+      document.addEventListener('mouseup', this.handleMouseUpEffect)
+    },
+    // 移除特效事件监听器
+    removeEffectsEventListeners() {
+      document.removeEventListener('click', this.handleClickEffect)
+      document.removeEventListener('mousemove', this.handleMouseMoveEffect)
+      document.removeEventListener('mousedown', this.handleMouseDownEffect)
+      document.removeEventListener('mouseup', this.handleMouseUpEffect)
+    },
+    // 处理鼠标点击特效
+    handleClickEffect(event) {
+      if (!this.styleSettings.enableEffects || !this.styleSettings.enableClickEffects) return
+
+      const settings = this.styleSettings
+      const particleCount = settings.clickEffectParticleCount
+
+      switch (settings.clickEffectType) {
+        case 'explosion':
+          // 爆炸效果
+          for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 / particleCount) * i
+            const speed = settings.clickEffectSpeed * (1 + Math.random() * 0.5)
+            this.particles.push({
+              x: event.clientX,
+              y: event.clientY,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              life: 1,
+              decay: settings.clickEffectDecay * (0.8 + Math.random() * 0.4),
+              color: this.getRandomColor(),
+              size: settings.clickEffectParticleSize * (0.8 + Math.random() * 0.4),
+              type: 'explosion',
+              gravity: settings.clickEffectGravity
+            })
+          }
+          break
+
+        case 'ripple':
+          // 涟漪效果
+          for (let i = 0; i < 3; i++) {
+            this.particles.push({
+              x: event.clientX,
+              y: event.clientY,
+              vx: 0,
+              vy: 0,
+              life: 1,
+              decay: settings.clickEffectDecay * 0.5,
+              color: this.getRandomColor(),
+              size: 0,
+              maxSize: settings.clickEffectParticleSize * (10 + i * 5),
+              type: 'ripple',
+              delay: i * 0.1
+            })
+          }
+          break
+
+        case 'sparkle':
+          // 闪烁效果
+          for (let i = 0; i < particleCount; i++) {
+            const angle = Math.random() * Math.PI * 2
+            const distance = 20 + Math.random() * 40
+            this.particles.push({
+              x: event.clientX + Math.cos(angle) * distance,
+              y: event.clientY + Math.sin(angle) * distance,
+              vx: 0,
+              vy: 0,
+              life: 1,
+              decay: settings.clickEffectDecay * (0.5 + Math.random() * 1),
+              color: this.getRandomColor(),
+              size: settings.clickEffectParticleSize * (0.5 + Math.random()),
+              type: 'sparkle',
+              rotation: Math.random() * Math.PI * 2
+            })
+          }
+          break
+
+        case 'firework':
+          // 烟花效果
+          const mainParticle = {
+            x: event.clientX,
+            y: event.clientY,
+            vx: 0,
+            vy: -settings.clickEffectSpeed * 5,
+            life: 1,
+            decay: 0.02,
+            color: this.getRandomColor(),
+            size: settings.clickEffectParticleSize,
+            type: 'firework-main',
+            particles: []
+          }
+          this.particles.push(mainParticle)
+          break
+
+        case 'starburst':
+          // 星爆效果
+          for (let i = 0; i < particleCount * 2; i++) {
+            const angle = Math.random() * Math.PI * 2
+            const speed = settings.clickEffectSpeed * (1 + Math.random() * 1.5)
+            const length = 20 + Math.random() * 30
+            this.particles.push({
+              x: event.clientX,
+              y: event.clientY,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              life: 1,
+              decay: settings.clickEffectDecay * (0.5 + Math.random() * 0.5),
+              color: this.getRandomColor(),
+              size: settings.clickEffectParticleSize * (0.5 + Math.random() * 0.5),
+              type: 'starburst',
+              length: length
+            })
+          }
+          break
+
+        case 'shockwave':
+          // 冲击波效果
+          for (let i = 0; i < 4; i++) {
+            this.particles.push({
+              x: event.clientX,
+              y: event.clientY,
+              vx: 0,
+              vy: 0,
+              life: 1,
+              decay: settings.clickEffectDecay * 0.3,
+              color: this.getRandomColor(),
+              size: 0,
+              maxSize: settings.clickEffectParticleSize * (5 + i * 3),
+              type: 'shockwave',
+              delay: i * 0.08
+            })
+          }
+          break
+
+        case 'spiral':
+          // 螺旋效果
+          for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 / particleCount) * i
+            const radius = 0
+            this.particles.push({
+              x: event.clientX,
+              y: event.clientY,
+              vx: 0,
+              vy: 0,
+              life: 1,
+              decay: settings.clickEffectDecay * 0.7,
+              color: this.getRandomColor(),
+              size: settings.clickEffectParticleSize * (0.6 + Math.random() * 0.4),
+              type: 'spiral',
+              angle: angle,
+              radius: radius,
+              speed: settings.clickEffectSpeed * 2
+            })
+          }
+          break
+
+        case 'bubbles':
+          // 气泡效果
+          for (let i = 0; i < particleCount; i++) {
+            const angle = Math.random() * Math.PI * 2
+            const distance = Math.random() * 30
+            this.particles.push({
+              x: event.clientX + Math.cos(angle) * distance,
+              y: event.clientY + Math.sin(angle) * distance,
+              vx: 0,
+              vy: -settings.clickEffectSpeed * (0.5 + Math.random() * 0.5),
+              life: 1,
+              decay: settings.clickEffectDecay * (0.5 + Math.random() * 0.5),
+              color: this.getRandomColor(),
+              size: settings.clickEffectParticleSize * (0.5 + Math.random() * 1),
+              type: 'bubbles',
+              wobble: Math.random() * Math.PI * 2
+            })
+          }
+          break
+      }
+    },
+    // 处理鼠标移动特效
+    handleMouseMoveEffect(event) {
+      if (!this.styleSettings.enableEffects || !this.styleSettings.enableTrailEffects) return
+
+      const settings = this.styleSettings
+
+      // 添加拖尾点
+      const trailPoint = {
+        x: event.clientX,
+        y: event.clientY,
+        life: 1,
+        decay: settings.trailEffectDecay,
+        size: settings.trailEffectParticleSize * (0.8 + Math.random() * 0.4),
+        color: this.getRandomColor(),
+        type: settings.trailEffectType,
+        timestamp: Date.now()
+      }
+
+      this.trailPoints.push(trailPoint)
+
+      // 限制拖尾点数量
+      if (this.trailPoints.length > settings.trailEffectMaxLength) {
+        this.trailPoints.shift()
+      }
+
+      // 如果鼠标正在按住且特效已激活，更新按住位置
+      if (this.isMouseHolding && this.holdActivated) {
+        this.holdPosition = { x: event.clientX, y: event.clientY }
+      }
+    },
+    // 处理鼠标按下特效
+    handleMouseDownEffect(event) {
+      if (!this.styleSettings.enableEffects || !this.styleSettings.enableHoldEffects) return
+      if (event.button !== 0) return // 只响应左键
+
+      this.isMouseHolding = true
+      this.holdStartTime = Date.now()
+      this.holdActivated = false
+      this.holdPosition = { x: event.clientX, y: event.clientY }
+      this.holdTime = 0
+    },
+    // 处理鼠标释放特效
+    handleMouseUpEffect() {
+      if (!this.isMouseHolding) return
+
+      this.isMouseHolding = false
+      this.holdActivated = false
+      this.holdStartTime = 0
+      this.holdTime = 0
+      // 清空按住特效粒子
+      this.holdParticles = []
+    },
+    // 获取随机颜色
+    getRandomColor() {
+      const colorMode = this.styleSettings.effectColorMode
+
+      switch (colorMode) {
+        case 'themeColors':
+          // 使用主题颜色
+          return this.getThemeColor()
+        case 'customColors':
+          // 使用自定义组件颜色
+          return this.getComponentColor()
+        case 'random':
+          // 使用随机颜色
+          return this.getRandomHexColor()
+        default:
+          return this.getThemeColor()
+      }
+    },
+    // 获取主题颜色
+    getThemeColor() {
+      const colors = []
+
+      // 根据主题颜色模式选择颜色
+      if (this.styleSettings.colorMode === 'single') {
+        // 单色模式 - 使用主色调
+        colors.push(this.hexToRgba(this.styleSettings.primaryColor))
+      } else if (this.styleSettings.colorMode === 'dual') {
+        // 双色模式 - 使用主色调和副色调
+        colors.push(this.hexToRgba(this.styleSettings.primaryColor))
+        colors.push(this.hexToRgba(this.styleSettings.secondaryColor))
+      } else if (this.styleSettings.colorMode === 'gradient') {
+        // 渐变模式 - 使用渐变色
+        colors.push(this.hexToRgba(this.styleSettings.gradientColor1))
+        colors.push(this.hexToRgba(this.styleSettings.gradientColor2))
+      } else if (this.styleSettings.colorMode === 'advanced-gradient') {
+        // 高级渐变模式 - 使用多个渐变色
+        if (this.styleSettings.advancedGradientColors && this.styleSettings.advancedGradientColors.length > 0) {
+          this.styleSettings.advancedGradientColors.forEach(color => {
+            colors.push(this.hexToRgba(color))
+          })
+        } else {
+          // 如果高级渐变色为空，使用默认的渐变色
+          const defaultColors = ['#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
+          defaultColors.forEach(color => {
+            colors.push(this.hexToRgba(color))
+          })
+        }
+      }
+
+      // 如果没有颜色，使用默认颜色
+      if (colors.length === 0) {
+        colors.push(this.hexToRgba(this.styleSettings.primaryColor || '#ec4899'))
+        colors.push(this.hexToRgba(this.styleSettings.secondaryColor || '#3b82f6'))
+      }
+
+      return colors[Math.floor(Math.random() * colors.length)]
+    },
+    // 获取组件颜色
+    getComponentColor() {
+      const colors = []
+
+      // 组件颜色使用与主题颜色相同的 colorMode，但使用不同的颜色字段
+      if (this.styleSettings.colorMode === 'single') {
+        // 单色模式 - 使用组件主色调
+        colors.push(this.hexToRgba(this.styleSettings.componentPrimaryColor || this.styleSettings.primaryColor))
+      } else if (this.styleSettings.colorMode === 'dual') {
+        // 双色模式 - 使用组件主色调和副色调
+        colors.push(this.hexToRgba(this.styleSettings.componentPrimaryColor || this.styleSettings.primaryColor))
+        colors.push(this.hexToRgba(this.styleSettings.componentSecondaryColor || this.styleSettings.secondaryColor))
+      } else if (this.styleSettings.colorMode === 'gradient') {
+        // 渐变模式 - 使用组件渐变色
+        colors.push(this.hexToRgba(this.styleSettings.componentGradientColor1 || this.styleSettings.gradientColor1))
+        colors.push(this.hexToRgba(this.styleSettings.componentGradientColor2 || this.styleSettings.gradientColor2))
+      } else if (this.styleSettings.colorMode === 'advanced-gradient') {
+        // 高级渐变模式 - 使用组件高级渐变色
+        if (this.styleSettings.componentAdvancedGradientColors && this.styleSettings.componentAdvancedGradientColors.length > 0) {
+          this.styleSettings.componentAdvancedGradientColors.forEach(color => {
+            colors.push(this.hexToRgba(color))
+          })
+        } else if (this.styleSettings.advancedGradientColors && this.styleSettings.advancedGradientColors.length > 0) {
+          // 如果组件高级渐变色为空，回退到主题高级渐变色
+          this.styleSettings.advancedGradientColors.forEach(color => {
+            colors.push(this.hexToRgba(color))
+          })
+        } else {
+          // 如果主题高级渐变色也为空，使用默认的渐变色
+          const defaultColors = ['#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
+          defaultColors.forEach(color => {
+            colors.push(this.hexToRgba(color))
+          })
+        }
+      }
+
+      // 如果没有组件颜色，回退到主题颜色
+      if (colors.length === 0) {
+        return this.getThemeColor()
+      }
+
+      return colors[Math.floor(Math.random() * colors.length)]
+    },
+    // 获取随机颜色
+    getRandomHexColor() {
+      const colors = [
+        'rgba(236, 72, 153,', // 粉色
+        'rgba(59, 130, 246,', // 蓝色
+        'rgba(16, 185, 129,', // 绿色
+        'rgba(245, 158, 11,', // 橙色
+        'rgba(139, 92, 246,', // 紫色
+        'rgba(239, 68, 68,',  // 红色
+        'rgba(6, 182, 212,',  // 青色
+        'rgba(251, 191, 36,'  // 黄色
+      ]
+      return colors[Math.floor(Math.random() * colors.length)]
+    },
+    // 将十六进制颜色转换为 RGBA
+    hexToRgba(hex) {
+      // 移除 # 号
+      hex = hex.replace('#', '')
+
+      // 解析 RGB 值
+      const r = parseInt(hex.substring(0, 2), 16)
+      const g = parseInt(hex.substring(2, 4), 16)
+      const b = parseInt(hex.substring(4, 6), 16)
+
+      return `rgba(${r}, ${g}, ${b},`
+    },
+    // 开始特效动画循环
+    startEffectsAnimation() {
+      const animate = () => {
+        this.renderEffects()
+        this.animationId = requestAnimationFrame(animate)
+      }
+      this.animationId = requestAnimationFrame(animate)
+    },
+    // 停止特效动画循环
+    stopEffectsAnimation() {
+      if (this.animationId) {
+        cancelAnimationFrame(this.animationId)
+        this.animationId = null
+      }
+    },
+    // 渲染特效
+    renderEffects() {
+      if (!this.effectsCtx || !this.styleSettings.enableEffects) return
+
+      // 清空画布
+      this.effectsCtx.clearRect(0, 0, this.canvasWidth, this.canvasHeight)
+
+      // 渲染点击粒子特效
+      this.renderClickParticles()
+
+      // 渲染鼠标拖尾特效
+      this.renderTrailEffects()
+
+      // 渲染鼠标按住特效
+      this.renderHoldEffects()
+    },
+    // 渲染点击粒子
+    renderClickParticles() {
+      if (!this.styleSettings.enableClickEffects) return
+
+      for (let i = this.particles.length - 1; i >= 0; i--) {
+        const p = this.particles[i]
+
+        // 处理延迟
+        if (p.delay && p.delay > 0) {
+          p.delay -= 0.016
+          continue
+        }
+
+        // 根据粒子类型更新和绘制
+        switch (p.type) {
+          case 'explosion':
+            // 爆炸粒子
+            p.x += p.vx * this.styleSettings.clickEffectSpeed
+            p.y += p.vy * this.styleSettings.clickEffectSpeed
+            p.vy += p.gravity || 0
+            p.life -= p.decay
+
+            if (p.life <= 0) {
+              this.particles.splice(i, 1)
+              continue
+            }
+
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = `${p.color} ${p.life})`
+            this.effectsCtx.fill()
+            break
+
+          case 'ripple':
+            // 涟漪效果
+            p.life -= p.decay
+            p.size = (p.maxSize || 50) * (1 - p.life)
+
+            if (p.life <= 0) {
+              this.particles.splice(i, 1)
+              continue
+            }
+
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
+            this.effectsCtx.strokeStyle = `${p.color} ${p.life})`
+            this.effectsCtx.lineWidth = 2
+            this.effectsCtx.stroke()
+            break
+
+          case 'sparkle':
+            // 闪烁效果
+            p.life -= p.decay
+            p.rotation += 0.1
+
+            if (p.life <= 0) {
+              this.particles.splice(i, 1)
+              continue
+            }
+
+            this.effectsCtx.save()
+            this.effectsCtx.translate(p.x, p.y)
+            this.effectsCtx.rotate(p.rotation)
+            this.effectsCtx.fillStyle = `${p.color} ${p.life})`
+            this.effectsCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size)
+            this.effectsCtx.restore()
+            break
+
+          case 'firework-main':
+                    // 烟花主粒子
+                    p.y += p.vy * this.styleSettings.clickEffectSpeed
+                    p.life -= p.decay
+          
+                    if (p.life <= 0) {
+                      // 爆炸产生小粒子
+                      for (let j = 0; j < 20; j++) {
+                        const angle = (Math.PI * 2 / 20) * j
+                        const speed = this.styleSettings.clickEffectSpeed * (1 + Math.random() * 0.5)
+                        this.particles.push({
+                          x: p.x,
+                          y: p.y,
+                          vx: Math.cos(angle) * speed,
+                          vy: Math.sin(angle) * speed,
+                          life: 1,
+                          decay: 0.03,
+                          color: p.color,
+                          size: p.size * 0.5,
+                          type: 'explosion',
+                          gravity: 0.2
+                        })
+                      }
+                      this.particles.splice(i, 1)
+                      continue
+                    }
+          
+                    this.effectsCtx.beginPath()
+                    this.effectsCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
+                    this.effectsCtx.fillStyle = `${p.color} ${p.life})`
+                    this.effectsCtx.fill()
+                    break
+          
+                  case 'starburst':
+                    // 星爆效果
+                    p.x += p.vx
+                    p.y += p.vy
+                    p.life -= p.decay
+          
+                    if (p.life <= 0) {
+                      this.particles.splice(i, 1)
+                      continue
+                    }
+          
+                    // 绘制星形
+                    this.effectsCtx.save()
+                    this.effectsCtx.translate(p.x, p.y)
+                    this.effectsCtx.rotate(Math.atan2(p.vy, p.vx))
+                    this.effectsCtx.beginPath()
+                    this.effectsCtx.moveTo(0, -p.length * p.life)
+                    this.effectsCtx.lineTo(p.size * p.life, 0)
+                    this.effectsCtx.lineTo(0, p.length * p.life)
+                    this.effectsCtx.lineTo(-p.size * p.life, 0)
+                    this.effectsCtx.closePath()
+                    this.effectsCtx.fillStyle = `${p.color} ${p.life})`
+                    this.effectsCtx.fill()
+                    this.effectsCtx.restore()
+                    break
+          
+                  case 'shockwave':
+                    // 冲击波效果
+                    if (p.delay && p.delay > 0) {
+                      p.delay -= 0.016
+                      continue
+                    }
+          
+                    p.life -= p.decay
+                    p.size = (p.maxSize || 50) * (1 - p.life)
+          
+                    if (p.life <= 0) {
+                      this.particles.splice(i, 1)
+                      continue
+                    }
+          
+                    this.effectsCtx.beginPath()
+                    this.effectsCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
+                    this.effectsCtx.strokeStyle = `${p.color} ${p.life})`
+                    this.effectsCtx.lineWidth = 3
+                    this.effectsCtx.stroke()
+                    break
+          
+                  case 'spiral':
+                    // 螺旋效果
+                    p.angle += 0.1 * this.styleSettings.clickEffectSpeed
+                    p.radius += 0.5 * this.styleSettings.clickEffectSpeed
+                    p.life -= p.decay
+          
+                    if (p.life <= 0) {
+                      this.particles.splice(i, 1)
+                      continue
+                    }
+          
+                    const spiralX = p.x + Math.cos(p.angle) * p.radius
+                    const spiralY = p.y + Math.sin(p.angle) * p.radius
+          
+                    this.effectsCtx.beginPath()
+                    this.effectsCtx.arc(spiralX, spiralY, p.size * p.life, 0, Math.PI * 2)
+                    this.effectsCtx.fillStyle = `${p.color} ${p.life})`
+                    this.effectsCtx.fill()
+                    break
+          
+                  case 'bubbles':
+                    // 气泡效果
+                    p.x += Math.sin(p.wobble) * 0.5
+                    p.wobble += 0.1
+                    p.y += p.vy
+                    p.life -= p.decay
+          
+                    if (p.life <= 0) {
+                      this.particles.splice(i, 1)
+                      continue
+                    }
+          
+                    // 绘制气泡
+                    this.effectsCtx.beginPath()
+                    this.effectsCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
+                    this.effectsCtx.strokeStyle = `${p.color} ${p.life})`
+                    this.effectsCtx.lineWidth = 1
+                    this.effectsCtx.stroke()
+          
+                    // 气泡高光
+                    this.effectsCtx.beginPath()
+                    this.effectsCtx.arc(p.x - p.size * 0.3, p.y - p.size * 0.3, p.size * 0.2 * p.life, 0, Math.PI * 2)
+                    this.effectsCtx.fillStyle = `${p.color} ${p.life * 0.8})`
+                    this.effectsCtx.fill()
+                    break        }
+      }
+    },
+    // 渲染拖尾特效
+    renderTrailEffects() {
+      if (!this.styleSettings.enableTrailEffects) return
+
+      const settings = this.styleSettings
+
+      for (let i = this.trailPoints.length - 1; i >= 0; i--) {
+        const p = this.trailPoints[i]
+
+        // 更新拖尾点生命周期
+        p.life -= p.decay
+
+        // 移除死亡的拖尾点
+        if (p.life <= 0) {
+          this.trailPoints.splice(i, 1)
+          continue
+        }
+
+        // 根据拖尾类型绘制
+        switch (p.type) {
+          case 'particles':
+            // 粒子拖尾
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = `${p.color} ${p.life})`
+            this.effectsCtx.fill()
+            break
+
+          case 'connected':
+            // 连线拖尾
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = `${p.color} ${p.life})`
+            this.effectsCtx.fill()
+
+            // 如果有下一个点，绘制连线
+            if (i < this.trailPoints.length - 1) {
+              const nextP = this.trailPoints[i + 1]
+              this.effectsCtx.beginPath()
+              this.effectsCtx.moveTo(p.x, p.y)
+              this.effectsCtx.lineTo(nextP.x, nextP.y)
+              this.effectsCtx.strokeStyle = `${p.color} ${Math.min(p.life, nextP.life) * 0.6})`
+              this.effectsCtx.lineWidth = settings.trailEffectLineWidth * p.life
+              this.effectsCtx.stroke()
+            }
+            break
+
+          case 'wave':
+            // 波浪拖尾
+            const timeOffset = (Date.now() - p.timestamp) * 0.005 * settings.trailEffectSpeed
+            const waveY = p.y + Math.sin(timeOffset) * 5 * p.life
+
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(p.x, waveY, p.size * p.life, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = `${p.color} ${p.life})`
+            this.effectsCtx.fill()
+            break
+
+          case 'glow':
+            // 发光拖尾
+            const gradient = this.effectsCtx.createRadialGradient(
+              p.x, p.y, 0,
+              p.x, p.y, p.size * 3 * p.life
+            )
+            gradient.addColorStop(0, `${p.color} ${p.life})`)
+            gradient.addColorStop(0.5, `${p.color} ${p.life * 0.3})`)
+            gradient.addColorStop(1, `${p.color} 0)`)
+
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(p.x, p.y, p.size * 3 * p.life, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = gradient
+            this.effectsCtx.fill()
+            break
+
+          case 'ribbon':
+            // 丝带拖尾
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = `${p.color} ${p.life * 0.8})`
+            this.effectsCtx.fill()
+
+            // 绘制波浪线条
+            if (i < this.trailPoints.length - 1) {
+              const nextP = this.trailPoints[i + 1]
+              const waveOffset = Math.sin((Date.now() - p.timestamp) * 0.01 * settings.trailEffectSpeed) * 5
+
+              this.effectsCtx.beginPath()
+              this.effectsCtx.moveTo(p.x, p.y + waveOffset)
+              
+              // 创建平滑曲线
+              const midX = (p.x + nextP.x) / 2
+              const midY = (p.y + nextP.y) / 2 + waveOffset
+              this.effectsCtx.quadraticCurveTo(midX, midY, nextP.x, nextP.y)
+              
+              this.effectsCtx.strokeStyle = `${p.color} ${Math.min(p.life, nextP.life) * 0.7})`
+              this.effectsCtx.lineWidth = p.size * 2 * p.life
+              this.effectsCtx.lineCap = 'round'
+              this.effectsCtx.stroke()
+            }
+            break
+
+          case 'matrix':
+            // 矩阵拖尾
+            const matrixChars = ['0', '1']
+            const char = matrixChars[Math.floor(Math.random() * matrixChars.length)]
+            const fontSize = p.size * 2 * p.life
+
+            this.effectsCtx.font = `${fontSize}px monospace`
+            this.effectsCtx.fillStyle = `${p.color} ${p.life})`
+            this.effectsCtx.fillText(char, p.x, p.y)
+
+            // 向上移动效果
+            p.y -= settings.trailEffectSpeed * 0.5
+            break
+
+          case 'comet':
+            // 彗星拖尾
+            // 彗星头部
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(p.x, p.y, p.size * 1.5 * p.life, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = `${p.color} ${p.life})`
+            this.effectsCtx.fill()
+
+            // 彗星尾巴
+            if (i < this.trailPoints.length - 1) {
+              const nextP = this.trailPoints[i + 1]
+              const tailLength = Math.min(i, 5)
+              
+              for (let j = 0; j < tailLength; j++) {
+                if (i + j + 1 >= this.trailPoints.length) break
+                const tailP = this.trailPoints[i + j + 1]
+                const tailAlpha = (1 - j / tailLength) * p.life * 0.5
+                
+                this.effectsCtx.beginPath()
+                this.effectsCtx.arc(tailP.x, tailP.y, p.size * (1 - j / tailLength) * p.life, 0, Math.PI * 2)
+                this.effectsCtx.fillStyle = `${p.color} ${tailAlpha})`
+                this.effectsCtx.fill()
+              }
+            }
+            break
+
+          case 'smoke':
+            // 烟雾拖尾
+            const smokeSize = p.size * (2 + Math.sin((Date.now() - p.timestamp) * 0.005) * 0.5) * p.life
+            const smokeGradient = this.effectsCtx.createRadialGradient(
+              p.x, p.y, 0,
+              p.x, p.y, smokeSize
+            )
+            smokeGradient.addColorStop(0, `${p.color} ${p.life * 0.3})`)
+            smokeGradient.addColorStop(1, `${p.color} 0)`)
+
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(p.x, p.y, smokeSize, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = smokeGradient
+            this.effectsCtx.fill()
+
+            // 烟雾向上飘动
+            p.y -= settings.trailEffectSpeed * 0.3
+            p.x += Math.sin((Date.now() - p.timestamp) * 0.003) * 0.5
+            break
+        }
+      }
+    },
+    // 渲染鼠标按住特效
+    renderHoldEffects() {
+      if (!this.styleSettings.enableHoldEffects || !this.isMouseHolding) return
+
+      // 检查是否达到延迟触发时间
+      if (!this.holdActivated) {
+        const holdDuration = Date.now() - this.holdStartTime
+        if (holdDuration >= this.holdDelayTime) {
+          this.holdActivated = true
+          this.holdTime = 0
+        } else {
+          // 还未达到延迟时间，不显示特效
+          return
+        }
+      }
+
+      const settings = this.styleSettings
+      const x = this.holdPosition.x
+      const y = this.holdPosition.y
+      const size = settings.holdEffectSize
+      const intensity = settings.holdEffectIntensity
+      const speed = settings.holdEffectSpeed
+
+      // 更新按住时间
+      this.holdTime += 0.016 * speed
+
+      switch (settings.holdEffectType) {
+        case 'expand':
+          // 扩散效果
+          const expandRadius = (this.holdTime * 50) % size
+          const alpha = 1 - (expandRadius / size)
+
+          this.effectsCtx.beginPath()
+          this.effectsCtx.arc(x, y, expandRadius, 0, Math.PI * 2)
+          this.effectsCtx.strokeStyle = `${this.getRandomColor()} ${alpha * intensity})`
+          this.effectsCtx.lineWidth = 2
+          this.effectsCtx.stroke()
+          break
+
+        case 'pulse':
+          // 脉冲效果
+          const pulseRadius = size * (0.5 + Math.sin(this.holdTime * 3) * 0.3 * intensity)
+          const pulseAlpha = 0.5 + Math.sin(this.holdTime * 3) * 0.3 * intensity
+
+          const gradient = this.effectsCtx.createRadialGradient(x, y, 0, x, y, pulseRadius)
+          gradient.addColorStop(0, `${this.getRandomColor()} ${pulseAlpha})`)
+          gradient.addColorStop(1, `${this.getRandomColor()} 0)`)
+
+          this.effectsCtx.beginPath()
+          this.effectsCtx.arc(x, y, pulseRadius, 0, Math.PI * 2)
+          this.effectsCtx.fillStyle = gradient
+          this.effectsCtx.fill()
+          break
+
+        case 'rotate':
+          // 旋转效果
+          const angle = this.holdTime * 2 * speed
+          const petals = 6
+
+          for (let i = 0; i < petals; i++) {
+            const petalAngle = (Math.PI * 2 / petals) * i + angle
+            const petalX = x + Math.cos(petalAngle) * size * 0.5 * intensity
+            const petalY = y + Math.sin(petalAngle) * size * 0.5 * intensity
+
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(petalX, petalY, size * 0.15, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = `${this.getRandomColor()} ${intensity})`
+            this.effectsCtx.fill()
+          }
+
+          // 中心圆
+          this.effectsCtx.beginPath()
+          this.effectsCtx.arc(x, y, size * 0.2, 0, Math.PI * 2)
+          this.effectsCtx.fillStyle = `${this.getRandomColor()} ${intensity})`
+          this.effectsCtx.fill()
+          break
+
+        case 'flower':
+          // 花朵效果
+          const flowerPetals = 8
+          const flowerAngle = this.holdTime * speed
+
+          for (let i = 0; i < flowerPetals; i++) {
+            const petalAngle = (Math.PI * 2 / flowerPetals) * i + flowerAngle
+            const petalSize = size * 0.3 * (1 + Math.sin(this.holdTime * 2 + i) * 0.3)
+            const petalX = x + Math.cos(petalAngle) * size * 0.4
+            const petalY = y + Math.sin(petalAngle) * size * 0.4
+
+            this.effectsCtx.beginPath()
+            this.effectsCtx.ellipse(petalX, petalY, petalSize, petalSize * 0.5, petalAngle, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = `${this.getRandomColor()} ${intensity * 0.7})`
+            this.effectsCtx.fill()
+          }
+
+          // 花心
+          this.effectsCtx.beginPath()
+          this.effectsCtx.arc(x, y, size * 0.15, 0, Math.PI * 2)
+          this.effectsCtx.fillStyle = `${this.getRandomColor()} ${intensity})`
+          this.effectsCtx.fill()
+          break
+
+        case 'vortex':
+          // 漩涡效果
+          const vortexRings = 5
+          for (let i = 0; i < vortexRings; i++) {
+            const ringRadius = (i + 1) * size * 0.15 * (1 + this.holdTime * 0.1)
+            const ringAngle = this.holdTime * (i + 1) * speed
+
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(x, y, ringRadius, ringAngle, ringAngle + Math.PI)
+            this.effectsCtx.strokeStyle = `${this.getRandomColor()} ${intensity * (1 - i / vortexRings)})`
+            this.effectsCtx.lineWidth = 2
+            this.effectsCtx.stroke()
+          }
+          break
+
+        case 'galaxy':
+          // 星系效果
+          const galaxyStars = 20
+          for (let i = 0; i < galaxyStars; i++) {
+            const starAngle = (Math.PI * 2 / galaxyStars) * i + this.holdTime * speed
+            const starRadius = size * 0.6 * Math.random() * intensity
+            const starX = x + Math.cos(starAngle) * starRadius
+            const starY = y + Math.sin(starAngle) * starRadius
+            const starSize = 2 + Math.random() * 3
+
+            this.effectsCtx.beginPath()
+            this.effectsCtx.arc(starX, starY, starSize, 0, Math.PI * 2)
+            this.effectsCtx.fillStyle = `${this.getRandomColor()} ${intensity * 0.8})`
+            this.effectsCtx.fill()
+          }
+
+          // 星系中心
+          const centerGradient = this.effectsCtx.createRadialGradient(x, y, 0, x, y, size * 0.3)
+          centerGradient.addColorStop(0, `${this.getRandomColor()} ${intensity})`)
+          centerGradient.addColorStop(1, `${this.getRandomColor()} 0)`)
+
+          this.effectsCtx.beginPath()
+          this.effectsCtx.arc(x, y, size * 0.3, 0, Math.PI * 2)
+          this.effectsCtx.fillStyle = centerGradient
+          this.effectsCtx.fill()
+          break
+      }
+    },
     // ==================== 长按清除数据相关方法 ====================
     // 长按开始
     handleTitlePressStart(event) {
@@ -4188,6 +5273,32 @@ export default {
         enableSplashAnimation: settings.enableSplashAnimation !== undefined ? settings.enableSplashAnimation : true,
         splashDuration: settings.splashDuration || 500,
         splashAnimationType: settings.splashAnimationType || 'scale',
+        // 特效设置
+        enableEffects: settings.enableEffects !== undefined ? settings.enableEffects : false,
+        enableClickEffects: settings.enableClickEffects !== undefined ? settings.enableClickEffects : true,
+        enableTrailEffects: settings.enableTrailEffects !== undefined ? settings.enableTrailEffects : true,
+        // 特效颜色模式
+        effectColorMode: settings.effectColorMode || 'themeColors',
+        // 点击特效参数
+        clickEffectType: settings.clickEffectType || 'explosion',
+        clickEffectSpeed: settings.clickEffectSpeed !== undefined ? settings.clickEffectSpeed : 2,
+        clickEffectGravity: settings.clickEffectGravity !== undefined ? settings.clickEffectGravity : 0.1,
+        clickEffectParticleSize: settings.clickEffectParticleSize !== undefined ? settings.clickEffectParticleSize : 4,
+        clickEffectParticleCount: settings.clickEffectParticleCount !== undefined ? settings.clickEffectParticleCount : 12,
+        clickEffectDecay: settings.clickEffectDecay !== undefined ? settings.clickEffectDecay : 0.02,
+        // 拖尾特效参数
+        trailEffectType: settings.trailEffectType || 'particles',
+        trailEffectSpeed: settings.trailEffectSpeed !== undefined ? settings.trailEffectSpeed : 1,
+        trailEffectParticleSize: settings.trailEffectParticleSize !== undefined ? settings.trailEffectParticleSize : 3,
+        trailEffectDecay: settings.trailEffectDecay !== undefined ? settings.trailEffectDecay : 0.03,
+        trailEffectMaxLength: settings.trailEffectMaxLength !== undefined ? settings.trailEffectMaxLength : 50,
+        trailEffectLineWidth: settings.trailEffectLineWidth !== undefined ? settings.trailEffectLineWidth : 2,
+        // 按住特效参数
+        enableHoldEffects: settings.enableHoldEffects !== undefined ? settings.enableHoldEffects : true,
+        holdEffectType: settings.holdEffectType || 'pulse',
+        holdEffectSpeed: settings.holdEffectSpeed !== undefined ? settings.holdEffectSpeed : 1,
+        holdEffectSize: settings.holdEffectSize !== undefined ? settings.holdEffectSize : 50,
+        holdEffectIntensity: settings.holdEffectIntensity !== undefined ? settings.holdEffectIntensity : 0.5,
         // 主题颜色设置
         themeColors: settings.themeColors || null
       }
@@ -4317,6 +5428,7 @@ export default {
       this.$nextTick(() => {
         this.handleScroll()
       })
+      this.closeSidebarForMobile()
     },
     // 进入多对话模式
     enterMultiChatMode() {
@@ -4374,6 +5486,7 @@ export default {
       if (!this.currentChatSession) return
       // 加载新会话的对话
       await this.loadCurrentChatSession()
+      this.closeSidebarForMobile()
     },
     // 加载当前会话的对话
     async loadCurrentChatSession() {
@@ -6923,6 +8036,8 @@ ${conversationText}
           this.agentToolStates[currentAgentId].toolStatus = '正在分析问题...'
           console.log(`[App] 智能体已启用网络搜索技能，准备发送消息`)
         }
+        // 获取对话历史（排除当前用户消息，因为 buildMessages 会自动添加）
+        const conversationHistoryWithoutCurrent = this.agentConversations[currentAgentId].filter(msg => msg.id !== userMessage?.id)
         if (settings.wordByWordOutput) {
           // 优化的逐字输出模式
           let aiMessage = null
@@ -6931,7 +8046,7 @@ ${conversationText}
           const response = await this.aiService.sendMessage(
             this.currentAgent,
             enhancedMessage,
-            this.agentConversations[currentAgentId],
+            conversationHistoryWithoutCurrent,
             async (progressText) => {
               // 如果启用了网络搜索技能，更新工具状态
               if (skillIds.includes('webSearch') && this.agentToolStates[currentAgentId]?.isUsingTool) {
@@ -7007,7 +8122,7 @@ ${conversationText}
           const response = await this.aiService.sendMessage(
             this.currentAgent,
             enhancedMessage,
-            this.agentConversations[currentAgentId]
+            conversationHistoryWithoutCurrent
           )
           // 添加AI回复
           const aiMessage = await this.storageManager.addMessage(currentAgentId, {
@@ -7152,6 +8267,8 @@ ${conversationText}
       }
       // 保存当前服务商，用于下次切换时保存
       this.settings.previousProvider = provider
+      // 立即同步到 aiSettings，确保切换后立即生效
+      this.syncAiSettingsFromSettings()
     },
     // 获取服务商支持的模型列表
     getProviderModels(provider) {
@@ -8817,17 +9934,21 @@ ${conversationText}
           try {
             // 找到该消息的索引
             const messageIndex = this.agentConversations[currentAgentId].findIndex(msg => msg.id === message.id)
-            if (messageIndex === -1) {
-              throw new Error('未找到消息')
-            }
-            // 获取该消息之前的所有消息作为上下文
-            const context = this.agentConversations[currentAgentId].slice(0, messageIndex)
-            // 如果前一条消息是用户消息，则使用它作为输入
-            let inputMessage = "重新生成回复"
-            if (messageIndex > 0 && this.agentConversations[currentAgentId][messageIndex - 1].role === 'user') {
-              inputMessage = this.agentConversations[currentAgentId][messageIndex - 1].content
-            }
-            const settings = this.storageManager.getSettings()
+                      if (messageIndex === -1) {
+                        throw new Error('未找到消息')
+                      }
+                      // 获取该消息之前的所有消息作为上下文（不包括用户消息本身）
+                      let inputMessage = "重新生成回复"
+                      let context = []
+                      if (messageIndex > 0 && this.agentConversations[currentAgentId][messageIndex - 1].role === 'user') {
+                        // 如果前一条消息是用户消息，则它应该作为输入消息
+                        inputMessage = this.agentConversations[currentAgentId][messageIndex - 1].content
+                        // 上下文应该是用户消息之前的所有消息
+                        context = this.agentConversations[currentAgentId].slice(0, messageIndex - 1)
+                      } else {
+                        // 如果前一条消息不是用户消息，则上下文包括该消息之前的所有消息
+                        context = this.agentConversations[currentAgentId].slice(0, messageIndex)
+                      }            const settings = this.storageManager.getSettings()
             if (settings.wordByWordOutput) {
               // 逐字输出模式
               let aiMessage = null
@@ -9594,6 +10715,14 @@ ${sceneContext ? `场景上下文参考：\n${sceneContext}` : ''}`
     },
     toggleSidebar() {
       this.sidebarExpanded = !this.sidebarExpanded;
+      if (!this.isPortraitMobile) {
+        this.desktopSidebarExpanded = this.sidebarExpanded;
+      }
+    },
+    closeSidebarForMobile() {
+      if (this.isPortraitMobile) {
+        this.sidebarExpanded = false;
+      }
     },
     // 判断文本是否过长，需要特殊处理
     isLongText(text) {
@@ -10023,8 +11152,9 @@ ${sceneContext ? `场景上下文参考：\n${sceneContext}` : ''}`
           keyPoints: '',
           avatar: '⚡'
         };
-        // 调用AI服务发送消息
-        const response = await this.aiService.sendMessage(tempAgent, input, this.quickChatMessages.filter(msg => msg.role !== 'system'), (partialResponse) => {
+        // 调用AI服务发送消息（传入排除当前用户消息的对话历史）
+        const conversationHistoryWithoutCurrent = this.quickChatMessages.filter(msg => msg.role !== 'system' && msg !== userMessage);
+        const response = await this.aiService.sendMessage(tempAgent, input, conversationHistoryWithoutCurrent, (partialResponse) => {
           // 流式输出处理，如果需要可以在这里添加
         });
         let aiResponse;
@@ -10656,6 +11786,19 @@ ${sceneContext ? `场景上下文参考：\n${sceneContext}` : ''}`
 <style>
 /* 导入样式文件 */
 @import './styles/global.css';
+
+/* ========== 特效 Canvas 样式 ========== */
+.effects-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 99999;
+  pointer-events: none;
+  display: block;
+}
+
 /* ========== 开启动画样式 ========== */
 /* 问候屏幕容器 */
 .splash-screen {
@@ -11667,6 +12810,13 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   align-items: center;
   gap: 6px;
 }
+.tools-group-end {
+  margin-left: auto;
+}
+.tools-spacer {
+  flex: 1 1 auto;
+  min-width: 8px;
+}
 .tools-divider {
   width: 1px;
   height: 24px;
@@ -11704,6 +12854,11 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   background: var(--danger-color, #ef4444);
   color: white;
   border-color: transparent;
+}
+.tool-btn.close-notepad-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
 }
 .color-picker {
   width: 32px;
@@ -12905,6 +14060,148 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
     min-width: 100px;
   }
 }
+
+@media (max-width: 768px) and (orientation: portrait) {
+  .app.mobile-portrait .dynamic-island {
+    top: calc(env(safe-area-inset-top) + 8px);
+    max-width: calc(100vw - 88px);
+    width: auto;
+    min-width: min(180px, calc(100vw - 88px));
+    min-height: 48px;
+    padding: 8px 12px;
+    border-radius: 18px;
+    white-space: nowrap;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .app.mobile-portrait .dynamic-island:hover {
+    transform: translateX(-50%);
+    min-height: 48px;
+    padding: 8px 12px;
+  }
+
+  .app.mobile-portrait .dynamic-island-content {
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .app.mobile-portrait .dynamic-island-avatar {
+    margin-right: 8px;
+  }
+
+  .app.mobile-portrait .dynamic-island-description,
+  .app.mobile-portrait .dynamic-island-music-info,
+  .app.mobile-portrait .dynamic-island-btn .btn-text {
+    display: none !important;
+  }
+
+  .app.mobile-portrait .dynamic-island-controls {
+    gap: 4px;
+    margin-left: 8px;
+    max-width: 52%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .app.mobile-portrait .dynamic-island-controls::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app.mobile-portrait .dynamic-island-btn,
+  .app.mobile-portrait .dynamic-island:hover .dynamic-island-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .app.mobile-portrait .files-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quick-chat-modal-overlay,
+  .notepad-modal-overlay,
+  .image-generator-modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .quick-chat-modal-content,
+  .notepad-modal-content,
+  .image-generator-modal-content {
+    width: 100vw;
+    max-width: none;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0 !important;
+    margin: 0;
+    box-shadow: none;
+    border: none;
+  }
+
+  .quick-chat-header,
+  .notepad-tools,
+  .image-generator-header {
+    padding-top: calc(16px + env(safe-area-inset-top));
+    border-radius: 0 !important;
+  }
+
+  .quick-chat-messages-container,
+  .image-generator-input-section,
+  .image-generator-preview-section {
+    padding: 16px;
+  }
+
+  .quick-chat-input-container {
+    padding: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .quick-chat-send-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .notepad-tools {
+    flex-wrap: wrap;
+  }
+
+  .tools-spacer {
+    display: none;
+  }
+
+  .tools-group-end {
+    margin-left: 0;
+  }
+
+  .image-generator-body {
+    flex-direction: column;
+  }
+
+  .image-generator-input-section,
+  .image-generator-preview-section {
+    width: 100%;
+  }
+
+  .image-generator-input-section {
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .control-row,
+  .image-generator-actions {
+    flex-direction: column;
+  }
+
+  .preview-container {
+    min-height: 220px;
+  }
+}
+
 /* 已上传文件区域样式 */
 .uploaded-files-area {
   margin-bottom: 12px;

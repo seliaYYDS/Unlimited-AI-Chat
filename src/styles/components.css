@@ -1790,6 +1790,81 @@
   }
 }
 
+@media (max-width: 768px) and (orientation: portrait) {
+  .component-help-modal-overlay,
+  .component-editor-modal-overlay,
+  .component-preview-modal-overlay {
+    align-items: flex-end;
+  }
+
+  .component-help-modal-content,
+  .component-editor-modal-content,
+  .component-preview-modal-content {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0 !important;
+    margin: 0;
+    box-shadow: none;
+    border: none;
+  }
+
+  .component-help-header,
+  .component-editor-header,
+  .component-preview-header {
+    padding: calc(16px + env(safe-area-inset-top)) 16px 16px;
+    border-radius: 0 !important;
+  }
+
+  .component-help-body,
+  .preview-main,
+  .preview-sidebar,
+  .editor-sidebar {
+    padding: 16px;
+  }
+
+  .component-editor-body,
+  .component-preview-body {
+    flex-direction: column;
+  }
+
+  .editor-sidebar,
+  .preview-sidebar {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    max-height: 34dvh;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .component-editor-header,
+  .component-preview-header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .editor-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .editor-actions,
+  .preview-size-controls {
+    width: 100%;
+  }
+
+  .editor-actions > *,
+  .preview-size-controls > * {
+    flex: 1 1 auto;
+  }
+
+  .preview-main {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}
+
 /* 预览容器内部的样式重置 */
 .preview-container :deep(*) {
   max-width: 100%;

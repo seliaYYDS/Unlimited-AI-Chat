@@ -616,8 +616,9 @@ export default {
   }
   
   .confirm-dialog {
-    min-width: 300px;
-    margin: 20px;
+    min-width: 0;
+    width: calc(100vw - 32px);
+    margin: 16px;
   }
 }
 </style>

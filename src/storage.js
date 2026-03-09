@@ -266,6 +266,7 @@ export class StorageManager {
                 currentProvider: 'openai',
                 previousProvider: 'openai',
                 modelName: 'gpt-3.5-turbo',
+                customModelName: '', // 自定义模型名称（当选择'custom'时使用）
                 temperature: 0.7,
                 maxTokens: 2000, // 提升默认值，更适合现代大模型
                                 // 对话设置

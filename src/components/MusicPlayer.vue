@@ -429,6 +429,28 @@
                   </svg>
                   <span class="bottom-playlist-count" v-if="playlist.length > 0">{{ playlist.length }}</span>
                 </button>
+                
+                <!-- 音量控制 -->
+                <div class="bottom-volume-control">
+                  <button class="bottom-volume-btn" :title="`音量: ${volume}%`">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                    </svg>
+                  </button>
+                  <div class="bottom-volume-slider-container">
+                    <input 
+                      type="range" 
+                      class="bottom-volume-slider" 
+                      v-model="volume" 
+                      @input="changeVolume"
+                      @mousedown="handleVolumeSliderMouseDown"
+                      @mouseup="handleVolumeSliderMouseUp"
+                      @mouseleave="handleVolumeSliderMouseUp"
+                      min="0" 
+                      max="100" 
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -750,20 +772,23 @@
           </div>
         </div>
         
-        <!-- 播放控制区域 -->
-        <div class="player-controls">
-          <div class="current-song-info">
-            <div class="song-image" v-if="currentSong" @click="openImmersivePlayer">
-              <!-- 歌曲图片加载状态 -->
-              <div v-if="isLoadingSong" class="image-loader-overlay">
-                <div class="image-loader"></div>
+        <!-- 底部播放控件面板 -->
+        <div v-if="!showPlaylistDetail" class="bottom-player">
+          <div class="bottom-player-content">
+            <!-- 歌曲信息 -->
+            <div class="bottom-song-info">
+              <div class="bottom-song-cover" @click="openImmersivePlayer">
+                <img v-if="currentSong" :src="(currentSong.al && currentSong.al.picUrl) || currentSong.picUrl || (currentSong.album && currentSong.album.picUrl) || defaultAlbumArt" :alt="currentSong.name" />
+                <div v-else class="empty-song-cover">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                  </svg>
+                </div>
               </div>
-              <img :src="(currentSong.al && currentSong.al.picUrl) || currentSong.picUrl || (currentSong.album && currentSong.album.picUrl) || defaultAlbumArt" :alt="currentSong.name" />
-            </div>
-            <div class="song-details">
-              <div class="song-name">{{ currentSong ? currentSong.name : '未播放' }}</div>
-              <div class="song-artist">
-                <template v-if="currentSong">
+              <div class="bottom-song-details">
+                <div class="bottom-song-name" v-if="currentSong">{{ currentSong.name }}</div>
+                <div class="bottom-song-name" v-else>未播放歌曲</div>
+                <div class="bottom-song-artist" v-if="currentSong">
                   <template v-if="currentSong.ar && Array.isArray(currentSong.ar)">
                     <span 
                       v-for="(artist, index) in currentSong.ar" 
@@ -786,185 +811,79 @@
                       <span v-if="index < currentSong.artists.length - 1" class="artist-separator">, </span>
                     </span>
                   </template>
-                  <span v-else-if="currentSong" class="artist-name clickable" @click.stop="handleArtistClick(currentSong)">{{ currentSong.artist || '未知艺术家' }}</span>
-                </template>
-                <template v-else>
-                  选择一首歌曲开始播放
-                </template>
-              </div>
-              <!-- 歌曲加载状态提示 -->
-              <div v-if="isLoadingSong" class="loading-status">
-                <div class="loading-dots">
-                  <span></span>
-                  <span></span>
-                  <span></span>
+                  <span v-else class="artist-name clickable" @click.stop="handleArtistClick(currentSong)">{{ currentSong.artist || '未知艺术家' }}</span>
                 </div>
-                <span class="loading-message">正在加载歌曲...</span>
+                <div class="bottom-song-artist" v-else>选择一首歌曲开始播放</div>
               </div>
             </div>
-            <!-- 播放列表按钮 -->
-            <div class="playlist-button-container">
-              <button 
-                class="playlist-button" 
-                @click.stop="togglePlaylistMenu"
-                :class="{ active: showPlaylistMenu }"
-                title="播放列表"
-              >
+            
+            <!-- 播放控制 -->
+            <div class="bottom-controls">
+              <button @click="previousSong" class="bottom-control-btn" title="上一首" :disabled="!currentSong">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
-                </svg>
-                <span class="playlist-count" v-if="playlist.length > 0">{{ playlist.length }}</span>
-              </button>
-              
-              <!-- 播放列表菜单 -->
-              <div v-if="showPlaylistMenu" class="playlist-menu">
-                <div class="playlist-menu-header">
-                  <h4>播放列表</h4>
-                  <div class="playlist-menu-controls">
-                    <button 
-                      class="clear-playlist-btn" 
-                      @click.stop="clearPlaylist"
-                      :disabled="playlist.length === 0"
-                      title="清空播放列表"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                      </svg>
-                    </button>
-                    <button 
-                      class="close-playlist-menu-btn" 
-                      @click.stop="showPlaylistMenu = false"
-                      title="关闭"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                
-                <div class="playlist-menu-content">
-                  <div v-if="playlist.length === 0" class="empty-playlist">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" class="empty-playlist-icon">
-                      <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
-                    </svg>
-                    <p>播放列表为空</p>
-                    <p class="empty-playlist-hint">点击搜索结果中的"+"按钮添加歌曲</p>
-                  </div>
-                  
-                  <div v-else class="playlist-menu-items">
-                    <div 
-                      v-for="(song, index) in playlist" 
-                      :key="song.id || index"
-                      :class="['playlist-menu-item', { 
-                        'playing': currentSong && currentSong.id === song.id, 
-                        'loading': isLoadingSong && currentSong && currentSong.id === song.id 
-                      }]"
-                      @click="selectSongFromPlaylist(index)"
-                      @contextmenu="showContextMenu($event, 'song', song)"
-                    >
-                      <div class="playlist-item-info">
-                        <div class="playlist-item-index">{{ index + 1 }}</div>
-                        <div class="playlist-item-cover">
-                          <img :src="song.picUrl || defaultAlbumArt" :alt="song.name" />
-                        </div>
-                        <div class="playlist-item-details">
-                          <div class="playlist-item-title">{{ song.name || '未知歌曲' }}</div>
-                          <div class="playlist-item-artist">{{ song.artist || '未知艺术家' }}</div>
-                        </div>
-                      </div>
-                      
-                      <div class="playlist-item-actions">
-                        <div v-if="isLoadingSong && currentSong && currentSong.id === song.id" class="playlist-item-loader">
-                          <div class="mini-loader"></div>
-                        </div>
-                        
-                        <button 
-                          class="playlist-item-remove-btn" 
-                          @click.stop="removeFromPlaylist(index)"
-                          title="从播放列表中移除"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                          </svg>
-                        </button>
-                        
-                        <div class="playlist-item-duration">{{ formatDuration((song.dt !== undefined ? song.dt : (song.duration !== undefined ? song.duration : 0)) || 0) }}</div>
-                      </div>
-                      
-                      <!-- 拖拽手柄 -->
-                      <div class="playlist-item-drag-handle" draggable="true" @dragstart="dragStart(index, $event)" @dragover.prevent @dragenter.prevent @drop="drop(index, $event)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M3 15h18v-2H3v2zm0 4h18v-2H3v2zm0-8h18V9H3v2zm0-6v2h18V5H3z"/>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="progress-container">
-            <span class="time-display">{{ formatTime(currentTime) }}</span>
-            <input 
-              type="range" 
-              class="progress-slider" 
-              :value="progress" 
-              @input="seekMusic" 
-              :max="100" 
-              :disabled="!currentSong"
-            />
-            <span class="time-display">{{ formatTime(duration) }}</span>
-          </div>
-          
-          <div class="player-controls-main">
-            <div class="control-buttons">
-              <button @click="skipPrevious" class="control-btn" :disabled="!currentSong">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
                 </svg>
               </button>
-              <button @click="togglePlayPause" class="control-btn large" :disabled="!currentSong">
-                <svg v-if="isPlaying" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                </svg>
-                <svg v-else width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+              <button @click="togglePlay" class="bottom-play-btn" :title="isPlaying ? '暂停' : '播放'" :disabled="!currentSong">
+                <svg v-if="!isPlaying" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M8 5v14l11-7z"/>
                 </svg>
+                <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                </svg>
               </button>
-              <button @click="skipNext" class="control-btn" :disabled="!currentSong">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <button @click="nextSong" class="bottom-control-btn" title="下一首" :disabled="!currentSong">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
                 </svg>
               </button>
             </div>
-          </div>
-          
-          <div class="play-mode-wrapper">
-            <button @click="togglePlayMode" class="control-btn play-mode-btn" :disabled="!currentSong" :title="getCurrentPlayModeLabel()">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path :d="getCurrentPlayModeIcon()"/>
-              </svg>
-            </button>
-            <div v-if="showPlayModeTooltipVisible" class="play-mode-tooltip">
-              {{ getCurrentPlayModeLabel() }}
+            
+            <!-- 进度条 -->
+            <div class="bottom-progress">
+              <span class="bottom-time">{{ formatTime(currentTime) }}</span>
+              <div class="bottom-progress-bar" @click="seekTo">
+                <div class="bottom-progress-fill" :style="{ width: progress + '%' }"></div>
+              </div>
+              <span class="bottom-time">{{ formatTime(duration) }}</span>
             </div>
-          </div>
-          
-          <div class="volume-control">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-            </svg>
-            <input 
-              type="range" 
-              class="volume-slider" 
-              v-model="volume" 
-              @input="changeVolume"
-              min="0" 
-              max="100" 
-            />
-          </div>
+            
+            <!-- 播放列表按钮 -->
+                          <div class="bottom-right-controls">
+                            <button 
+                              class="bottom-playlist-btn" 
+                              @click="togglePlaylistMenu"
+                              :class="{ active: showPlaylistMenu }"
+                              title="播放列表"
+                            >
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/>
+                              </svg>
+                              <span class="bottom-playlist-count" v-if="playlist.length > 0">{{ playlist.length }}</span>
+                            </button>
+                            
+                            <!-- 音量控制 -->
+                            <div class="bottom-volume-control">
+                              <button class="bottom-volume-btn" :title="`音量: ${volume}%`">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                                </svg>
+                              </button>
+                              <div class="bottom-volume-slider-container">
+                                <input 
+                                  type="range" 
+                                  class="bottom-volume-slider" 
+                                  v-model="volume" 
+                                  @input="changeVolume"
+                                  @mousedown="handleVolumeSliderMouseDown"
+                                  @mouseup="handleVolumeSliderMouseUp"
+                                  @mouseleave="handleVolumeSliderMouseUp"
+                                  min="0" 
+                                  max="100" 
+                                />
+                              </div>
+                            </div>
+                          </div>          </div>
         </div>
       </div>
     </div>
@@ -2238,6 +2157,7 @@ mounted() {
       
       // 监听窗口大小变化
       window.addEventListener('resize', this.handleWindowResize);
+      this.clampMiniPlayerPosition();
       
       // 加载保存的音量
       this.loadSavedVolume();
@@ -3385,6 +3305,29 @@ mounted() {
       }
       // 保存音量设置到localStorage
       this.saveVolume();
+    },
+
+    // 音量滑块鼠标按下事件
+    handleVolumeSliderMouseDown(event) {
+      event.target.classList.add('slider-dragging');
+      // 添加全局鼠标松开监听，防止鼠标移出后无法正常结束拖动
+      document.addEventListener('mouseup', this.handleVolumeSliderMouseUpGlobal);
+    },
+
+    // 音量滑块鼠标松开事件
+    handleVolumeSliderMouseUp(event) {
+      event.target.classList.remove('slider-dragging');
+      document.removeEventListener('mouseup', this.handleVolumeSliderMouseUpGlobal);
+    },
+
+    // 全局鼠标松开事件处理
+    handleVolumeSliderMouseUpGlobal() {
+      // 移除所有滑块的拖动状态
+      const sliders = document.querySelectorAll('.bottom-volume-slider');
+      sliders.forEach(slider => {
+        slider.classList.remove('slider-dragging');
+      });
+      document.removeEventListener('mouseup', this.handleVolumeSliderMouseUpGlobal);
     },
 
     // 加载保存的音量设置
@@ -5796,11 +5739,26 @@ mounted() {
       if (this.contextMenu.visible) {
         this.adjustContextMenuPosition();
       }
+
+      this.clampMiniPlayerPosition();
       
       // 如果沉浸式播放器可见，重新加载背景
       if (this.showImmersivePlayer && this.$refs.immersiveCanvas) {
         this.loadImmersiveBackground();
       }
+    },
+    clampMiniPlayerPosition() {
+      const isPortraitMobile = window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+      const playerWidth = isPortraitMobile ? Math.min(window.innerWidth - 24, 300) : 300;
+      const playerHeight = 120;
+      const minOffset = 12;
+      const maxX = Math.max(minOffset, window.innerWidth - playerWidth - minOffset);
+      const maxY = Math.max(minOffset, window.innerHeight - playerHeight - minOffset);
+
+      this.miniPlayerPosition.x = Math.min(Math.max(this.miniPlayerPosition.x, minOffset), maxX);
+      this.miniPlayerPosition.y = Math.min(Math.max(this.miniPlayerPosition.y, minOffset), maxY);
+      this.displayPosition.x = this.miniPlayerPosition.x;
+      this.displayPosition.y = this.miniPlayerPosition.y;
     },
 
     // 调整右键菜单位置，确保不超出视窗
@@ -7198,41 +7156,46 @@ mounted() {
             }
             
             const lyricsScroll = this.$refs.lyricsScroll;
+            const lyricsContainer = this.$refs.lyricsContainer;
             const lyricLines = lyricsScroll.querySelectorAll('.lyric-line');
             
             if (lyricLines[newIndex]) {
-              // 基础行高度 5rem = 80px
-              let totalHeight = 0;
-              let lineHeight = 80; // 5 * 16
-              
-              // 计算到当前行的总高度，考虑是否有译文或罗马音
-              for (let i = 0; i <= newIndex; i++) {
-                // 检查当前行是否有译文或罗马音（确保不为null）
-                const hasTranslation = this.showTranslation && this.translationLyrics[i] != null;
-                const hasRoma = this.showRoma && this.romaLyrics[i] != null;
-                
-                if (i === newIndex) {
-                  // 当前行：如果有译文或罗马音，使用更高的高度
-                  if (hasTranslation || hasRoma) {
-                    lineHeight = 104; // 6.5rem * 16px
+              const isPortraitMobile = window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+              let transformValue = 0;
+
+              if (isPortraitMobile) {
+                const currentLine = lyricLines[newIndex];
+                const containerHeight = lyricsContainer ? lyricsContainer.clientHeight : 0;
+                const lineCenter = currentLine.offsetTop + currentLine.offsetHeight / 2;
+                const targetCenter = containerHeight > 0
+                  ? containerHeight * 0.42
+                  : currentLine.offsetHeight;
+                transformValue = targetCenter - lineCenter;
+              } else {
+                // 保持桌面端原有的歌词定位逻辑不变
+                let totalHeight = 0;
+                let lineHeight = 80;
+
+                for (let i = 0; i <= newIndex; i++) {
+                  const hasTranslation = this.showTranslation && this.translationLyrics[i] != null;
+                  const hasRoma = this.showRoma && this.romaLyrics[i] != null;
+
+                  if (i === newIndex) {
+                    if (hasTranslation || hasRoma) {
+                      lineHeight = 104;
+                    } else {
+                      lineHeight = 88;
+                    }
+                  } else if (hasTranslation || hasRoma) {
+                    totalHeight += 96;
                   } else {
-                    lineHeight = 88; // 5.5rem * 16px
-                  }
-                } else {
-                  // 其他行：如果有译文或罗马音，使用更高的高度
-                  if (hasTranslation || hasRoma) {
-                    totalHeight += 96; // 6rem * 16px
-                  } else {
-                    totalHeight += 80; // 5rem * 16px
+                    totalHeight += 80;
                   }
                 }
+
+                totalHeight += lineHeight;
+                transformValue = -(totalHeight - lineHeight);
               }
-              
-              // 加上当前行的高度
-              totalHeight += lineHeight;
-              
-              // 计算transform值，使当前行居中
-              const transformValue = -(totalHeight - lineHeight);
               
               // 设置transform
               lyricsScroll.style.transform = `translateY(${transformValue}px)`;
@@ -8344,7 +8307,7 @@ mounted() {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   padding: 10px;
 }
 
@@ -13110,6 +13073,151 @@ mounted() {
   line-height: 1;
 }
 
+.bottom-volume-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: 0.5rem;
+}
+
+.bottom-volume-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bottom-volume-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.bottom-volume-slider-container {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: all 0.2s ease;
+  width: 120px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+}
+
+.bottom-volume-control:hover .bottom-volume-slider-container {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.bottom-volume-slider {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--bg-hover);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.bottom-volume-slider:active {
+  background: var(--bg-hover);
+}
+
+.bottom-volume-slider:active::-webkit-slider-runnable-track {
+  background: var(--bg-hover);
+}
+
+.bottom-volume-slider.slider-dragging {
+  background: var(--bg-hover);
+}
+
+.bottom-volume-slider.slider-dragging::-webkit-slider-runnable-track {
+  background: var(--bg-hover);
+}
+
+.bottom-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  top: -4px;
+  box-shadow: 0 0 0 0 rgba(var(--primary-color-rgb), 0.7);
+}
+
+.bottom-volume-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 8px rgba(var(--primary-color-rgb), 0.5);
+}
+
+.bottom-volume-slider::-webkit-slider-thumb:active {
+  transform: scale(0.9);
+  box-shadow: 0 0 0 8px rgba(var(--primary-color-rgb), 0.3), 0 0 16px rgba(var(--primary-color-rgb), 0.4);
+}
+
+.bottom-volume-slider.slider-dragging::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 10px rgba(var(--primary-color-rgb), 0.4), 0 0 20px rgba(var(--primary-color-rgb), 0.6);
+  animation: pulse-thumb 1s ease-in-out infinite;
+}
+
+@keyframes pulse-thumb {
+  0%, 100% {
+    box-shadow: 0 0 0 10px rgba(var(--primary-color-rgb), 0.4), 0 0 20px rgba(var(--primary-color-rgb), 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 14px rgba(var(--primary-color-rgb), 0.5), 0 0 28px rgba(var(--primary-color-rgb), 0.7);
+  }
+}
+
+.bottom-volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: var(--primary-color);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  top: -4px;
+  box-shadow: 0 0 0 0 rgba(var(--primary-color-rgb), 0.7);
+}
+
+.bottom-volume-slider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 8px rgba(var(--primary-color-rgb), 0.5);
+}
+
+.bottom-volume-slider::-moz-range-thumb:active {
+  transform: scale(0.9);
+  box-shadow: 0 0 0 8px rgba(var(--primary-color-rgb), 0.3), 0 0 16px rgba(var(--primary-color-rgb), 0.4);
+}
+
+.bottom-volume-slider.slider-dragging::-moz-range-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 10px rgba(var(--primary-color-rgb), 0.4), 0 0 20px rgba(var(--primary-color-rgb), 0.6);
+  animation: pulse-thumb 1s ease-in-out infinite;
+}
+
 .header-title {
   cursor: pointer;
   transition: all 0.3s ease;
@@ -14115,6 +14223,12 @@ mounted() {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  .music-notification {
+    min-width: 0;
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+  }
+
   .create-playlist-content {
     flex-direction: column;
     padding: 24px;
@@ -14144,6 +14258,186 @@ mounted() {
   
   .action-btn {
     flex: 1;
+  }
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+  .music-player-modal-overlay,
+  .artist-detail-modal-overlay,
+  .playlist-detail-modal-overlay,
+  .album-detail-modal-overlay,
+  .modal-overlay {
+    align-items: flex-end;
+  }
+
+  .music-player-modal-content,
+  .artist-detail-modal-content,
+  .playlist-detail-modal-content,
+  .album-detail-modal-content,
+  .modal-content {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0 !important;
+    margin: 0;
+    box-shadow: none;
+    border: none;
+  }
+
+  .music-player-header,
+  .artist-detail-header,
+  .playlist-detail-header,
+  .album-detail-header,
+  .modern-modal-header {
+    padding-top: calc(16px + env(safe-area-inset-top));
+    border-radius: 0 !important;
+  }
+
+  .music-player-header {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .artist-detail-body,
+  .playlist-detail-body,
+  .album-detail-body {
+    padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .modal-content {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .music-player-main {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .immersive-player {
+    min-height: 100dvh;
+  }
+
+  .immersive-close-btn {
+    top: calc(12px + env(safe-area-inset-top));
+    right: 12px;
+    opacity: 1;
+  }
+
+  .immersive-content {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 1rem;
+    padding: calc(64px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+    max-width: none;
+    min-height: 100%;
+  }
+
+  .immersive-left {
+    flex: 0 0 auto;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .immersive-cover-container {
+    width: min(62vw, 260px);
+    height: auto;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.9rem;
+    border-radius: 0;
+    overflow: visible;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .immersive-cover {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 22px;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
+  }
+
+  .immersive-song-info {
+    position: static;
+    width: 100%;
+    padding: 0;
+    text-align: center;
+  }
+
+  .immersive-song-name,
+  .immersive-artist-name,
+  .immersive-album-name {
+    text-align: center;
+  }
+
+  .immersive-song-name {
+    font-size: clamp(1.2rem, 5vw, 1.55rem);
+  }
+
+  .immersive-right {
+    order: 2;
+    flex: 1 1 auto;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .lyrics-container {
+    width: 100%;
+    padding: 0;
+    min-height: 0;
+  }
+
+  .lyrics-scroll {
+    width: min(100%, 520px);
+    max-width: 100%;
+    margin: 0 auto;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: clamp(88px, 18vh, 160px);
+    padding-bottom: clamp(140px, 30vh, 260px);
+  }
+
+  .lyric-line {
+    align-items: center;
+    text-align: center;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .lyric-text,
+  .lyric-translation {
+    width: 100%;
+    text-align: center;
+  }
+
+  .lyric-translation.approximate {
+    border-left: none;
+    padding-left: 0;
+  }
+
+  .immersive-controls-vertical {
+    order: 3;
+    width: 100%;
+    max-width: 360px;
+    margin: 0 auto;
+    gap: 1rem;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  .progress-section {
+    margin: 0;
+    padding: 0.5rem 0;
+  }
+
+  .translation-control {
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
 }
 
@@ -14464,6 +14758,7 @@ mounted() {
   animation: contextMenuFadeIn 0.15s ease;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  overflow: visible;
 }
 
 @keyframes contextMenuFadeIn {

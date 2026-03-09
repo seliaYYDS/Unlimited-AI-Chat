@@ -1309,12 +1309,13 @@ select.form-control {
 @media (max-width: 768px) {
   .tavern-sidebar {
     position: fixed;
-    top: 56px;
+    top: calc(52px + env(safe-area-inset-top));
     right: 0;
     bottom: 0;
     left: 0;
     width: 100%;
     max-width: none;
+    padding-bottom: env(safe-area-inset-bottom);
     z-index: 101;
     transform: translateX(100%);
     transition: transform 0.3s ease;

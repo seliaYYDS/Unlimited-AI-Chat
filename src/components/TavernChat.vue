@@ -2003,6 +2003,7 @@ watch(messages, () => {
 
   .chat-input-area {
     padding: 12px 16px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
 
   .input-header {
@@ -2030,6 +2031,15 @@ watch(messages, () => {
   .send-btn {
     width: 40px;
     height: 40px;
+  }
+
+  .input-wrapper {
+    gap: 8px;
+  }
+
+  .chat-input {
+    font-size: 16px;
+    max-height: 30dvh;
   }
 
   .input-hint {

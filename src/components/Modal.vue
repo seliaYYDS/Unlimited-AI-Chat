@@ -248,4 +248,45 @@ export default {
   background: var(--bg-secondary);
   border-color: var(--border-color);
 }
+
+@media (max-width: 768px) and (orientation: portrait) {
+  .modal-overlay {
+    align-items: flex-end;
+  }
+
+  .modal-container,
+  .modal-container.small,
+  .modal-container.medium,
+  .modal-container.large,
+  .modal-container.auto-width {
+    width: 100vw;
+    min-width: 0;
+    max-width: 100vw;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0 !important;
+    margin: 0;
+    box-shadow: none;
+    border: none;
+  }
+
+  .modal-header {
+    padding-top: calc(16px + env(safe-area-inset-top));
+    border-radius: 0 !important;
+  }
+
+  .modal-content {
+    padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .modal-footer {
+    padding: 0 16px calc(16px + env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+  }
+
+  .modal-footer .btn {
+    flex: 1 1 140px;
+  }
+}
 </style>

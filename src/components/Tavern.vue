@@ -563,7 +563,7 @@ const isImageUrl = (avatar) => {
   bottom: 0;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: var(--app-height, 100vh);
   width: 100vw;
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -1202,9 +1202,9 @@ const isImageUrl = (avatar) => {
 /* 响应式设计 */
 @media (max-width: 768px) {
   .tavern-header {
-    padding: 10px 16px;
-    height: 52px;
-    min-height: 52px;
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    height: calc(52px + env(safe-area-inset-top));
+    min-height: calc(52px + env(safe-area-inset-top));
   }
 
   .tavern-title {

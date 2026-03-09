@@ -913,6 +913,256 @@
       </div>
     </div>
 
+    <!-- 特效设置 -->
+    <div class="settings-section">
+      <h4 class="section-title">特效设置</h4>
+
+      <div class="form-group">
+        <CustomCheckbox
+          :model-value="settings.enableEffects"
+          label="启用全局特效"
+          @update:model-value="updateSetting('enableEffects', $event)"
+        />
+        <div class="form-hint">
+          开启后可以在页面上显示各种视觉特效效果
+        </div>
+      </div>
+
+      <div v-if="settings.enableEffects" class="form-group">
+        <label>特效颜色模式</label>
+        <CustomSelect
+          :model-value="settings.effectColorMode"
+          :options="effectColorModes"
+          @update:model-value="updateSetting('effectColorMode', $event)"
+        />
+        <div class="form-hint">
+          选择特效使用的颜色来源
+        </div>
+      </div>
+
+      <!-- 鼠标点击特效设置 -->
+      <div v-if="settings.enableEffects" class="settings-subsection">
+        <h5 class="subsection-title">鼠标点击特效</h5>
+
+        <div class="form-group">
+          <CustomCheckbox
+            :model-value="settings.enableClickEffects"
+            label="启用鼠标点击特效"
+            @update:model-value="updateSetting('enableClickEffects', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableClickEffects" class="form-group">
+          <label>特效类型</label>
+          <CustomSelect
+            :model-value="settings.clickEffectType"
+            :options="clickEffectTypes"
+            @update:model-value="updateSetting('clickEffectType', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableClickEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.clickEffectSpeed"
+            :min="0.5"
+            :max="5"
+            :step="0.1"
+            label="特效速度"
+            unit="x"
+            @update:model-value="updateSetting('clickEffectSpeed', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableClickEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.clickEffectGravity"
+            :min="0"
+            :max="0.5"
+            :step="0.01"
+            label="重力"
+            unit=""
+            @update:model-value="updateSetting('clickEffectGravity', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableClickEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.clickEffectParticleSize"
+            :min="1"
+            :max="10"
+            :step="0.5"
+            label="粒子大小"
+            unit="px"
+            @update:model-value="updateSetting('clickEffectParticleSize', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableClickEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.clickEffectParticleCount"
+            :min="5"
+            :max="30"
+            :step="1"
+            label="粒子数量"
+            unit="个"
+            @update:model-value="updateSetting('clickEffectParticleCount', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableClickEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.clickEffectDecay"
+            :min="0.01"
+            :max="0.1"
+            :step="0.01"
+            label="消失速度"
+            unit=""
+            @update:model-value="updateSetting('clickEffectDecay', $event)"
+          />
+        </div>
+      </div>
+
+      <!-- 鼠标拖尾特效设置 -->
+      <div v-if="settings.enableEffects" class="settings-subsection">
+        <h5 class="subsection-title">鼠标拖尾特效</h5>
+
+        <div class="form-group">
+          <CustomCheckbox
+            :model-value="settings.enableTrailEffects"
+            label="启用鼠标拖尾特效"
+            @update:model-value="updateSetting('enableTrailEffects', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableTrailEffects" class="form-group">
+          <label>特效类型</label>
+          <CustomSelect
+            :model-value="settings.trailEffectType"
+            :options="trailEffectTypes"
+            @update:model-value="updateSetting('trailEffectType', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableTrailEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.trailEffectSpeed"
+            :min="0.5"
+            :max="3"
+            :step="0.1"
+            label="特效速度"
+            unit="x"
+            @update:model-value="updateSetting('trailEffectSpeed', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableTrailEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.trailEffectParticleSize"
+            :min="1"
+            :max="8"
+            :step="0.5"
+            label="粒子大小"
+            unit="px"
+            @update:model-value="updateSetting('trailEffectParticleSize', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableTrailEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.trailEffectDecay"
+            :min="0.01"
+            :max="0.1"
+            :step="0.01"
+            label="消失速度"
+            unit=""
+            @update:model-value="updateSetting('trailEffectDecay', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableTrailEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.trailEffectMaxLength"
+            :min="20"
+            :max="100"
+            :step="5"
+            label="拖尾长度"
+            unit="个"
+            @update:model-value="updateSetting('trailEffectMaxLength', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableTrailEffects && settings.trailEffectType === 'connected'" class="form-group">
+          <CustomSlider
+            :model-value="settings.trailEffectLineWidth"
+            :min="1"
+            :max="5"
+            :step="0.5"
+            label="连线宽度"
+            unit="px"
+            @update:model-value="updateSetting('trailEffectLineWidth', $event)"
+          />
+        </div>
+      </div>
+    </div>
+
+      <!-- 鼠标按住特效设置 -->
+      <div v-if="settings.enableEffects" class="settings-subsection">
+        <h5 class="subsection-title">鼠标按住特效</h5>
+
+        <div class="form-group">
+          <CustomCheckbox
+            :model-value="settings.enableHoldEffects"
+            label="启用鼠标按住特效"
+            @update:model-value="updateSetting('enableHoldEffects', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableHoldEffects" class="form-group">
+          <label>特效类型</label>
+          <CustomSelect
+            :model-value="settings.holdEffectType"
+            :options="holdEffectTypes"
+            @update:model-value="updateSetting('holdEffectType', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableHoldEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.holdEffectSpeed"
+            :min="0.5"
+            :max="3"
+            :step="0.1"
+            label="特效速度"
+            unit="x"
+            @update:model-value="updateSetting('holdEffectSpeed', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableHoldEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.holdEffectSize"
+            :min="20"
+            :max="100"
+            :step="5"
+            label="特效大小"
+            unit="px"
+            @update:model-value="updateSetting('holdEffectSize', $event)"
+          />
+        </div>
+
+        <div v-if="settings.enableHoldEffects" class="form-group">
+          <CustomSlider
+            :model-value="settings.holdEffectIntensity"
+            :min="0.1"
+            :max="1"
+            :step="0.1"
+            label="强度"
+            unit=""
+            @update:model-value="updateSetting('holdEffectIntensity', $event)"
+          />
+        </div>
+      </div>
+
     <!-- 重置按钮 -->
     <div class="settings-actions">
       <button class="btn secondary" @click="resetToDefaults">
@@ -977,6 +1227,43 @@ export default {
         { id: 'preset', label: '预制主题' },
         { id: 'custom', label: '自定义主题' },
         { id: 'component', label: '组件颜色' }
+      ],
+      // 点击特效类型选项
+      clickEffectTypes: [
+        { value: 'explosion', label: '爆炸' },
+        { value: 'ripple', label: '涟漪' },
+        { value: 'sparkle', label: '闪烁' },
+        { value: 'firework', label: '烟花' },
+        { value: 'starburst', label: '星爆' },
+        { value: 'shockwave', label: '冲击波' },
+        { value: 'spiral', label: '螺旋' },
+        { value: 'bubbles', label: '气泡' }
+      ],
+      // 拖尾特效类型选项
+      trailEffectTypes: [
+        { value: 'particles', label: '粒子' },
+        { value: 'connected', label: '连线' },
+        { value: 'wave', label: '波浪' },
+        { value: 'glow', label: '发光' },
+        { value: 'ribbon', label: '丝带' },
+        { value: 'matrix', label: '矩阵' },
+        { value: 'comet', label: '彗星' },
+        { value: 'smoke', label: '烟雾' }
+      ],
+      // 按住特效类型选项
+      holdEffectTypes: [
+        { value: 'expand', label: '扩散' },
+        { value: 'pulse', label: '脉冲' },
+        { value: 'rotate', label: '旋转' },
+        { value: 'flower', label: '花朵' },
+        { value: 'vortex', label: '漩涡' },
+        { value: 'galaxy', label: '星系' }
+      ],
+      // 特效颜色模式选项
+      effectColorModes: [
+        { value: 'themeColors', label: '主题颜色' },
+        { value: 'customColors', label: '组件颜色' },
+        { value: 'random', label: '随机颜色' }
       ],
 
       presetThemes: [
@@ -1914,6 +2201,21 @@ export default {
   color: var(--text-primary);
 }
 
+.settings-subsection {
+  margin: 24px 0;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.subsection-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
 .form-group {
   margin-bottom: 20px;
 }
@@ -2545,6 +2847,14 @@ export default {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  :deep(.settings-section:first-child),
+  :deep(.modal-content .settings-section:first-child) {
+    min-width: 0;
+    max-height: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
   .preset-themes-grid {
     grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
   }

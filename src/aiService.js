@@ -2857,7 +2857,12 @@ ${text}
     mergeAgentSettings(globalSettings, agent) {
         // 如果智能体没有单独设置，直接返回全局设置
         if (!agent || !agent.useCustomApi) {
-            return { ...globalSettings }
+            // 处理全局设置中的自定义模型名称
+            const merged = { ...globalSettings }
+            if (merged.modelName === 'custom' && merged.customModelName) {
+                merged.modelName = merged.customModelName
+            }
+            return merged
         }
 
         // 智能体有单独设置，合并设置（智能体设置优先）
@@ -2867,7 +2872,7 @@ ${text}
         if (agent.useCustomApi) {
             // 使用智能体的自定义 API 配置
             merged.apiType = 'network'
-            
+
             // 根据服务商自动设置默认端点
             const endpointMap = {
                 openai: 'https://api.openai.com/v1/chat/completions',
@@ -2876,15 +2881,29 @@ ${text}
                 azure: '',
                 google: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent'
             }
-            
+
             // API 端点优先使用智能体的配置，否则根据服务商自动设置
             merged.apiEndpoint = agent.customApiEndpoint || endpointMap[agent.customApiProvider] || globalSettings.apiEndpoint
-            
+
             // API 密钥优先使用智能体的配置，否则使用全局设置
             merged.apiKey = agent.customApiKey || globalSettings.apiKeys?.[agent.customApiProvider] || globalSettings.apiKey
-            
+
             // 模型名称优先使用智能体的配置，否则使用全局设置
-            merged.modelName = agent.customModelName || globalSettings.modelName
+            let modelName = agent.customModelName || globalSettings.modelName
+
+            // 处理自定义模型名称
+            if (modelName === 'custom') {
+                // 优先使用智能体的自定义模型名称
+                if (agent.customCustomModelName && agent.customCustomModelName.trim()) {
+                    modelName = agent.customCustomModelName.trim()
+                }
+                // 否则使用全局的自定义模型名称
+                else if (globalSettings.customModelName && globalSettings.customModelName.trim()) {
+                    modelName = globalSettings.customModelName.trim()
+                }
+            }
+
+            merged.modelName = modelName
         }
 
         return merged
