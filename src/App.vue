@@ -3020,9 +3020,19 @@ function render(params) {
           :key="notification.id"
           :class="['notification', notification.type]"
         >
+          <div class="notification-indicator"></div>
           <div class="notification-content">
+            <span v-if="notification.title" class="notification-title">{{ notification.title }}</span>
             <span class="notification-message">{{ notification.message }}</span>
           </div>
+          <button
+            class="notification-close"
+            type="button"
+            aria-label="Close notification"
+            @click="removeNotification(notification.id)"
+          >
+            x
+          </button>
         </div>
       </transition-group>
     </div>
@@ -3440,6 +3450,7 @@ export default {
       // 通知系统
       notifications: [],
       notificationId: 0,
+      notificationTimers: {},
       // 推荐回复相关状态
             showSuggestionsModal: false,
             isGeneratingSuggestions: false,
@@ -3794,6 +3805,8 @@ export default {
     if (this.statusTimer) {
       clearTimeout(this.statusTimer)
     }
+    Object.values(this.notificationTimers || {}).forEach(timer => clearTimeout(timer))
+    this.notificationTimers = {}
   },
   watch: {
     'settings.apiEndpoint': {
@@ -8772,19 +8785,83 @@ ${conversationText}
         }
       }
     },
+    normalizeNotificationType(type = 'default') {
+      const normalizedType = String(type || 'default').toLowerCase()
+      const typeMap = {
+        error: 'danger',
+        failed: 'danger',
+        fail: 'danger',
+        warn: 'warning',
+        ok: 'success'
+      }
+      const finalType = typeMap[normalizedType] || normalizedType
+      const supportedTypes = ['default', 'info', 'success', 'warning', 'danger']
+      return supportedTypes.includes(finalType) ? finalType : 'default'
+    },
+    normalizeNotificationPayload(message, type = 'default', options = {}) {
+      let payload
+
+      if (message instanceof Error) {
+        payload = {
+          message: message.message,
+          type: 'danger'
+        }
+      } else if (message && typeof message === 'object' && !Array.isArray(message)) {
+        payload = { ...message }
+      } else {
+        payload = {
+          message,
+          type,
+          ...(options && typeof options === 'object' ? options : {})
+        }
+      }
+
+      if (payload.message instanceof Error) {
+        payload.message = payload.message.message
+        payload.type = payload.type || 'danger'
+      }
+
+      if (payload.type == null) {
+        payload.type = type
+      }
+
+      payload.type = this.normalizeNotificationType(payload.type)
+      payload.message = String(payload.message ?? '操作已完成')
+      payload.title = payload.title ? String(payload.title) : ''
+
+      const fallbackDuration = (this.styleSettings?.notificationDuration || 3) * 1000
+      const parsedDuration = Number(payload.duration)
+      payload.duration = Number.isFinite(parsedDuration) ? parsedDuration : fallbackDuration
+      payload.persistent = Boolean(payload.persistent) || payload.duration === 0
+
+      return payload
+    },
+    removeNotification(id) {
+      if (this.notificationTimers[id]) {
+        clearTimeout(this.notificationTimers[id])
+        delete this.notificationTimers[id]
+      }
+      this.notifications = this.notifications.filter(notification => notification.id !== id)
+    },
     // 通知系统
-    showNotification(message, type = 'default') {
+    showNotification(message, type = 'default', options = {}) {
+      const payload = this.normalizeNotificationPayload(message, type, options)
       const id = ++this.notificationId
+
       this.notifications.push({
         id,
-        message,
-        type
+        message: payload.message,
+        type: payload.type,
+        title: payload.title
       })
-      // 使用设置中的滞留时间，如果没有设置则默认3秒
-      const duration = (this.styleSettings?.notificationDuration || 3) * 1000
-      setTimeout(() => {
-        this.notifications = this.notifications.filter(n => n.id !== id)
-      }, duration)
+
+      if (!payload.persistent) {
+        this.notificationTimers[id] = setTimeout(() => {
+          this.removeNotification(id)
+        }, Math.max(0, payload.duration))
+      }
+
+      return id
     },
     // 设置滚动监听器
     setupScrollListener() {
@@ -14133,7 +14210,7 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
   .quick-chat-modal-content,
   .notepad-modal-content,
   .image-generator-modal-content {
-    width: 100vw;
+    width: 100%;
     max-width: none;
     height: 100%;
     max-height: 100%;
@@ -14141,6 +14218,7 @@ body[data-color-mode="advanced-gradient"] .dynamic-island {
     margin: 0;
     box-shadow: none;
     border: none;
+    box-sizing: border-box;
   }
 
   .quick-chat-header,

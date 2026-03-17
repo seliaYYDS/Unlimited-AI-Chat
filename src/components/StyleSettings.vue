@@ -2107,7 +2107,7 @@ export default {
     },
 
     showNotification(message, type) {
-      this.$emit('notify', { message, type })
+      this.$emit('notify', message, type)
     },
 
     async loadSystemFonts() {

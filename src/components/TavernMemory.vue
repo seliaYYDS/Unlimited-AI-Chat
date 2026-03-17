@@ -283,7 +283,7 @@ const summarizeCharacterMemory = async (character) => {
     }
   } catch (error) {
     console.error('总结对话失败:', error);
-    emit('notify', '总结失败，请重试', 'error');
+    emit('notify', '总结失败，请重试', 'danger');
   } finally {
     isSummarizing.value = false;
   }

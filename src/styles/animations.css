@@ -372,14 +372,22 @@
   transition: all var(--duration-normal) var(--ease-out);
 }
 
+.notification-move {
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
 .notification-enter-from {
   opacity: 0;
   transform: translateY(-20px) scale(0.9);
 }
 
+.notification-leave-active {
+  pointer-events: none;
+}
+
 .notification-leave-to {
   opacity: 0;
-  transform: translateY(-20px) scale(0.9);
+  transform: translateY(-12px) scale(0.94);
 }
 
 /* 消息气泡动画 */

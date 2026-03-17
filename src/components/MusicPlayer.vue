@@ -14275,14 +14275,15 @@ mounted() {
   .playlist-detail-modal-content,
   .album-detail-modal-content,
   .modal-content {
-    width: 100vw;
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     height: 100%;
     max-height: 100%;
     border-radius: 0 !important;
     margin: 0;
     box-shadow: none;
     border: none;
+    box-sizing: border-box;
   }
 
   .music-player-header,

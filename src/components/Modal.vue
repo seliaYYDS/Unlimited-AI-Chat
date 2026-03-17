@@ -10,7 +10,9 @@
         </button>
       </div>
       <div class="modal-content">
-        <slot></slot>
+        <div class="modal-content-inner">
+          <slot></slot>
+        </div>
       </div>
       <div class="modal-footer" v-if="showFooter">
         <button class="btn secondary" @click="close" v-if="showCancel">取消</button>
@@ -103,7 +105,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1300;
   animation: fadeIn 0.3s ease;
   /* 添加模糊效果 */
   backdrop-filter: blur(var(--modal-backdrop-blur, 8px));
@@ -131,6 +133,7 @@ export default {
   border: 1px solid var(--border-color);
   position: relative;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .modal-container.small {
@@ -188,10 +191,24 @@ export default {
 .modal-content {
   padding: 24px;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
   word-wrap: break-word;
   background: transparent;
+  box-sizing: border-box;
+}
+
+.modal-content-inner {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
 }
 
@@ -259,15 +276,16 @@ export default {
   .modal-container.medium,
   .modal-container.large,
   .modal-container.auto-width {
-    width: 100vw;
+    width: 100%;
     min-width: 0;
-    max-width: 100vw;
+    max-width: 100%;
     height: 100%;
     max-height: 100%;
     border-radius: 0 !important;
     margin: 0;
     box-shadow: none;
     border: none;
+    box-sizing: border-box;
   }
 
   .modal-header {
@@ -276,8 +294,17 @@ export default {
   }
 
   .modal-content {
+    padding: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .modal-content-inner {
+    width: 100%;
+    max-width: 100%;
     padding: 16px;
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    box-sizing: border-box;
   }
 
   .modal-footer {

@@ -177,11 +177,11 @@ export default {
           this.$emit('notify', '智能体记忆已保存', 'success')
           this.$emit('memory-updated', this.agent.id)
         } else {
-          this.$emit('notify', '保存失败，请重试', 'error')
+          this.$emit('notify', '保存失败，请重试', 'danger')
         }
       } catch (error) {
         console.error('保存智能体记忆失败:', error)
-        this.$emit('notify', '保存失败，请重试', 'error')
+        this.$emit('notify', '保存失败，请重试', 'danger')
       } finally {
         this.isSaving = false
       }
@@ -204,11 +204,11 @@ export default {
           this.$emit('notify', '智能体记忆已清除', 'success')
           this.$emit('memory-updated', this.agent.id)
         } else {
-          this.$emit('notify', '清除失败，请重试', 'error')
+          this.$emit('notify', '清除失败，请重试', 'danger')
         }
       } catch (error) {
         console.error('清除智能体记忆失败:', error)
-        this.$emit('notify', '清除失败，请重试', 'error')
+        this.$emit('notify', '清除失败，请重试', 'danger')
       }
     },
 

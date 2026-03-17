@@ -417,9 +417,10 @@ export class ThemeManager {
     // 应用弹窗背景设置
 
     if (settings.modalBackdropBlur !== undefined) {
-
-      root.style.setProperty('--modal-backdrop-blur', settings.modalBackdropBlur ? 'blur(' + (settings.modalBackdropBlurAmount || 8) + 'px)' : 'none')
-
+      root.style.setProperty(
+        '--modal-backdrop-blur',
+        settings.modalBackdropBlur ? `${settings.modalBackdropBlurAmount || 8}px` : '0px'
+      )
     }
 
     
